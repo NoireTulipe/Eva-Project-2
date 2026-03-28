@@ -12,6 +12,7 @@ export const NAV = [
       { path: '/me/ventes',       label: 'Ventes' },
       { path: '/me/produits',     label: 'Produits' },
       { path: '/me/pdv',          label: 'Points de vente' },
+      { path: '/me/depots',       label: 'Dépôts PDV' },
       { path: '/me/compta',       label: 'Comptabilité' },
       { path: '/me/referentiels', label: 'Référentiels' },
     ],

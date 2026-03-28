@@ -10,6 +10,7 @@ import Dashboard   from './pages/web/Dashboard.jsx'
 import MeVentes       from './pages/web/me/Ventes.jsx'
 import MeProduits     from './pages/web/me/Produits.jsx'
 import MePDV          from './pages/web/me/PDV.jsx'
+import MeDepots       from './pages/web/me/Depots.jsx'
 import MeCompta       from './pages/web/me/Compta.jsx'
 import MeReferentiels from './pages/web/me/Referentiels.jsx'
 
@@ -56,6 +57,7 @@ export default function App() {
               <Route path="ventes"       element={<MeVentes />} />
               <Route path="produits"     element={<MeProduits />} />
               <Route path="pdv"          element={<MePDV />} />
+              <Route path="depots"       element={<MeDepots />} />
               <Route path="compta"       element={<MeCompta />} />
               <Route path="referentiels" element={<MeReferentiels />} />
             </Route>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApi } from '../../../shared/hooks/useApi.js'
-import { produits, pdv, ventes, sessions } from '../../../shared/api.js'
+import { produits, pdv, ventes, sessions, frais } from '../../../shared/api.js'
 import { useSession } from '../../../shared/SessionContext.jsx'
 import Spinner from '../../../components/web/Spinner.jsx'
 import ErrorMessage from '../../../components/web/ErrorMessage.jsx'
@@ -11,7 +11,7 @@ const DATE = d => new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', time
 
 // ─── Vue : ouvrir une nouvelle session ────────────────────────────────────────
 
-function VueOuvrirSession({ onOuverte }) {
+function VueOuvrirSession() {
   const { data: listePDV, loading } = useApi(() => pdv.getAll())
   const [form, setForm] = useState({ pointDeVenteId: '', debut: new Date().toISOString().slice(0, 16) })
   const [error, setError] = useState(null)
@@ -66,6 +66,107 @@ function VueOuvrirSession({ onOuverte }) {
           {opening ? 'Ouverture...' : 'Ouvrir la session'}
         </button>
       </form>
+    </div>
+  )
+}
+
+// ─── Sous-vue : frais d'une session ───────────────────────────────────────────
+
+function VueFraisSession({ sessionId, fraisList, onRefresh }) {
+  const [form, setForm] = useState({ typeFraisId: '', libelle: '', montant: '' })
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  async function handleAjouter(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    try {
+      await frais.ajouterSession(sessionId, {
+        typeFraisId: Number(form.typeFraisId),
+        libelle: form.libelle,
+        montant: Number(form.montant),
+      })
+      setForm({ typeFraisId: '', libelle: '', montant: '' })
+      onRefresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSupprimer(id) {
+    try {
+      await frais.remove(id)
+      onRefresh()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow p-5">
+      <h3 className="font-medium text-gray-700 mb-4">Frais de la session</h3>
+      <form onSubmit={handleAjouter} className="grid grid-cols-3 gap-3 mb-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+          <SelectRef table="types-frais" label="Type de frais"
+            value={form.typeFraisId}
+            onChange={v => setForm(f => ({ ...f, typeFraisId: v }))}
+            required />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Libellé *</label>
+          <input value={form.libelle} onChange={e => setForm(f => ({ ...f, libelle: e.target.value }))}
+            required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Montant (€) *</label>
+          <div className="flex gap-2">
+            <input type="number" step="0.01" min="0" value={form.montant}
+              onChange={e => setForm(f => ({ ...f, montant: e.target.value }))}
+              required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            <button type="submit" disabled={saving}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-2 rounded text-sm whitespace-nowrap">
+              {saving ? '...' : '+ Ajouter'}
+            </button>
+          </div>
+        </div>
+        {error && <div className="col-span-3"><ErrorMessage message={error} /></div>}
+      </form>
+
+      {fraisList?.length > 0 ? (
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium text-gray-500">Type</th>
+              <th className="px-3 py-2 text-left font-medium text-gray-500">Libellé</th>
+              <th className="px-3 py-2 text-right font-medium text-gray-500">Montant</th>
+              <th className="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {fraisList.map(f => (
+              <tr key={f.id} className="border-t border-gray-100">
+                <td className="px-3 py-2 text-gray-500">{f.typeFrais?.nom ?? '—'}</td>
+                <td className="px-3 py-2">{f.libelle}</td>
+                <td className="px-3 py-2 text-right font-medium">{EUR(f.montant)}</td>
+                <td className="px-3 py-2 text-right">
+                  <button onClick={() => handleSupprimer(f.id)} className="text-red-500 hover:underline text-xs">Supprimer</button>
+                </td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-gray-200">
+              <td colSpan={2} className="px-3 py-2 font-medium text-gray-700">Total frais</td>
+              <td className="px-3 py-2 text-right font-semibold">{EUR(fraisList.reduce((a, f) => a + f.montant, 0))}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      ) : (
+        <p className="text-sm text-gray-400">Aucun frais enregistré.</p>
+      )}
     </div>
   )
 }
@@ -134,7 +235,6 @@ function VueSessionActive() {
     }
   }
 
-  // Après clôture, session est null dans le contexte — on affiche le récap ici avant reset
   if (recap) {
     return (
       <div className="space-y-4">
@@ -144,26 +244,16 @@ function VueSessionActive() {
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="font-semibold text-gray-800 mb-4">Récapitulatif financier</h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {[
-              { label: 'CA total', value: recap.ca },
-              { label: 'Commission PDV', value: recap.commissionPDV },
-              { label: 'Droits auteur', value: recap.droitsAuteur },
-              { label: 'Frais', value: recap.totalFrais },
-              { label: 'Bénéfice net', value: recap.beneficeNet, highlight: true }
-            ].map(({ label, value, highlight }) => (
-              <div key={label} className={`rounded p-3 ${highlight ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
-                <p className="text-xs text-gray-500 mb-1">{label}</p>
-                <p className={`font-semibold ${highlight ? 'text-blue-700' : 'text-gray-800'}`}>{value != null ? EUR(value) : '—'}</p>
-              </div>
-            ))}
-          </div>
+          <RecapFinancier recap={recap} />
         </div>
       </div>
     )
   }
 
   const ventesActives = session.ventes?.filter(v => !v.annulee) ?? []
+  const caProvisoire = ventesActives.reduce((acc, v) =>
+    acc + v.lignes.reduce((a, l) => a + l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100), 0), 0
+  )
 
   return (
     <div className="space-y-6">
@@ -173,10 +263,7 @@ function VueSessionActive() {
           <h2 className="font-semibold text-gray-800 text-lg">{session.pointDeVente?.nom}</h2>
           <p className="text-sm text-gray-500 mt-0.5">Ouverte le {DATE(session.debut)}</p>
           <p className="text-sm font-medium text-green-700 mt-1">
-            {ventesActives.length} vente{ventesActives.length !== 1 ? 's' : ''} — CA provisoire :{' '}
-            {EUR(ventesActives.reduce((acc, v) =>
-              acc + v.lignes.reduce((a, l) => a + l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100), 0), 0
-            ))}
+            {ventesActives.length} vente{ventesActives.length !== 1 ? 's' : ''} — CA provisoire : {EUR(caProvisoire)}
           </p>
         </div>
         <button
@@ -237,6 +324,13 @@ function VueSessionActive() {
         </form>
       </div>
 
+      {/* Frais */}
+      <VueFraisSession
+        sessionId={session.id}
+        fraisList={session.frais}
+        onRefresh={rechargerSession}
+      />
+
       {/* Liste ventes */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
@@ -287,6 +381,30 @@ function VueSessionActive() {
   )
 }
 
+// ─── Composant récap financier réutilisable ───────────────────────────────────
+
+function RecapFinancier({ recap }) {
+  const lignes = [
+    { label: 'CA total', value: recap.ca },
+    { label: 'Commission PDV', value: recap.commissionPDV, negatif: true },
+    { label: 'Droits auteur', value: recap.droitsAuteur, negatif: true },
+    { label: 'Frais', value: recap.totalFrais, negatif: true },
+    { label: 'Bénéfice net', value: recap.beneficeNet, highlight: true },
+  ]
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {lignes.map(({ label, value, highlight, negatif }) => (
+        <div key={label} className={`rounded p-3 ${highlight ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
+          <p className="text-xs text-gray-500 mb-1">{label}</p>
+          <p className={`font-semibold ${highlight ? 'text-blue-700' : negatif ? 'text-red-600' : 'text-gray-800'}`}>
+            {value != null ? EUR(value) : '—'}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Vue : historique des sessions ────────────────────────────────────────────
 
 function VueHistorique() {
@@ -310,6 +428,7 @@ function VueHistorique() {
           const ca = ventesActives.reduce((acc, v) =>
             acc + v.lignes.reduce((a, l) => a + l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100), 0), 0
           )
+          const totalFrais = s.frais?.reduce((a, f) => a + f.montant, 0) ?? 0
           const isOpen = expanded === s.id
 
           return (
@@ -330,13 +449,15 @@ function VueHistorique() {
                 </div>
                 <div className="flex items-center gap-6 text-sm">
                   <span className="text-gray-500">{ventesActives.length} vente(s)</span>
+                  {totalFrais > 0 && <span className="text-red-500">{EUR(totalFrais)} frais</span>}
                   <span className="font-semibold text-gray-800">{EUR(ca)}</span>
                   <span className="text-gray-400">{isOpen ? '▲' : '▼'}</span>
                 </div>
               </button>
 
               {isOpen && (
-                <div className="border-t border-gray-100">
+                <div className="border-t border-gray-100 p-5 space-y-4">
+                  {/* Ventes */}
                   <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50">
                       <tr>
@@ -365,6 +486,24 @@ function VueHistorique() {
                       )}
                     </tbody>
                   </table>
+
+                  {/* Frais de la session */}
+                  {s.frais?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-600 mb-2">Frais</h4>
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {s.frais.map(f => (
+                            <tr key={f.id} className="border-b border-gray-100">
+                              <td className="px-4 py-1.5 text-gray-500">{f.typeFrais?.nom ?? '—'}</td>
+                              <td className="px-4 py-1.5">{f.libelle}</td>
+                              <td className="px-4 py-1.5 text-right text-red-600">{EUR(f.montant)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

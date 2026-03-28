@@ -155,3 +155,67 @@ export const ventes = {
   enregistrer: (data) => request('POST', '/ventes/ventes', data),
   annuler: (id) => request('POST', `/ventes/ventes/${id}/annuler`)
 }
+
+// --- Frais ---
+
+export const frais = {
+  getAll: ({ debut, fin } = {}) => {
+    const params = new URLSearchParams()
+    if (debut) params.set('debut', debut)
+    if (fin) params.set('fin', fin)
+    const qs = params.toString()
+    return request('GET', `/ventes/frais${qs ? `?${qs}` : ''}`)
+  },
+  create: (data) => request('POST', '/ventes/frais', data),
+  ajouterSession: (sessionId, data) => request('POST', `/ventes/sessions/${sessionId}/frais`, data),
+  remove: (id) => request('DELETE', `/ventes/frais/${id}`)
+}
+
+// --- Pertes ---
+
+export const pertes = {
+  getAll: ({ debut, fin } = {}) => {
+    const params = new URLSearchParams()
+    if (debut) params.set('debut', debut)
+    if (fin) params.set('fin', fin)
+    const qs = params.toString()
+    return request('GET', `/ventes/pertes${qs ? `?${qs}` : ''}`)
+  },
+  create: (data) => request('POST', '/ventes/pertes', data),
+  remove: (id) => request('DELETE', `/ventes/pertes/${id}`)
+}
+
+// --- Auteurs ---
+
+export const auteurs = {
+  getAll: () => request('GET', '/ventes/auteurs'),
+  create: (data) => request('POST', '/ventes/auteurs', data),
+  update: (id, data) => request('PUT', `/ventes/auteurs/${id}`, data),
+  remove: (id) => request('DELETE', `/ventes/auteurs/${id}`),
+  setForProduit: (produitId, auteurIds) => request('PUT', `/ventes/produits/${produitId}/auteurs`, { auteurIds })
+}
+
+// --- Dépôts ---
+
+export const depots = {
+  getAll: ({ pdvId } = {}) => {
+    const params = new URLSearchParams()
+    if (pdvId) params.set('pdvId', pdvId)
+    const qs = params.toString()
+    return request('GET', `/ventes/depots${qs ? `?${qs}` : ''}`)
+  },
+  create: (data) => request('POST', '/ventes/depots', data),
+  retour: (id, quantite) => request('POST', `/ventes/depots/${id}/retour`, { quantite })
+}
+
+// --- Comptabilité ---
+
+export const compta = {
+  getRecap: ({ debut, fin } = {}) => {
+    const params = new URLSearchParams()
+    if (debut) params.set('debut', debut)
+    if (fin) params.set('fin', fin)
+    const qs = params.toString()
+    return request('GET', `/ventes/compta${qs ? `?${qs}` : ''}`)
+  }
+}

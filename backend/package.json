@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "seed:fixtures": "node prisma/seed.fixtures.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

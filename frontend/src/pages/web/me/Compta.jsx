@@ -1,10 +1,442 @@
+import { useState } from 'react'
+import { useApi } from '../../../shared/hooks/useApi.js'
+import { compta, frais, pertes, produits } from '../../../shared/api.js'
+import Spinner from '../../../components/web/Spinner.jsx'
+import ErrorMessage from '../../../components/web/ErrorMessage.jsx'
+import SelectRef from '../../../components/web/SelectRef.jsx'
+
+const EUR = v => Number(v).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
+const DATE = d => new Date(d).toLocaleDateString('fr-FR', { dateStyle: 'short' })
+const DATE_LONG = d => new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+
+// ─── Filtre période ───────────────────────────────────────────────────────────
+
+function FiltrePeriode({ debut, fin, onChange }) {
+  return (
+    <div className="flex gap-3 items-center bg-white rounded-lg shadow px-4 py-3 mb-6">
+      <span className="text-sm font-medium text-gray-600">Période :</span>
+      <div className="flex items-center gap-2">
+        <label className="text-sm text-gray-500">Du</label>
+        <input type="date" value={debut} onChange={e => onChange('debut', e.target.value)}
+          className="border border-gray-300 rounded px-2 py-1 text-sm" />
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="text-sm text-gray-500">au</label>
+        <input type="date" value={fin} onChange={e => onChange('fin', e.target.value)}
+          className="border border-gray-300 rounded px-2 py-1 text-sm" />
+      </div>
+      <button onClick={() => onChange('reset')}
+        className="text-xs text-gray-400 hover:text-gray-600 underline ml-2">
+        Tout afficher
+      </button>
+    </div>
+  )
+}
+
+// ─── Onglet Bilan ─────────────────────────────────────────────────────────────
+
+function OngletBilan({ debut, fin }) {
+  const { data, loading, error } = useApi(
+    () => compta.getRecap({ debut: debut || undefined, fin: fin || undefined }),
+    [debut, fin]
+  )
+
+  if (loading) return <Spinner />
+  if (error) return <ErrorMessage message={error} />
+  if (!data) return null
+
+  const { recap } = data
+
+  const lignesBilan = [
+    { label: 'Chiffre d\'affaires', value: recap.totalCA, couleur: 'text-green-700', bg: 'bg-green-50 border-green-100' },
+    { label: 'Commissions PDV', value: recap.totalCommissionPDV, couleur: 'text-red-600', bg: 'bg-red-50 border-red-100' },
+    { label: 'Droits auteur', value: recap.totalDroitsAuteur, couleur: 'text-red-600', bg: 'bg-red-50 border-red-100' },
+    { label: 'Frais', value: recap.totalFrais, couleur: 'text-red-600', bg: 'bg-red-50 border-red-100' },
+    { label: 'Pertes', value: recap.totalPertes, couleur: 'text-red-600', bg: 'bg-red-50 border-red-100' },
+    { label: 'Résultat net', value: recap.beneficeNet, couleur: recap.beneficeNet >= 0 ? 'text-blue-700' : 'text-red-700', bg: 'bg-blue-50 border-blue-200', highlight: true },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {lignesBilan.map(({ label, value, couleur, bg, highlight }) => (
+          <div key={label} className={`rounded-lg border p-4 ${bg} ${highlight ? 'md:col-span-1' : ''}`}>
+            <p className="text-xs text-gray-500 mb-1">{label}</p>
+            <p className={`text-lg font-bold ${couleur}`}>{EUR(value)}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-5">
+        <p className="text-sm text-gray-500 mb-1">Sessions clôturées sur la période</p>
+        <p className="text-2xl font-bold text-gray-800">{recap.nbSessions}</p>
+      </div>
+
+      {/* Tableau récap sessions */}
+      {data.sessions?.length > 0 && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100">
+            <h3 className="font-medium text-gray-700">Détail par session</h3>
+          </div>
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-4 py-3 font-medium text-gray-600">PDV</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Date</th>
+                <th className="px-4 py-3 font-medium text-gray-600 text-right">CA</th>
+                <th className="px-4 py-3 font-medium text-gray-600 text-right">Commission</th>
+                <th className="px-4 py-3 font-medium text-gray-600 text-right">Frais</th>
+                <th className="px-4 py-3 font-medium text-gray-600 text-right">Ventes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.sessions.map(s => {
+                const ventesActives = s.ventes?.filter(v => !v.annulee) ?? []
+                const ca = ventesActives.reduce((acc, v) =>
+                  acc + v.lignes.reduce((a, l) => a + l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100), 0), 0
+                )
+                const totalFraisSession = s.frais?.reduce((a, f) => a + f.montant, 0) ?? 0
+                const commission = (s.pointDeVente?.commissionFixe ?? 0) + ca * ((s.pointDeVente?.commissionPourcent ?? 0) / 100)
+                return (
+                  <tr key={s.id} className="border-b border-gray-100">
+                    <td className="px-4 py-3 font-medium">{s.pointDeVente?.nom}</td>
+                    <td className="px-4 py-3 text-gray-500">{DATE_LONG(s.debut)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-green-700">{EUR(ca)}</td>
+                    <td className="px-4 py-3 text-right text-red-600">{commission > 0 ? EUR(commission) : '—'}</td>
+                    <td className="px-4 py-3 text-right text-red-600">{totalFraisSession > 0 ? EUR(totalFraisSession) : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-500">{ventesActives.length}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Onglet Frais ─────────────────────────────────────────────────────────────
+
+function OngletFrais({ debut, fin }) {
+  const { data: liste, loading, error, refetch } = useApi(
+    () => frais.getAll({ debut: debut || undefined, fin: fin || undefined }),
+    [debut, fin]
+  )
+  const [form, setForm] = useState(null)
+  const [formError, setFormError] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  function ouvrirForm() {
+    setForm({ typeFraisId: '', libelle: '', montant: '' })
+    setFormError(null)
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setFormError(null)
+    try {
+      await frais.create({
+        typeFraisId: Number(form.typeFraisId),
+        libelle: form.libelle,
+        montant: Number(form.montant),
+      })
+      setForm(null)
+      refetch()
+    } catch (err) {
+      setFormError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSupprimer(id) {
+    if (!confirm('Supprimer ce frais ?')) return
+    try {
+      await frais.remove(id)
+      refetch()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  if (loading) return <Spinner />
+  if (error) return <ErrorMessage message={error} />
+
+  const total = liste?.reduce((a, f) => a + f.montant, 0) ?? 0
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-gray-500">{liste?.length ?? 0} frais — Total : <span className="font-semibold text-red-600">{EUR(total)}</span></p>
+        <button onClick={ouvrirForm} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
+          + Ajouter un frais
+        </button>
+      </div>
+
+      {form && (
+        <div className="bg-white rounded-lg shadow p-5">
+          <h3 className="font-medium mb-4">Nouveau frais hors session</h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+              <SelectRef table="types-frais" label="Type de frais"
+                value={form.typeFraisId}
+                onChange={v => setForm(f => ({ ...f, typeFraisId: v }))}
+                required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Libellé *</label>
+              <input value={form.libelle} onChange={e => setForm(f => ({ ...f, libelle: e.target.value }))}
+                required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Montant (€) *</label>
+              <input type="number" step="0.01" min="0" value={form.montant}
+                onChange={e => setForm(f => ({ ...f, montant: e.target.value }))}
+                required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            {formError && <div className="col-span-3"><ErrorMessage message={formError} /></div>}
+            <div className="col-span-3 flex gap-2 justify-end">
+              <button type="button" onClick={() => setForm(null)} className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-50">Annuler</button>
+              <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded text-sm">
+                {saving ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 font-medium text-gray-600">Date</th>
+              <th className="px-4 py-3 font-medium text-gray-600">Type</th>
+              <th className="px-4 py-3 font-medium text-gray-600">Libellé</th>
+              <th className="px-4 py-3 font-medium text-gray-600">Session</th>
+              <th className="px-4 py-3 font-medium text-gray-600 text-right">Montant</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {liste?.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">Aucun frais</td></tr>
+            )}
+            {liste?.map(f => (
+              <tr key={f.id} className="border-b border-gray-100">
+                <td className="px-4 py-3 text-gray-500">{DATE(f.createdAt)}</td>
+                <td className="px-4 py-3 text-gray-500">{f.typeFrais?.nom ?? '—'}</td>
+                <td className="px-4 py-3">{f.libelle}</td>
+                <td className="px-4 py-3 text-gray-400 text-xs">
+                  {f.session ? `${f.session.pointDeVente?.nom ?? ''} — ${DATE(f.session.debut)}` : 'Hors session'}
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-red-600">{EUR(f.montant)}</td>
+                <td className="px-4 py-3 text-right">
+                  {!f.session && (
+                    <button onClick={() => handleSupprimer(f.id)} className="text-red-500 hover:underline text-xs">Supprimer</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Onglet Pertes ────────────────────────────────────────────────────────────
+
+function OngletPertes({ debut, fin }) {
+  const { data: liste, loading, error, refetch } = useApi(
+    () => pertes.getAll({ debut: debut || undefined, fin: fin || undefined }),
+    [debut, fin]
+  )
+  const { data: listeProduits } = useApi(() => produits.getAll())
+  const [form, setForm] = useState(null)
+  const [formError, setFormError] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  function ouvrirForm() {
+    setForm({ typePerteid: '', produitId: '', quantite: '', valeur: '', description: '' })
+    setFormError(null)
+  }
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(f => ({ ...f, [name]: value }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setFormError(null)
+    try {
+      await pertes.create({
+        typePerteid: Number(form.typePerteid),
+        produitId: form.produitId ? Number(form.produitId) : undefined,
+        quantite: form.quantite ? Number(form.quantite) : undefined,
+        valeur: Number(form.valeur),
+        description: form.description || undefined,
+      })
+      setForm(null)
+      refetch()
+    } catch (err) {
+      setFormError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSupprimer(id) {
+    if (!confirm('Supprimer cette perte ?')) return
+    try {
+      await pertes.remove(id)
+      refetch()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  if (loading) return <Spinner />
+  if (error) return <ErrorMessage message={error} />
+
+  const total = liste?.reduce((a, p) => a + p.valeur, 0) ?? 0
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-gray-500">{liste?.length ?? 0} perte(s) — Total : <span className="font-semibold text-red-600">{EUR(total)}</span></p>
+        <button onClick={ouvrirForm} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
+          + Déclarer une perte
+        </button>
+      </div>
+
+      {form && (
+        <div className="bg-white rounded-lg shadow p-5">
+          <h3 className="font-medium mb-4">Nouvelle perte</h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+              <SelectRef table="types-perte" label="Type de perte"
+                value={form.typePerteid}
+                onChange={v => setForm(f => ({ ...f, typePerteid: v }))}
+                required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Valeur (€) *</label>
+              <input name="valeur" type="number" step="0.01" min="0" value={form.valeur}
+                onChange={handleChange} required
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Produit concerné</label>
+              <select name="produitId" value={form.produitId} onChange={handleChange}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <option value="">— Aucun produit spécifique —</option>
+                {listeProduits?.map(p => (
+                  <option key={p.id} value={p.id}>{p.nom}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quantité</label>
+              <input name="quantite" type="number" min="1" value={form.quantite}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <input name="description" value={form.description} onChange={handleChange}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            {formError && <div className="col-span-2"><ErrorMessage message={formError} /></div>}
+            <div className="col-span-2 flex gap-2 justify-end">
+              <button type="button" onClick={() => setForm(null)} className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-50">Annuler</button>
+              <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded text-sm">
+                {saving ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 font-medium text-gray-600">Date</th>
+              <th className="px-4 py-3 font-medium text-gray-600">Type</th>
+              <th className="px-4 py-3 font-medium text-gray-600">Produit</th>
+              <th className="px-4 py-3 font-medium text-gray-600">Qté</th>
+              <th className="px-4 py-3 font-medium text-gray-600">Description</th>
+              <th className="px-4 py-3 font-medium text-gray-600 text-right">Valeur</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {liste?.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">Aucune perte enregistrée</td></tr>
+            )}
+            {liste?.map(p => (
+              <tr key={p.id} className="border-b border-gray-100">
+                <td className="px-4 py-3 text-gray-500">{DATE(p.createdAt)}</td>
+                <td className="px-4 py-3 text-gray-500">{p.typePerte?.nom ?? '—'}</td>
+                <td className="px-4 py-3">{p.produit?.nom ?? '—'}</td>
+                <td className="px-4 py-3">{p.quantite ?? '—'}</td>
+                <td className="px-4 py-3 text-gray-500">{p.description ?? '—'}</td>
+                <td className="px-4 py-3 text-right font-medium text-red-600">{EUR(p.valeur)}</td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={() => handleSupprimer(p.id)} className="text-red-500 hover:underline text-xs">Supprimer</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Page principale ───────────────────────────────────────────────────────────
+
+const ONGLETS = ['Bilan', 'Frais', 'Pertes']
+
 export default function Compta() {
+  const [onglet, setOnglet] = useState(0)
+  const now = new Date()
+  const debutAnnee = `${now.getFullYear()}-01-01`
+  const [debut, setDebut] = useState(debutAnnee)
+  const [fin, setFin] = useState('')
+
+  function handleFiltre(champ, valeur) {
+    if (champ === 'reset') { setDebut(''); setFin(''); return }
+    if (champ === 'debut') setDebut(valeur)
+    if (champ === 'fin') setFin(valeur)
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Comptabilité</h1>
-      <div className="bg-white rounded-lg shadow p-6 text-sm text-gray-500">
-        Module en cours de développement — recettes, dépenses, bilan.
+
+      <FiltrePeriode debut={debut} fin={fin} onChange={handleFiltre} />
+
+      <div className="flex gap-1 mb-6 border-b border-gray-200">
+        {ONGLETS.map((o, i) => (
+          <button key={o} onClick={() => setOnglet(i)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              onglet === i ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}>
+            {o}
+          </button>
+        ))}
       </div>
+
+      {onglet === 0 && <OngletBilan debut={debut} fin={fin} />}
+      {onglet === 1 && <OngletFrais debut={debut} fin={fin} />}
+      {onglet === 2 && <OngletPertes debut={debut} fin={fin} />}
     </div>
   )
 }

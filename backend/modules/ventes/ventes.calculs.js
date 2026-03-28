@@ -111,6 +111,42 @@ export function calcRecapSession(session) {
 }
 
 /**
+ * Calcule le récapitulatif comptable sur une période
+ * sessions : sessions clôturées avec ventes, frais, pointDeVente
+ * fraisHorsSessions : frais sans sessionId dans la période
+ * pertes : pertes dans la période
+ */
+export function calcRecapCompta(sessions, fraisHorsSessions, pertes) {
+  let totalCA = 0
+  let totalCommissionPDV = 0
+  let totalDroitsAuteur = 0
+  let totalFraisSessions = 0
+
+  for (const session of sessions) {
+    const recap = calcRecapSession(session)
+    totalCA += recap.ca
+    totalCommissionPDV += recap.commissionPDV
+    totalDroitsAuteur += recap.droitsAuteur
+    totalFraisSessions += recap.totalFrais
+  }
+
+  const totalFraisHors = fraisHorsSessions.reduce((acc, f) => acc + f.montant, 0)
+  const totalFrais = totalFraisSessions + totalFraisHors
+  const totalPertes = pertes.reduce((acc, p) => acc + p.valeur, 0)
+  const beneficeNet = totalCA - totalCommissionPDV - totalDroitsAuteur - totalFrais - totalPertes
+
+  return {
+    totalCA: round(totalCA),
+    totalCommissionPDV: round(totalCommissionPDV),
+    totalDroitsAuteur: round(totalDroitsAuteur),
+    totalFrais: round(totalFrais),
+    totalPertes: round(totalPertes),
+    beneficeNet: round(beneficeNet),
+    nbSessions: sessions.length,
+  }
+}
+
+/**
  * Arrondi à 2 décimales
  */
 export function round(val) {

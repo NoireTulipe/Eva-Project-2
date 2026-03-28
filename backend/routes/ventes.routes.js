@@ -16,6 +16,22 @@ import {
   getSessions,
   enregistrerVente,
   annulerVente,
+  getFrais,
+  ajouterFraisSession,
+  ajouterFraisLibre,
+  supprimerFrais,
+  getPertes,
+  creerPerte,
+  supprimerPerte,
+  getAuteurs,
+  creerAuteur,
+  updateAuteur,
+  supprimerAuteur,
+  setAuteursProduit,
+  getDepots,
+  creerDepot,
+  retourDepot,
+  getRecapCompta,
 } from '../modules/ventes/ventes.service.js'
 import { logError } from '../logs/logger.js'
 
@@ -176,6 +192,185 @@ router.post('/ventes', async (req, res) => {
 router.post('/ventes/:id/annuler', async (req, res) => {
   try {
     res.json(await annulerVente(Number(req.params.id)))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── FRAIS ────────────────────────────────────────────────────────────────────
+
+router.get('/frais', async (req, res) => {
+  try {
+    res.json(await getFrais({ debut: req.query.debut, fin: req.query.fin }))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/frais', async (req, res) => {
+  const { typeFraisId, libelle, montant } = req.body
+  if (!typeFraisId) return res.status(400).json({ error: 'Le type de frais est requis' })
+  if (!libelle?.trim()) return res.status(400).json({ error: 'Le libellé est requis' })
+  if (montant == null) return res.status(400).json({ error: 'Le montant est requis' })
+  try {
+    res.status(201).json(await ajouterFraisLibre(req.body))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/sessions/:id/frais', async (req, res) => {
+  const { typeFraisId, libelle, montant } = req.body
+  if (!typeFraisId) return res.status(400).json({ error: 'Le type de frais est requis' })
+  if (!libelle?.trim()) return res.status(400).json({ error: 'Le libellé est requis' })
+  if (montant == null) return res.status(400).json({ error: 'Le montant est requis' })
+  try {
+    res.status(201).json(await ajouterFraisSession(Number(req.params.id), req.body))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.delete('/frais/:id', async (req, res) => {
+  try {
+    await supprimerFrais(Number(req.params.id))
+    res.status(204).end()
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── PERTES ───────────────────────────────────────────────────────────────────
+
+router.get('/pertes', async (req, res) => {
+  try {
+    res.json(await getPertes({ debut: req.query.debut, fin: req.query.fin }))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/pertes', async (req, res) => {
+  const { typePerteid, valeur } = req.body
+  if (!typePerteid) return res.status(400).json({ error: 'Le type de perte est requis' })
+  if (valeur == null) return res.status(400).json({ error: 'La valeur est requise' })
+  try {
+    res.status(201).json(await creerPerte(req.body))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.delete('/pertes/:id', async (req, res) => {
+  try {
+    await supprimerPerte(Number(req.params.id))
+    res.status(204).end()
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── AUTEURS ──────────────────────────────────────────────────────────────────
+
+router.get('/auteurs', async (_req, res) => {
+  try {
+    res.json(await getAuteurs())
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/auteurs', async (req, res) => {
+  if (!req.body.nom?.trim()) return res.status(400).json({ error: 'Le nom est requis' })
+  try {
+    res.status(201).json(await creerAuteur(req.body))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.put('/auteurs/:id', async (req, res) => {
+  if (!req.body.nom?.trim()) return res.status(400).json({ error: 'Le nom est requis' })
+  try {
+    res.json(await updateAuteur(Number(req.params.id), req.body))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.delete('/auteurs/:id', async (req, res) => {
+  try {
+    await supprimerAuteur(Number(req.params.id))
+    res.status(204).end()
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.put('/produits/:id/auteurs', async (req, res) => {
+  const { auteurIds } = req.body
+  if (!Array.isArray(auteurIds)) return res.status(400).json({ error: 'auteurIds doit être un tableau' })
+  try {
+    res.json(await setAuteursProduit(Number(req.params.id), auteurIds))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── DÉPÔTS ───────────────────────────────────────────────────────────────────
+
+router.get('/depots', async (req, res) => {
+  try {
+    const pdvId = req.query.pdvId ? Number(req.query.pdvId) : undefined
+    res.json(await getDepots({ pdvId }))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/depots', async (req, res) => {
+  const { produitId, pointDeVenteId, quantite } = req.body
+  if (!produitId) return res.status(400).json({ error: 'Le produit est requis' })
+  if (!pointDeVenteId) return res.status(400).json({ error: 'Le point de vente est requis' })
+  if (!quantite || quantite <= 0) return res.status(400).json({ error: 'La quantité doit être positive' })
+  try {
+    res.status(201).json(await creerDepot(req.body))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/depots/:id/retour', async (req, res) => {
+  const { quantite } = req.body
+  if (!quantite || quantite <= 0) return res.status(400).json({ error: 'La quantité de retour doit être positive' })
+  try {
+    res.json(await retourDepot(Number(req.params.id), Number(quantite)))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── COMPTABILITÉ ─────────────────────────────────────────────────────────────
+
+router.get('/compta', async (req, res) => {
+  try {
+    res.json(await getRecapCompta({ debut: req.query.debut, fin: req.query.fin }))
   } catch (err) {
     logError(err.message)
     res.status(500).json({ error: err.message })
