@@ -130,7 +130,22 @@ export async function cloturerSession(sessionId) {
     data: { statut: 'cloturee', fin: new Date() },
   })
 
-  return { session, recap }
+  return recap
+}
+
+export async function getSessions({ limit = 20, offset = 0 } = {}) {
+  return prisma.session.findMany({
+    include: {
+      pointDeVente: true,
+      ventes: {
+        include: { lignes: { include: { produit: true } } },
+      },
+      frais: true,
+    },
+    orderBy: { debut: 'desc' },
+    take: limit,
+    skip: offset,
+  })
 }
 
 export async function getSessionById(id) {

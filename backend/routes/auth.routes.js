@@ -28,7 +28,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     )
@@ -44,7 +44,7 @@ router.post('/login', async (req, res) => {
     res.json({
       token,
       refresh,
-      user: { id: user.id, nom: user.nom, prenom: user.prenom, email: user.email }
+      user: { id: user.id, nom: user.nom, prenom: user.prenom, email: user.email, role: user.role }
     })
   } catch (err) {
     logError(`Login erreur : ${err.message}`)

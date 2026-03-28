@@ -13,6 +13,7 @@ import {
   ouvrirSession,
   cloturerSession,
   getSessionById,
+  getSessions,
   enregistrerVente,
   annulerVente,
 } from '../modules/ventes/ventes.service.js'
@@ -53,6 +54,11 @@ router.get('/produits/:id/stock', async (req, res) => {
 })
 
 router.post('/produits', async (req, res) => {
+  const { nom, categorieId, prixVenteTTC, stock } = req.body
+  if (!nom?.trim()) return res.status(400).json({ error: 'Le nom est requis' })
+  if (!categorieId) return res.status(400).json({ error: 'La catégorie est requise' })
+  if (prixVenteTTC == null) return res.status(400).json({ error: 'Le prix TTC est requis' })
+  if (stock == null) return res.status(400).json({ error: 'Le stock est requis' })
   try {
     res.status(201).json(await createProduit(req.body))
   } catch (err) {
@@ -91,6 +97,7 @@ router.get('/pdv', async (req, res) => {
 })
 
 router.post('/pdv', async (req, res) => {
+  if (!req.body.nom?.trim()) return res.status(400).json({ error: 'Le nom est requis' })
   try {
     res.status(201).json(await createPointDeVente(req.body))
   } catch (err) {
@@ -109,6 +116,17 @@ router.put('/pdv/:id', async (req, res) => {
 })
 
 // ─── SESSIONS ─────────────────────────────────────────────────────────────────
+
+router.get('/sessions', async (req, res) => {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : 20
+    const offset = req.query.offset ? Number(req.query.offset) : 0
+    res.json(await getSessions({ limit, offset }))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
 
 router.post('/sessions', async (req, res) => {
   try {
@@ -143,6 +161,10 @@ router.post('/sessions/:id/cloturer', async (req, res) => {
 // ─── VENTES ───────────────────────────────────────────────────────────────────
 
 router.post('/ventes', async (req, res) => {
+  const { sessionId, methodePaiementId, lignes } = req.body
+  if (!sessionId) return res.status(400).json({ error: 'La session est requise' })
+  if (!methodePaiementId) return res.status(400).json({ error: 'La méthode de paiement est requise' })
+  if (!Array.isArray(lignes) || lignes.length === 0) return res.status(400).json({ error: 'Au moins une ligne de vente est requise' })
   try {
     res.status(201).json(await enregistrerVente(req.body))
   } catch (err) {

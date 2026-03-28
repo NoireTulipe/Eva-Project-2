@@ -1,2 +1,25 @@
 [2026-03-28T15:32:03.029Z] ERROR — Login erreur : secretOrPrivateKey must have a value
 [2026-03-28T15:32:03.033Z] ERROR — POST /auth/login — 500 (68ms)
+[2026-03-28T17:19:34.779Z] ERROR — 
+Invalid `prisma.produit.create()` invocation:
+
+{
+  data: {
+    nom: "Kazuki, l'Eveil d'un Guerrier Mage [1]",
+    prixVenteTTC: 12.5,
+    tva: 5.5,
+    cout: 7.5,
+    droitAuteur: false,
+    stock: 10,
+    stockAlerte: 5,
+    auteurs: undefined,
++   categorie: {
++     create: CategorieCreateWithoutProduitsInput | CategorieUncheckedCreateWithoutProduitsInput,
++     connectOrCreate: CategorieCreateOrConnectWithoutProduitsInput,
++     connect: CategorieWhereUniqueInput
++   }
+  }
+}
+
+Argument `categorie` is missing.
+[2026-03-28T17:19:34.780Z] ERROR — POST /ventes/produits — 500 (10ms)

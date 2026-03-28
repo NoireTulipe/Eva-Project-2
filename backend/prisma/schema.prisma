@@ -245,6 +245,7 @@ model User {
   prenom    String?
   email     String   @unique
   password  String
+  role      String   @default("user")
   actif     Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
