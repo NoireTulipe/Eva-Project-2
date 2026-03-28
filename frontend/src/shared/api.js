@@ -1,0 +1,147 @@
+const BASE = '/api'
+
+// --- Gestion tokens ---
+
+function getToken() {
+  return localStorage.getItem('token')
+}
+
+function getRefreshToken() {
+  return localStorage.getItem('refresh')
+}
+
+function getUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user'))
+  } catch {
+    return null
+  }
+}
+
+function isLoggedIn() {
+  return !!getToken()
+}
+
+function saveTokens({ token, refresh, user }) {
+  if (token) localStorage.setItem('token', token)
+  if (refresh) localStorage.setItem('refresh', refresh)
+  if (user) localStorage.setItem('user', JSON.stringify(user))
+}
+
+function clearSession() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('refresh')
+  localStorage.removeItem('user')
+}
+
+function logout() {
+  clearSession()
+  window.location.href = '/login'
+}
+
+// --- Client HTTP central ---
+
+async function request(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' }
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined
+  })
+
+  if (res.status === 401) {
+    // Tenter un refresh
+    const refreshToken = getRefreshToken()
+    if (!refreshToken) { logout(); return }
+
+    const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    })
+
+    if (!refreshRes.ok) { logout(); return }
+
+    const data = await refreshRes.json()
+    saveTokens({ token: data.token })
+
+    // Retry la requête originale avec le nouveau token
+    const retryRes = await fetch(`${BASE}${path}`, {
+      method,
+      headers: { ...headers, 'Authorization': `Bearer ${data.token}` },
+      body: body !== undefined ? JSON.stringify(body) : undefined
+    })
+
+    if (!retryRes.ok) {
+      const err = await retryRes.json().catch(() => ({}))
+      throw new Error(err.error || `Erreur ${retryRes.status}`)
+    }
+
+    return retryRes.json()
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Erreur ${res.status}`)
+  }
+
+  // Réponses sans corps (204)
+  if (res.status === 204) return null
+  return res.json()
+}
+
+// --- Auth ---
+
+export const auth = {
+  getToken,
+  getUser,
+  isLoggedIn,
+  logout,
+
+  async login(email, password) {
+    const data = await request('POST', '/auth/login', { email, password })
+    saveTokens({ token: data.token, refresh: data.refreshToken, user: data.user })
+    return data
+  },
+
+  async refresh(refreshToken) {
+    return request('POST', '/auth/refresh', { refreshToken })
+  }
+}
+
+// --- Produits ---
+
+export const produits = {
+  getAll: () => request('GET', '/ventes/produits'),
+  getById: (id) => request('GET', `/ventes/produits/${id}`),
+  getStock: (id) => request('GET', `/ventes/produits/${id}/stock`),
+  create: (data) => request('POST', '/ventes/produits', data),
+  update: (id, data) => request('PUT', `/ventes/produits/${id}`, data),
+  remove: (id) => request('DELETE', `/ventes/produits/${id}`)
+}
+
+// --- Points de vente ---
+
+export const pdv = {
+  getAll: () => request('GET', '/ventes/pdv'),
+  create: (data) => request('POST', '/ventes/pdv', data),
+  update: (id, data) => request('PUT', `/ventes/pdv/${id}`, data)
+}
+
+// --- Sessions ---
+
+export const sessions = {
+  open: (pointDeVenteId, debut) => request('POST', '/ventes/sessions', { pointDeVenteId, debut }),
+  getById: (id) => request('GET', `/ventes/sessions/${id}`),
+  cloturer: (id) => request('POST', `/ventes/sessions/${id}/cloturer`)
+}
+
+// --- Ventes ---
+
+export const ventes = {
+  enregistrer: (data) => request('POST', '/ventes/ventes', data),
+  annuler: (id) => request('POST', `/ventes/ventes/${id}/annuler`)
+}
