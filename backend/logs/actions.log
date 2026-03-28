@@ -1,0 +1,7 @@
+[2026-03-28T14:11:14.590Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-28T14:11:50.276Z] ACTION — GET /health — 200 (4ms)
+[2026-03-28T14:11:50.349Z] ACTION — GET /favicon.ico — 404 (2ms)
+[2026-03-28T15:29:37.269Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-28T15:34:06.920Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-28T15:34:15.602Z] ACTION — Login réussi : bonacci.francois@gmail.com
+[2026-03-28T15:34:15.606Z] ACTION — POST /auth/login — 200 (77ms)
