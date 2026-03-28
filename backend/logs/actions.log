@@ -5,3 +5,10 @@
 [2026-03-28T15:34:06.920Z] ACTION — EVA backend démarré sur le port 3000
 [2026-03-28T15:34:15.602Z] ACTION — Login réussi : bonacci.francois@gmail.com
 [2026-03-28T15:34:15.606Z] ACTION — POST /auth/login — 200 (77ms)
+[2026-03-28T15:49:44.528Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-28T15:50:34.306Z] ACTION — GET /ventes/produits — 401 (3ms)
+[2026-03-28T15:50:44.321Z] ACTION — Login réussi : bonacci.francois@gmail.com
+[2026-03-28T15:50:44.323Z] ACTION — POST /auth/login — 200 (71ms)
+[2026-03-28T15:50:51.001Z] ACTION — GET /ventes/produits — 401 (0ms)
+[2026-03-28T15:52:46.099Z] ACTION — Login réussi : bonacci.francois@gmail.com
+[2026-03-28T15:52:46.100Z] ACTION — POST /auth/login — 200 (61ms)

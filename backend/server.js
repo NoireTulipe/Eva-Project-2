@@ -3,6 +3,7 @@ import dotenv from 'dotenv'
 import { logError, logAction } from './logs/logger.js'
 import { loggerMiddleware } from './middleware/logger.js'
 import authRoutes from './routes/auth.routes.js'
+import ventesRoutes from './routes/ventes.routes.js'
 
 dotenv.config({ path: '../.env' })
 
@@ -14,6 +15,7 @@ app.use(loggerMiddleware)
 
 // Routes
 app.use('/auth', authRoutes)
+app.use('/ventes', ventesRoutes)
 
 // Health check
 app.get('/health', (req, res) => {
