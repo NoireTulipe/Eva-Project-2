@@ -31,11 +31,11 @@ if (existsSync(FRONTEND_DIST)) {
 }
 
 // Routes
-app.use('/auth', authRoutes)
-app.use('/ventes', ventesRoutes)
-app.use('/ref', referentielsRoutes)
-app.use('/eva', evaRoutes)
-app.use('/admin', adminRoutes)
+app.use('/api/auth', authRoutes)
+app.use('/api/ventes', ventesRoutes)
+app.use('/api/ref', referentielsRoutes)
+app.use('/api/eva', evaRoutes)
+app.use('/api/admin', adminRoutes)
 
 // Health check
 app.get('/health', (req, res) => {
