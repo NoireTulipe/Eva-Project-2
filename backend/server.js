@@ -2,6 +2,7 @@ import express from 'express'
 import dotenv from 'dotenv'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { existsSync } from 'fs'
 import { logError, logAction } from './logs/logger.js'
 import { loggerMiddleware } from './middleware/logger.js'
 import authRoutes from './routes/auth.routes.js'
@@ -16,11 +17,18 @@ import prisma from './config/db.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: resolve(__dirname, '../.env') })
 
+const FRONTEND_DIST = resolve(__dirname, '../frontend/dist')
+
 const app = express()
 const PORT = process.env.PORT || 3000
 
 app.use(express.json())
 app.use(loggerMiddleware)
+
+// Servir le frontend buildé (production)
+if (existsSync(FRONTEND_DIST)) {
+  app.use(express.static(FRONTEND_DIST))
+}
 
 // Routes
 app.use('/auth', authRoutes)
@@ -34,6 +42,13 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+// Fallback SPA — toutes les routes non-API → index.html
+if (existsSync(FRONTEND_DIST)) {
+  app.get('*', (req, res) => {
+    res.sendFile(resolve(FRONTEND_DIST, 'index.html'))
+  })
+}
+
 // Erreurs globales
 app.use((err, req, res, next) => {
   logError(err.message)
@@ -42,6 +57,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, async () => {
   logAction(`EVA backend démarré sur le port ${PORT}`)
+  logAction(`Frontend dist : ${FRONTEND_DIST} — ${existsSync(FRONTEND_DIST) ? 'TROUVÉ' : 'INTROUVABLE'}`)
 
   // Démarrer les crons
   startAllCrons().catch(err => logError(`Crons: échec démarrage — ${err.message}`))
