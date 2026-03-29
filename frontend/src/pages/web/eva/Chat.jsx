@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { eva, conversations as convsApi } from '../../../shared/api.js'
 
 const THINKING_PHRASES = [
@@ -44,8 +44,8 @@ export default function Chat() {
     try {
       const list = await convsApi.getAll()
       setConvList(list)
-    } catch {
-      // silencieux
+    } catch (err) {
+      console.error('loadConvList:', err)
     }
   }
 
@@ -57,8 +57,8 @@ export default function Chat() {
       const conv = await convsApi.getById(id)
       setActiveConvId(id)
       setMessages(conv.messages.map(m => ({ role: m.role, content: m.content, id: m.id })))
-    } catch {
-      // silencieux
+    } catch (err) {
+      console.error('openConversation:', err)
     } finally {
       setLoadingConv(false)
     }
@@ -71,8 +71,8 @@ export default function Chat() {
       setConvList(prev => [conv, ...prev])
       setActiveConvId(conv.id)
       setMessages([])
-    } catch {
-      // silencieux
+    } catch (err) {
+      console.error('newConversation:', err)
     }
   }
 
@@ -141,8 +141,8 @@ export default function Chat() {
         convId = conv.id
         setActiveConvId(convId)
         setConvList(prev => [conv, ...prev])
-      } catch {
-        // Sans conversation, envoyer en mode éphémère
+      } catch (err) {
+        console.warn('Création conversation échouée, mode éphémère:', err)
       }
     }
 
