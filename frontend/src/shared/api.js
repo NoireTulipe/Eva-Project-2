@@ -256,7 +256,57 @@ export const admin = {
 // --- EVA ---
 
 export const eva = {
-  chat: (message, history = []) => request('POST', '/eva/chat', { message, history })
+  chat: (message, conversationId = null) =>
+    request('POST', '/eva/chat', { message, conversationId })
+}
+
+// --- Conversations ---
+
+export const conversations = {
+  getAll: () => request('GET', '/conversations'),
+  create: (titre) => request('POST', '/conversations', { titre }),
+  getById: (id) => request('GET', `/conversations/${id}`),
+  rename: (id, titre) => request('PUT', `/conversations/${id}`, { titre }),
+  remove: (id) => request('DELETE', `/conversations/${id}`)
+}
+
+// --- Mémoire ---
+
+export const memoire = {
+  getStats: () => request('GET', '/memoire/stats'),
+
+  // Souvenirs
+  getSouvenirs: () => request('GET', '/memoire/souvenirs'),
+  createSouvenir: (contenu) => request('POST', '/memoire/souvenirs', { contenu }),
+  updateSouvenir: (id, contenu) => request('PUT', `/memoire/souvenirs/${id}`, { contenu }),
+  deleteSouvenir: (id) => request('DELETE', `/memoire/souvenirs/${id}`),
+
+  // Préférences
+  getPreferences: () => request('GET', '/memoire/preferences'),
+  createPreference: (cle, contenu) => request('POST', '/memoire/preferences', { cle, contenu }),
+  updatePreference: (id, data) => request('PUT', `/memoire/preferences/${id}`, data),
+  deletePreference: (id) => request('DELETE', `/memoire/preferences/${id}`),
+
+  // Contacts
+  getContacts: () => request('GET', '/memoire/contacts'),
+  createContact: (nom, contenu) => request('POST', '/memoire/contacts', { nom, contenu }),
+  updateContact: (id, data) => request('PUT', `/memoire/contacts/${id}`, data),
+  deleteContact: (id) => request('DELETE', `/memoire/contacts/${id}`),
+
+  // Buffer
+  getBuffer: (traite) => {
+    const qs = traite !== undefined ? `?traite=${traite}` : ''
+    return request('GET', `/memoire/buffer${qs}`)
+  },
+  deleteBufferEntry: (id) => request('DELETE', `/memoire/buffer/${id}`),
+  clearBuffer: (traite) => {
+    const qs = traite !== undefined ? `?traite=${traite}` : ''
+    return request('DELETE', `/memoire/buffer${qs}`)
+  },
+
+  // Outils
+  recherche: (query) => request('POST', '/memoire/recherche', { query }),
+  consolider: () => request('POST', '/memoire/consolider')
 }
 
 // --- Comptabilité ---

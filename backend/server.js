@@ -9,6 +9,8 @@ import authRoutes from './routes/auth.routes.js'
 import ventesRoutes from './routes/ventes.routes.js'
 import referentielsRoutes from './routes/referentiels.routes.js'
 import evaRoutes from './routes/eva.routes.js'
+import conversationsRoutes from './routes/conversations.routes.js'
+import memoireRoutes from './routes/memoire.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
@@ -35,6 +37,8 @@ app.use('/api/auth', authRoutes)
 app.use('/api/ventes', ventesRoutes)
 app.use('/api/ref', referentielsRoutes)
 app.use('/api/eva', evaRoutes)
+app.use('/api/conversations', conversationsRoutes)
+app.use('/api/memoire', memoireRoutes)
 app.use('/api/admin', adminRoutes)
 
 // Health check

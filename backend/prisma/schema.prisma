@@ -307,6 +307,26 @@ model Rappel {
   createdAt   DateTime  @default(now())
 }
 
+// ─── CONVERSATIONS ────────────────────────────────────────────────────────────
+
+model Conversation {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  titre     String    @default("Nouvelle conversation")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String       // "user" | "assistant"
+  content        String
+  createdAt      DateTime     @default(now())
+}
+
 // ─── MÉMOIRE ──────────────────────────────────────────────────────────────────
 
 model MemBuffer {

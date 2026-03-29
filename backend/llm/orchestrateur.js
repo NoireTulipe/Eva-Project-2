@@ -1,6 +1,7 @@
 import { callAI } from './providers.js'
 import { getPrompt } from './prompts.js'
 import { getToolsDescription, executeTool } from '../tools/registry.js'
+import { rechercheMemoire } from '../modules/memoire/recherche.js'
 import prisma from '../config/db.js'
 import { logAction, logError } from '../logs/logger.js'
 
@@ -107,11 +108,12 @@ export async function processMessage(message, context, options = {}) {
   const now = new Date()
   const dateInfo = `Date et heure : ${now.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}, ${now.toLocaleDateString('fr-FR', { weekday: 'long', timeZone: 'Europe/Paris' })}`
 
-  // 1. Charger les prompts et la config LLM
-  const [orchestratorRaw, redacteurRaw, config] = await Promise.all([
+  // 1. Charger les prompts, la config LLM et la mémoire en parallèle
+  const [orchestratorRaw, redacteurRaw, config, memoireContext] = await Promise.all([
     getPrompt('orchestrateur', 'system'),
     getPrompt('redacteur', 'system'),
-    getLLMConfig()
+    getLLMConfig(),
+    buildMemoireContext(message, context.userId)
   ])
 
   const orchestratorPrompt = (orchestratorRaw || DEFAULT_ORCHESTRATOR)
@@ -126,8 +128,8 @@ export async function processMessage(message, context, options = {}) {
         .join('\n')
     : ''
 
-  // 3. Appel orchestrateur (Flash)
-  const userPrompt = `${dateInfo}${historyText}
+  // 3. Appel orchestrateur (Flash) avec mémoire injectée
+  const userPrompt = `${dateInfo}${memoireContext}${historyText}
 
 Message de ${context.userName} : ${message}`
 
@@ -223,4 +225,46 @@ async function pushToBuffer(message, response, context) {
       contenu: `${context.userName}: ${message}\nEVA: ${response}`
     }
   })
+}
+
+/**
+ * Construit le bloc mémoire à injecter dans le prompt Flash.
+ * Fait une recherche sémantique sur le message + récupère les préférences clés.
+ * Retourne une chaîne vide si aucun résultat pertinent.
+ */
+async function buildMemoireContext(message, userId) {
+  try {
+    const [semantique, preferences] = await Promise.all([
+      rechercheMemoire(message, userId),
+      prisma.memPreference.findMany({
+        where: { userId },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        select: { cle: true, contenu: true }
+      })
+    ])
+
+    const lines = []
+
+    if (preferences.length > 0) {
+      lines.push('PRÉFÉRENCES CONNUES :')
+      for (const p of preferences) {
+        lines.push(`  • ${p.cle} : ${p.contenu}`)
+      }
+    }
+
+    if (semantique.length > 0) {
+      lines.push('MÉMOIRE PERTINENTE :')
+      for (const r of semantique) {
+        if (r.type === 'souvenir') lines.push(`  • [souvenir] ${r.contenu}`)
+        else if (r.type === 'preference') lines.push(`  • [préférence] ${r.cle} : ${r.contenu}`)
+        else if (r.type === 'contact') lines.push(`  • [contact] ${r.nom} : ${r.contenu}`)
+      }
+    }
+
+    return lines.length > 0 ? '\n\n' + lines.join('\n') : ''
+  } catch {
+    // La mémoire ne doit jamais bloquer le pipeline
+    return ''
+  }
 }
