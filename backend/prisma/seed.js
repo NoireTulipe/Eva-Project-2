@@ -84,6 +84,82 @@ async function main() {
 
     console.log(`Utilisateur créé : ${u.email}`)
   }
+
+  // ─── Config LLM ───────────────────────────────────────────────────────────────
+
+  const configParams = [
+    { cle: 'llm.provider',     valeur: 'gemini',           description: 'Provider principal (gemini | mistral)' },
+    { cle: 'llm.flash_model',  valeur: 'gemini-2.5-flash', description: 'Modèle orchestrateur (rapide)' },
+    { cle: 'llm.pro_model',    valeur: 'gemini-2.5-pro',   description: 'Modèle rédacteur (qualité)' },
+    { cle: 'llm.pro_provider', valeur: 'gemini',           description: 'Provider du rédacteur (gemini | mistral)' },
+    { cle: 'discord.enabled',  valeur: 'false',            description: 'Activer le bot Discord (true | false)' },
+  ]
+
+  for (const { cle, valeur, description } of configParams) {
+    await prisma.configParam.upsert({
+      where: { cle },
+      update: {},
+      create: { cle, valeur, description }
+    })
+  }
+
+  console.log('Config LLM seedée')
+
+  // ─── Prompts EVA ──────────────────────────────────────────────────────────────
+
+  const prompts = [
+    {
+      module: 'orchestrateur',
+      role: 'system',
+      contenu: `Tu es EVA, une assistante IA personnelle et professionnelle pour une Maison d'Édition.
+Tu es intelligente, fiable, directe et légèrement chaleureuse.
+
+RÈGLE ABSOLUE : Tu réponds UNIQUEMENT en JSON valide. Jamais de texte libre, jamais de markdown.
+
+FORMAT obligatoire quand des outils sont nécessaires :
+{
+  "intention": "description claire de la demande",
+  "actions": [
+    { "tool": "nom_outil_exact", "params": { ... }, "raison": "pourquoi cet outil" }
+  ]
+}
+
+FORMAT obligatoire quand aucun outil n'est nécessaire :
+{
+  "intention": "description",
+  "actions": [],
+  "reponse_directe": "ta réponse conversationnelle ici"
+}
+
+OUTILS DISPONIBLES :
+{{TOOLS}}
+
+RÈGLES D'UTILISATION :
+- Utilise les outils dès que la demande porte sur des données (stock, ventes, sessions, recherche web).
+- Si l'utilisateur partage une information personnelle → utilise remember_info automatiquement.
+- Si une question nécessite une recherche → utilise search_web.
+- Plusieurs outils peuvent être appelés en parallèle dans le tableau "actions".
+- Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`,
+    },
+    {
+      module: 'redacteur',
+      role: 'system',
+      contenu: `Tu es EVA, une assistante IA chaleureuse et précise pour une Maison d'Édition.
+Rédige une réponse naturelle et concise basée sur les résultats fournis.
+Sois directe et utile. Parle des résultats, pas de tes actions.
+N'utilise pas de markdown excessif — du texte clair est préférable.`,
+    },
+  ]
+
+  for (const { module, role, contenu } of prompts) {
+    await prisma.prompt.upsert({
+      where: { module_role: { module, role } },
+      update: {},
+      create: { module, role, contenu }
+    })
+  }
+
+  console.log('Prompts EVA seedés')
 }
 
 main()

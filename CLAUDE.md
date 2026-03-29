@@ -84,11 +84,12 @@ Tableau de bord modulaire avec widgets configurables par utilisateur.
 
 ### 📦 Maison d'Édition (`/me`)
 ```
-/me/ventes        — Sessions de vente (active + historique)
-/me/produits      — Catalogue produits (livres, goodies)
-/me/pdv           — Points de vente
-/me/compta        — Comptabilité (stub)
-/me/referentiels  — Référentiels / thésaurus métier
+/me/ventes        — Sessions de vente (active + historique) ✅
+/me/produits      — Catalogue produits + auteurs ✅
+/me/pdv           — Points de vente ✅
+/me/depots        — Dépôts PDV (suivi exemplaires en dépôt-vente) ✅
+/me/compta        — Comptabilité (bilan, frais, pertes) ✅
+/me/referentiels  — Référentiels / thésaurus métier ✅
 ```
 
 ### 🤖 EVA (`/eva`)
@@ -124,7 +125,7 @@ eva-v2/
 ├── package.json                  # npm workspaces (backend + frontend)
 │
 ├── backend/
-│   ├── package.json              # prisma.seed configuré
+│   ├── package.json              # scripts : dev, start, seed:fixtures
 │   ├── server.js                 # Express, routes montées : /auth /ventes /ref
 │   ├── config/
 │   │   └── db.js
@@ -133,7 +134,8 @@ eva-v2/
 │   │   └── logger.js
 │   ├── routes/
 │   │   ├── auth.routes.js        # POST /auth/login, POST /auth/refresh
-│   │   ├── ventes.routes.js      # 15 endpoints (produits, PDV, sessions, ventes)
+│   │   ├── ventes.routes.js      # 33 endpoints (produits, PDV, sessions, ventes,
+│   │   │                         #   frais, pertes, auteurs, dépôts, compta)
 │   │   ├── referentiels.routes.js # CRUD générique GET/POST/PUT/DELETE /ref/:table
 │   │   ├── mail.routes.js        # (à créer)
 │   │   ├── agenda.routes.js      # (à créer)
@@ -143,8 +145,8 @@ eva-v2/
 │   │   └── admin.routes.js       # (à créer)
 │   ├── modules/
 │   │   ├── ventes/
-│   │   │   ├── ventes.service.js  # CRUD + sessions + calculs
-│   │   │   └── ventes.calculs.js  # JS pur, zéro LLM
+│   │   │   ├── ventes.service.js  # CRUD complet ME (voir détail ci-dessous)
+│   │   │   └── ventes.calculs.js  # JS pur : calcRecapSession, calcRecapCompta
 │   │   ├── mail/         # (à créer)
 │   │   ├── agenda/       # (à créer)
 │   │   ├── notes/        # (à créer)
@@ -164,10 +166,11 @@ eva-v2/
 │   └── prisma/
 │       ├── schema.prisma         # 25+ modèles, 5 migrations appliquées
 │       ├── seed.js               # référentiels + 2 utilisateurs
+│       ├── seed.fixtures.js      # données de test ME complètes
 │       └── dev.db
 │
 ├── frontend/
-│   ├── package.json              # react, react-dom, react-router-dom, vite, tailwind
+│   ├── package.json
 │   ├── vite.config.js            # proxy /api → localhost:3000
 │   ├── tailwind.config.js
 │   ├── postcss.config.js
@@ -177,11 +180,13 @@ eva-v2/
 │       ├── App.jsx               # routing React Router v6, PrivateRoute, AdminRoute
 │       ├── index.css
 │       ├── shared/
-│       │   ├── api.js            # client HTTP JWT (auto-refresh 401), toutes les fonctions
+│       │   ├── api.js            # client HTTP JWT (auto-refresh 401)
+│       │   │                     # modules : auth, produits, pdv, sessions, ref,
+│       │   │                     #           ventes, frais, pertes, auteurs, depots, compta
 │       │   ├── nav.js            # config navigation centralisée (NAV)
 │       │   ├── SessionContext.jsx # contexte session active + persistance localStorage
 │       │   └── hooks/
-│       │       └── useApi.js     # { data, loading, error, refetch }
+│       │       └── useApi.js     # { data, loading, error, refetch }, supporte deps[]
 │       ├── components/web/
 │       │   ├── Layout.jsx        # Navbar + SubNav + <Outlet>
 │       │   ├── Navbar.jsx        # 4 onglets icône+texte, pastille session active
@@ -193,10 +198,11 @@ eva-v2/
 │           ├── LoginPage.jsx
 │           ├── Dashboard.jsx
 │           ├── me/
-│           │   ├── Ventes.jsx    # session active (Context) + historique dépliable
-│           │   ├── Produits.jsx
-│           │   ├── PDV.jsx
-│           │   ├── Compta.jsx    # stub
+│           │   ├── Ventes.jsx    # session active (ventes + frais) + historique
+│           │   ├── Produits.jsx  # 2 onglets : Catalogue (CRUD + auteurs) + Auteurs (CRUD)
+│           │   ├── PDV.jsx       # CRUD points de vente
+│           │   ├── Depots.jsx    # dépôts par PDV, création, retour partiel/total
+│           │   ├── Compta.jsx    # 3 onglets : Bilan (filtrable) + Frais + Pertes
 │           │   └── Referentiels.jsx
 │           ├── eva/
 │           │   ├── Supervision.jsx  # stub
@@ -221,16 +227,60 @@ eva-v2/
 
 ## Modules — résumé fonctionnel
 
-### 1. Ventes / Maison d'Édition ✅ IMPLÉMENTÉ
-- Sessions de vente liées à un PDV
+### 1. Ventes / Maison d'Édition ✅ COMPLET
+
+**Sessions**
+- Ouvrir/clôturer une session liée à un PDV
 - Session active persistée via `SessionContext` + localStorage + détection auto au démarrage
 - Pastille "Session ouverte" dans la Navbar (lien direct)
-- Historique des sessions dépliable avec détail des ventes
-- CRUD produits (avec catégorie via SelectRef), PDV, ventes, annulations
+- Frais ajoutables pendant la session (type + libellé + montant)
 - Clôture : recap financier (CA, commission PDV, droits auteur, frais, bénéfice net)
-- Référentiels (7 tables) gérés dans ME > Référentiels
-- Calculs financiers en JS pur (`ventes.calculs.js`), jamais via LLM
-- Auteurs : schéma prêt, formulaire produit non encore implémenté côté UI
+- Historique dépliable avec détail ventes + frais
+
+**Produits**
+- CRUD catalogue (nom, catégorie, prix TTC, TVA, coût, stock, alerte stock, droits auteur %)
+- Liaison auteurs (many-to-many) dans le formulaire — sélecteur à badges cliquables
+- Suppression logique (`actif: false`)
+- Alerte visuelle si stock ≤ seuil
+
+**Auteurs**
+- CRUD (nom, prénom, email)
+- Onglet dédié dans `/me/produits`
+
+**PDV**
+- CRUD points de vente (nom, adresse, ville, type, commission fixe + %, encaissement)
+
+**Dépôts PDV** (`/me/depots`)
+- Déposer des exemplaires d'un produit chez un PDV
+- Vue regroupée par PDV avec total exemplaires actifs
+- Filtre : actifs / clôturés / tous
+- Retour partiel ou total (modale de saisie)
+- Stock décrémenté au dépôt, restitué au retour
+
+**Frais**
+- Ajout pendant une session (rattaché) ou hors session (comptabilité générale)
+- Suppression des frais hors session uniquement (les frais de session sont liés)
+
+**Pertes**
+- Déclaration : type (référentiel), produit optionnel, quantité optionnelle, valeur €, description
+- Stock décrémenté si produit + quantité renseignés
+- Suppression : stock restitué si applicable
+
+**Comptabilité** (`/me/compta`)
+- Filtre par période (début/fin) — par défaut : année en cours
+- Onglet **Bilan** : CA total, commissions, droits auteur, frais, pertes, résultat net + tableau par session
+- Onglet **Frais** : liste complète (session ou hors session), ajout frais hors session, suppression
+- Onglet **Pertes** : liste complète, déclaration, suppression
+
+**Calculs financiers** (`ventes.calculs.js`) — zéro LLM
+- `calcHT`, `calcRemise`, `calcPrixNet`, `calcTotalLigne`, `calcCAVente`
+- `calcCASession` (avec remise globale), `calcCommissionPDV`, `calcDroitsAuteur`
+- `calcBeneficeNet`, `calcRecapSession`, `calcRecapCompta`
+
+**Règles stock**
+- Vente → stock décrémenté ; annulation vente → stock restitué
+- Dépôt → stock décrémenté ; retour dépôt → stock restitué
+- Perte avec produit+qté → stock décrémenté ; suppression perte → stock restitué
 
 ### 2. Référentiels ✅ IMPLÉMENTÉ
 Route générique `GET/POST/PUT/DELETE /ref/:table` pour :
@@ -327,6 +377,7 @@ npx prisma studio              # explorer la base
 npx prisma migrate dev --name <nom>  # nouvelle migration
 npx prisma db seed             # reseed référentiels + utilisateurs
 npx prisma db push             # sync schema sans migration (dev only)
+npm run seed:fixtures           # charger les données de test ME
 ```
 
 ---
@@ -337,7 +388,8 @@ npx prisma db push             # sync schema sans migration (dev only)
 - [x] Express + middleware (auth JWT, logger)
 - [x] Prisma + SQLite (5 migrations, 25+ modèles)
 - [x] Seed référentiels + 2 utilisateurs (admin/user)
-- [x] Module Ventes complet (15 endpoints)
+- [x] Fixtures de test ME (`seed.fixtures.js`)
+- [x] Module Ventes complet — produits, PDV, sessions, ventes, frais, pertes, auteurs, dépôts, compta (33 endpoints)
 - [x] Route référentiels générique (`/ref/:table`)
 - [ ] Module Mail
 - [ ] Module Agenda
@@ -358,11 +410,12 @@ npx prisma db push             # sync schema sans migration (dev only)
 - [x] Navigation 4 espaces (Navbar + SubNav), Admin masqué pour `role: user`
 - [x] SessionContext (persistance + détection auto session ouverte)
 - [x] Composant SelectRef (select + modale Portal + auto-sélection)
-- [x] ME > Ventes (session active + historique)
-- [x] ME > Produits (CRUD)
+- [x] ME > Ventes (session active + frais + historique)
+- [x] ME > Produits (CRUD + auteurs intégrés)
 - [x] ME > PDV (CRUD)
+- [x] ME > Dépôts PDV (création + retour partiel/total, vue par PDV)
+- [x] ME > Comptabilité (bilan filtrable + frais + pertes)
 - [x] ME > Référentiels (CRUD 7 tables)
-- [ ] ME > Comptabilité
 - [ ] Dashboard (widgets configurables)
 - [ ] EVA > tous les modules (stubs en place)
 - [ ] Admin > tous les modules (stubs en place)

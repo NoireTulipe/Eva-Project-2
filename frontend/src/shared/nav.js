@@ -22,6 +22,7 @@ export const NAV = [
     label: 'EVA',
     icon: '🤖',
     children: [
+      { path: '/eva/chat',        label: 'Chat' },
       { path: '/eva/supervision', label: 'Supervision' },
       { path: '/eva/mails',       label: 'Mails' },
       { path: '/eva/memoire',     label: 'Mémoire' },

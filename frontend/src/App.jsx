@@ -15,6 +15,7 @@ import MeCompta       from './pages/web/me/Compta.jsx'
 import MeReferentiels from './pages/web/me/Referentiels.jsx'
 
 // EVA
+import EvaChat        from './pages/web/eva/Chat.jsx'
 import EvaSupervision from './pages/web/eva/Supervision.jsx'
 import EvaMails       from './pages/web/eva/Mails.jsx'
 import EvaMemoire     from './pages/web/eva/Memoire.jsx'
@@ -64,7 +65,8 @@ export default function App() {
 
             {/* EVA */}
             <Route path="/eva">
-              <Route index element={<Navigate to="supervision" replace />} />
+              <Route index element={<Navigate to="chat" replace />} />
+              <Route path="chat"        element={<EvaChat />} />
               <Route path="supervision" element={<EvaSupervision />} />
               <Route path="mails"       element={<EvaMails />} />
               <Route path="memoire"     element={<EvaMemoire />} />

@@ -5,6 +5,10 @@ import { loggerMiddleware } from './middleware/logger.js'
 import authRoutes from './routes/auth.routes.js'
 import ventesRoutes from './routes/ventes.routes.js'
 import referentielsRoutes from './routes/referentiels.routes.js'
+import evaRoutes from './routes/eva.routes.js'
+import adminRoutes from './routes/admin.routes.js'
+import { startBot } from './discord/bot.js'
+import prisma from './config/db.js'
 
 dotenv.config({ path: '../.env' })
 
@@ -18,6 +22,8 @@ app.use(loggerMiddleware)
 app.use('/auth', authRoutes)
 app.use('/ventes', ventesRoutes)
 app.use('/ref', referentielsRoutes)
+app.use('/eva', evaRoutes)
+app.use('/admin', adminRoutes)
 
 // Health check
 app.get('/health', (req, res) => {
@@ -30,6 +36,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Erreur interne du serveur' })
 })
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   logAction(`EVA backend démarré sur le port ${PORT}`)
+
+  // Démarrer le bot Discord si activé
+  const discordParam = await prisma.configParam.findUnique({ where: { cle: 'discord.enabled' } })
+  if (discordParam?.valeur === 'true') {
+    startBot().catch(err => logAction(`Discord: échec démarrage — ${err.message}`))
+  }
 })

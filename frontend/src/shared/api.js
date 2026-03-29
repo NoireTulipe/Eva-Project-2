@@ -208,6 +208,30 @@ export const depots = {
   retour: (id, quantite) => request('POST', `/ventes/depots/${id}/retour`, { quantite })
 }
 
+// --- Admin ---
+
+export const admin = {
+  // Prompts
+  getPrompts: () => request('GET', '/admin/prompts'),
+  updatePrompt: (id, data) => request('PUT', `/admin/prompts/${id}`, data),
+
+  // Config LLM
+  getConfig: () => request('GET', '/admin/config'),
+  updateConfig: (id, valeur) => request('PUT', `/admin/config/${id}`, { valeur }),
+
+  // Discord canaux
+  getCanaux: () => request('GET', '/admin/discord/canaux'),
+  createCanal: (data) => request('POST', '/admin/discord/canaux', data),
+  updateCanal: (id, data) => request('PUT', `/admin/discord/canaux/${id}`, data),
+  deleteCanal: (id) => request('DELETE', `/admin/discord/canaux/${id}`)
+}
+
+// --- EVA ---
+
+export const eva = {
+  chat: (message, history = []) => request('POST', '/eva/chat', { message, history })
+}
+
 // --- Comptabilité ---
 
 export const compta = {

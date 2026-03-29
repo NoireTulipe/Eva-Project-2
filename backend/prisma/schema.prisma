@@ -377,3 +377,16 @@ model CronConfig {
   updatedAt   DateTime @updatedAt
 }
 
+// ─── DISCORD ──────────────────────────────────────────────────────────────────
+
+model CanalDiscord {
+  id         Int      @id @default(autoincrement())
+  channelId  String   @unique
+  nom        String
+  mode       String   @default("conversation") // "outils" | "conversation"
+  categories String   @default("[]")           // JSON : ["ventes", "web", "memoire"]
+  actif      Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
