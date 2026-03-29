@@ -38,7 +38,7 @@ app.use('/api/eva', evaRoutes)
 app.use('/api/admin', adminRoutes)
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
