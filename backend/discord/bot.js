@@ -22,14 +22,8 @@ client.on('messageCreate', async (message) => {
   // Ignorer les bots
   if (message.author.bot) return
 
-  // En serveur : ignorer si EVA n'est pas mentionnée (sauf DM)
   const isDM = !message.guild
-  if (!isDM && !message.mentions.has(client.user)) return
-
-  // Nettoyer la mention du message
-  const userMessage = message.content
-    .replace(/<@!?\d+>/g, '')
-    .trim()
+  const userMessage = message.content.replace(/<@!?\d+>/g, '').trim()
 
   if (!userMessage) return
 
@@ -39,7 +33,10 @@ client.on('messageCreate', async (message) => {
     await message.channel.sendTyping()
 
     // Configuration du canal
-    const canalConfig = await getCanalConfig(channelId)
+    const canalConfig = await getCanalConfig(isDM ? null : channelId)
+
+    // Canal exclu → EVA n'écoute pas
+    if (canalConfig.mode === 'exclu') return
 
     // Historique récent du canal (5 derniers messages)
     const history = await fetchHistory(message.channel, client.user.id, 6)

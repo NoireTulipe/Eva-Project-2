@@ -282,7 +282,9 @@ function OngletDiscord() {
             <div className="text-xs text-gray-400 font-mono mt-0.5">{c.channelId}</div>
             <div className="flex gap-2 mt-2 flex-wrap">
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                c.mode === 'outils' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                c.mode === 'outils'       ? 'bg-blue-100 text-blue-700' :
+                c.mode === 'exclu'        ? 'bg-red-100 text-red-700' :
+                                            'bg-gray-100 text-gray-600'
               }`}>
                 {c.mode}
               </span>
@@ -338,7 +340,8 @@ function OngletDiscord() {
             <div className="flex flex-col gap-2">
               {[
                 { val: 'conversation', label: 'Conversation — Pro direct + mémoire, aucun outil' },
-                { val: 'outils',       label: 'Outils — Flash + outils filtrés + Pro' }
+                { val: 'outils',       label: 'Outils — Flash + outils filtrés + Pro' },
+                { val: 'exclu',        label: 'Exclure EVA — elle n\'écoute pas ce salon' }
               ].map(({ val, label }) => (
                 <label key={val} className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -347,7 +350,7 @@ function OngletDiscord() {
                     onChange={() => setForm(p => ({ ...p, mode: val }))}
                     className="accent-indigo-600"
                   />
-                  <span className="text-sm text-gray-700">{label}</span>
+                  <span className={`text-sm ${val === 'exclu' ? 'text-red-600' : 'text-gray-700'}`}>{label}</span>
                 </label>
               ))}
             </div>

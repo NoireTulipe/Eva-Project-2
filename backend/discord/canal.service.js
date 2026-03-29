@@ -7,6 +7,8 @@ import prisma from '../config/db.js'
  * @returns {Promise<{mode: string, categories: string[]}>}
  */
 export async function getCanalConfig(channelId) {
+  if (!channelId) return { mode: 'conversation', categories: [] }
+
   const canal = await prisma.canalDiscord.findUnique({
     where: { channelId }
   })

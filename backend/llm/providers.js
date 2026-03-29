@@ -2,8 +2,17 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { Mistral } from '@mistralai/mistralai'
 import { logError } from '../logs/logger.js'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+// Initialisation paresseuse — les clients sont créés au premier appel,
+// après que dotenv ait chargé les variables d'environnement.
+let geminiClient = null
 let mistralClient = null
+
+function getGemini() {
+  if (!geminiClient) {
+    geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  }
+  return geminiClient
+}
 
 function getMistral() {
   if (!mistralClient) {
@@ -19,7 +28,7 @@ async function callGemini(modelName, messages) {
   const modelOptions = { model: modelName }
   if (systemMsg) modelOptions.systemInstruction = systemMsg.content
 
-  const model = genAI.getGenerativeModel(modelOptions)
+  const model = getGemini().getGenerativeModel(modelOptions)
 
   const contents = otherMsgs.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',

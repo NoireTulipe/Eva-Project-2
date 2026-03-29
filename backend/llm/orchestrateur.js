@@ -77,7 +77,10 @@ export async function processConversation(message, context) {
       ).join('\n')
     : ''
 
+  const modelInfo = `Modèle LLM actif : ${config.proProvider} / ${config.proModel}`
+
   const prompt = `${systemPrompt}
+${modelInfo}
 
 ${dateInfo}${memoryText}${historyText}
 
@@ -87,6 +90,7 @@ ${context.userName} : ${message}`
     { role: 'user', content: prompt }
   ])
 
+  logAction(`EVA: réponse générée via ${config.proProvider}/${config.proModel} (${response.length} chars)`)
   pushToBuffer(message, response, context).catch(err => logError(`pushToBuffer: ${err.message}`))
   return response
 }
@@ -170,7 +174,9 @@ Message de ${context.userName} : ${message}`
   const toolResults = results.map(r => r.value || r.reason)
 
   // 7. Appel rédacteur (Pro) pour synthèse finale
+  const modelInfo = `Modèle LLM actif : ${config.proProvider} / ${config.proModel}`
   const writerPrompt = `${redacteurPrompt}
+${modelInfo}
 
 ${dateInfo}
 
@@ -190,7 +196,7 @@ Rédige une réponse naturelle et concise basée sur ces résultats.`
     logError(`pushToBuffer: ${err.message}`)
   )
 
-  logAction(`EVA: réponse générée (${finalResponse.length} chars)`)
+  logAction(`EVA: réponse générée via ${config.proProvider}/${config.proModel} (${finalResponse.length} chars)`)
   return finalResponse
 }
 

@@ -223,7 +223,30 @@ export const admin = {
   getCanaux: () => request('GET', '/admin/discord/canaux'),
   createCanal: (data) => request('POST', '/admin/discord/canaux', data),
   updateCanal: (id, data) => request('PUT', `/admin/discord/canaux/${id}`, data),
-  deleteCanal: (id) => request('DELETE', `/admin/discord/canaux/${id}`)
+  deleteCanal: (id) => request('DELETE', `/admin/discord/canaux/${id}`),
+
+  // Logs
+  getLogs: (fichier = 'actions', lignes = 200) =>
+    request('GET', `/admin/logs?fichier=${fichier}&lignes=${lignes}`),
+  clearLogs: (fichier = 'actions') =>
+    request('DELETE', `/admin/logs?fichier=${fichier}`),
+
+  // Utilisateurs
+  getUtilisateurs: () => request('GET', '/admin/utilisateurs'),
+  updateUtilisateur: (id, data) => request('PUT', `/admin/utilisateurs/${id}`, data),
+
+  // Crons
+  getCrons: () => request('GET', '/admin/crons'),
+  updateCron: (id, data) => request('PUT', `/admin/crons/${id}`, data),
+  runCron: (id) => request('POST', `/admin/crons/${id}/run`),
+
+  // Sauvegardes
+  getSauvegardeInfo: () => request('GET', '/admin/sauvegardes/info'),
+  createSauvegarde: () => request('POST', '/admin/sauvegardes/backup'),
+
+  // Système
+  getSystemeStatus: () => request('GET', '/admin/systeme/status'),
+  restart: () => request('POST', '/admin/systeme/restart')
 }
 
 // --- EVA ---

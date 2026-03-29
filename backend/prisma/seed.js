@@ -93,6 +93,7 @@ async function main() {
     { cle: 'llm.pro_model',    valeur: 'gemini-2.5-pro',   description: 'Modèle rédacteur (qualité)' },
     { cle: 'llm.pro_provider', valeur: 'gemini',           description: 'Provider du rédacteur (gemini | mistral)' },
     { cle: 'discord.enabled',  valeur: 'false',            description: 'Activer le bot Discord (true | false)' },
+    { cle: 'backup.path',      valeur: './prisma/',        description: 'Dossier de destination des sauvegardes SQLite (chemin relatif à backend/)' },
   ]
 
   for (const { cle, valeur, description } of configParams) {
@@ -160,6 +161,21 @@ N'utilise pas de markdown excessif — du texte clair est préférable.`,
   }
 
   console.log('Prompts EVA seedés')
+
+  // ─── Crons ────────────────────────────────────────────────────────────────────
+
+  await prisma.cronConfig.upsert({
+    where: { nom: 'memoire.consolidation' },
+    update: {},
+    create: {
+      nom: 'memoire.consolidation',
+      expression: '0 3 * * *',   // Chaque nuit à 3h
+      actif: true,
+      description: 'Consolidation nocturne du buffer mémoire vers la mémoire long terme'
+    }
+  })
+
+  console.log('Crons seedées')
 }
 
 main()

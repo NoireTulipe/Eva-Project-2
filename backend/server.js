@@ -1,5 +1,7 @@
 import express from 'express'
 import dotenv from 'dotenv'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { logError, logAction } from './logs/logger.js'
 import { loggerMiddleware } from './middleware/logger.js'
 import authRoutes from './routes/auth.routes.js'
@@ -8,9 +10,11 @@ import referentielsRoutes from './routes/referentiels.routes.js'
 import evaRoutes from './routes/eva.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import { startBot } from './discord/bot.js'
+import { startAllCrons } from './crons/cron.manager.js'
 import prisma from './config/db.js'
 
-dotenv.config({ path: '../.env' })
+const __dirname = dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: resolve(__dirname, '../.env') })
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -38,6 +42,9 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, async () => {
   logAction(`EVA backend démarré sur le port ${PORT}`)
+
+  // Démarrer les crons
+  startAllCrons().catch(err => logError(`Crons: échec démarrage — ${err.message}`))
 
   // Démarrer le bot Discord si activé
   const discordParam = await prisma.configParam.findUnique({ where: { cle: 'discord.enabled' } })

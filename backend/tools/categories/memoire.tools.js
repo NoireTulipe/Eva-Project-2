@@ -1,4 +1,5 @@
 import prisma from '../../config/db.js'
+import { rechercheMemoire, rechercheBuffer } from '../../modules/memoire/recherche.js'
 
 export const memoireTools = [
   {
@@ -35,37 +36,19 @@ export const memoireTools = [
       required: ['query']
     },
     async execute({ query }, context) {
-      const [buffer, souvenirs, preferences] = await Promise.all([
-        prisma.memBuffer.findMany({
-          where: {
-            source: { startsWith: `web:${context.userId}` },
-            contenu: { contains: query }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 5
-        }),
-        prisma.memSouvenir.findMany({
-          where: {
-            userId: context.userId,
-            contenu: { contains: query }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 5
-        }),
-        prisma.memPreference.findMany({
-          where: {
-            userId: context.userId,
-            contenu: { contains: query }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 3
-        })
+      const [semantique, buffer] = await Promise.all([
+        rechercheMemoire(query, context.userId),
+        rechercheBuffer(query, context.userId)
       ])
 
       return {
-        buffer: buffer.map(r => r.contenu),
-        souvenirs: souvenirs.map(s => s.contenu),
-        preferences: preferences.map(p => ({ cle: p.cle, contenu: p.contenu }))
+        memoire_semantique: semantique.map(r => ({
+          type: r.type,
+          contenu: r.contenu,
+          ...(r.nom && { nom: r.nom }),
+          ...(r.cle && { cle: r.cle })
+        })),
+        buffer_recent: buffer.map(r => r.contenu)
       }
     }
   }

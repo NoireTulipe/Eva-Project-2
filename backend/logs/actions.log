@@ -982,3 +982,287 @@
 [2026-03-29T08:18:09.114Z] ACTION — GET /ref/methodes-paiement — 304 (4ms)
 [2026-03-29T08:18:09.118Z] ACTION — GET /ref/types-frais — 304 (6ms)
 [2026-03-29T08:18:09.121Z] ACTION — GET /ventes/produits — 304 (6ms)
+[2026-03-29T08:43:08.840Z] ACTION — GET /admin/prompts — 304 (3ms)
+[2026-03-29T08:43:08.847Z] ACTION — GET /admin/prompts — 304 (2ms)
+[2026-03-29T08:43:09.760Z] ACTION — GET /admin/config — 304 (2ms)
+[2026-03-29T08:43:09.766Z] ACTION — GET /admin/config — 304 (2ms)
+[2026-03-29T08:43:22.507Z] ACTION — Admin: config discord.enabled → true
+[2026-03-29T08:43:22.507Z] ACTION — PUT /admin/config/5 — 200 (10ms)
+[2026-03-29T08:43:25.018Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T08:43:25.967Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T08:44:50.721Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T08:44:51.417Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T08:45:41.349Z] ACTION — GET /admin/prompts — 304 (11ms)
+[2026-03-29T08:45:41.356Z] ACTION — GET /admin/prompts — 304 (2ms)
+[2026-03-29T08:45:48.156Z] ACTION — POST /eva/chat — 200 (995ms)
+[2026-03-29T09:12:09.242Z] ACTION — Discord [1467901713636790339] mode=conversation → 40 chars
+[2026-03-29T09:12:38.419Z] ACTION — Discord [1467901713636790339] mode=conversation → 333 chars
+[2026-03-29T09:13:23.594Z] ACTION — Discord [1467901713636790339] mode=conversation → 100 chars
+[2026-03-29T09:21:03.399Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:21:05.942Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:21:07.417Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:22:36.277Z] ACTION — POST /eva/chat — 200 (654ms)
+[2026-03-29T09:23:08.992Z] ACTION — POST /eva/chat — 200 (658ms)
+[2026-03-29T09:23:37.385Z] ACTION — EVA: exécution 1 outil(s) — Identifier le modèle d'IA utilisé par EVA
+[2026-03-29T09:23:37.845Z] ACTION — EVA: réponse générée (121 chars)
+[2026-03-29T09:23:37.848Z] ACTION — POST /eva/chat — 200 (1786ms)
+[2026-03-29T09:26:09.445Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:26:10.157Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:26:15.763Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:26:16.604Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:26:43.162Z] ACTION — POST /eva/chat — 200 (679ms)
+[2026-03-29T09:27:43.482Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:27:44.308Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:27:58.735Z] ACTION — POST /eva/chat — 200 (770ms)
+[2026-03-29T09:28:45.520Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:28:46.304Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:29:31.837Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:29:32.661Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:29:59.131Z] ACTION — POST /eva/chat — 200 (997ms)
+[2026-03-29T09:30:11.384Z] ACTION — POST /eva/chat — 200 (1029ms)
+[2026-03-29T09:30:48.648Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:30:49.569Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:31:12.270Z] ACTION — Discord [1467901713636790339] mode=conversation → 45 chars
+[2026-03-29T09:32:05.787Z] ACTION — Discord [1467901713636790339] mode=conversation → 97 chars
+[2026-03-29T09:32:41.411Z] ACTION — Discord [1467901713636790339] mode=conversation → 177 chars
+[2026-03-29T09:34:46.104Z] ACTION — Discord [1467901713636790339] mode=conversation → 93 chars
+[2026-03-29T09:35:24.740Z] ACTION — Discord [1467901713636790339] mode=conversation → 156 chars
+[2026-03-29T09:42:56.762Z] ACTION — Discord [1467901713636790339] mode=conversation → 192 chars
+[2026-03-29T09:45:17.291Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:45:18.262Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:49:06.211Z] ACTION — Discord [1467901713636790339] mode=conversation → 127 chars
+[2026-03-29T09:51:42.685Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:51:43.426Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:54:44.005Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:54:44.799Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:54:49.526Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:54:50.393Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:58:49.145Z] ACTION — GET /ventes/sessions/5 — 304 (10ms)
+[2026-03-29T09:58:49.154Z] ACTION — GET /ventes/sessions/5 — 304 (4ms)
+[2026-03-29T09:59:03.680Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:59:04.725Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:59:19.903Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T09:59:20.712Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T09:59:26.497Z] ACTION — GET /ventes/sessions/5 — 304 (10ms)
+[2026-03-29T09:59:26.504Z] ACTION — GET /ventes/sessions/5 — 304 (5ms)
+[2026-03-29T09:59:32.053Z] ACTION — POST /eva/chat — 200 (1106ms)
+[2026-03-29T09:59:47.638Z] ACTION — POST /eva/chat — 200 (1239ms)
+[2026-03-29T10:00:09.962Z] ACTION — POST /eva/chat — 200 (1110ms)
+[2026-03-29T10:00:32.354Z] ACTION — POST /eva/chat — 200 (2653ms)
+[2026-03-29T10:01:03.151Z] ACTION — POST /eva/chat — 200 (1650ms)
+[2026-03-29T10:01:38.961Z] ACTION — POST /eva/chat — 200 (1841ms)
+[2026-03-29T10:01:53.818Z] ACTION — POST /eva/chat — 200 (1046ms)
+[2026-03-29T10:03:35.902Z] ACTION — POST /eva/chat — 200 (3302ms)
+[2026-03-29T10:05:53.513Z] ACTION — POST /eva/chat — 200 (4307ms)
+[2026-03-29T10:07:08.561Z] ACTION — POST /eva/chat — 200 (2803ms)
+[2026-03-29T10:09:46.277Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:09:46.984Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:09:53.241Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:09:53.979Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:09:59.923Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:10:00.738Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:11:42.008Z] ACTION — Discord [1467901713636790339] mode=conversation → 158 chars
+[2026-03-29T10:12:11.651Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:12:12.398Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:13:19.993Z] ACTION — Discord [1467901713636790339] mode=conversation → 31 chars
+[2026-03-29T10:14:36.350Z] ACTION — POST /eva/chat — 200 (911ms)
+[2026-03-29T10:15:50.741Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:15:51.478Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:16:45.349Z] ACTION — EVA: réponse générée via gemini/gemini-2.5-pro (49 chars)
+[2026-03-29T10:16:45.350Z] ACTION — Discord [1467901713636790339] mode=conversation → 49 chars
+[2026-03-29T10:19:08.124Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:19:08.943Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:19:13.722Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:19:14.543Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:19:19.749Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:19:20.481Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:20:36.209Z] ACTION — EVA: réponse générée via gemini/gemini-2.5-pro (41 chars)
+[2026-03-29T10:20:36.210Z] ACTION — Discord [1467901713636790339] mode=conversation → 41 chars
+[2026-03-29T10:20:42.085Z] ACTION — GET /ventes/sessions/5 — 304 (10ms)
+[2026-03-29T10:20:42.094Z] ACTION — GET /ventes/sessions/5 — 304 (5ms)
+[2026-03-29T10:20:43.968Z] ACTION — GET /admin/prompts — 304 (4ms)
+[2026-03-29T10:20:43.977Z] ACTION — GET /admin/prompts — 304 (5ms)
+[2026-03-29T10:21:11.570Z] ACTION — GET /admin/prompts — 304 (2ms)
+[2026-03-29T10:21:11.577Z] ACTION — GET /admin/prompts — 304 (2ms)
+[2026-03-29T10:21:12.964Z] ACTION — GET /admin/discord/canaux — 304 (2ms)
+[2026-03-29T10:21:12.970Z] ACTION — GET /admin/discord/canaux — 304 (3ms)
+[2026-03-29T10:22:56.951Z] ACTION — Admin: canal Discord créé — #sans_eva (1487758785702400000)
+[2026-03-29T10:22:56.952Z] ACTION — POST /admin/discord/canaux — 201 (8ms)
+[2026-03-29T10:23:46.999Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:23:49.516Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T10:23:50.254Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T10:24:38.769Z] ACTION — EVA: réponse générée via gemini/gemini-2.5-pro (38 chars)
+[2026-03-29T10:24:38.770Z] ACTION — Discord [1467901713636790339] mode=conversation → 38 chars
+[2026-03-29T11:12:12.679Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:12:13.503Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:15:05.444Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:15:06.235Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:15:13.755Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:15:14.643Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:15:40.301Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:15:40.955Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:15:49.813Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:15:49.872Z] ACTION — Crons : 0 tâche(s) démarrée(s)
+[2026-03-29T11:15:50.499Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:16:10.162Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:16:10.220Z] ACTION — Crons : 0 tâche(s) démarrée(s)
+[2026-03-29T11:16:10.991Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:16:32.356Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:16:32.412Z] ACTION — Crons : 0 tâche(s) démarrée(s)
+[2026-03-29T11:16:33.135Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:16:37.528Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:16:37.588Z] ACTION — Crons : 0 tâche(s) démarrée(s)
+[2026-03-29T11:16:38.349Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:16:42.386Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:16:42.401Z] ACTION — Crons : 0 tâche(s) démarrée(s)
+[2026-03-29T11:16:43.183Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:16:48.112Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:16:48.171Z] ACTION — Crons : 0 tâche(s) démarrée(s)
+[2026-03-29T11:16:49.041Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:16:52.336Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:16:52.396Z] ACTION — Crons : 0 tâche(s) démarrée(s)
+[2026-03-29T11:16:53.010Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:17:01.239Z] ACTION — GET /admin/prompts — 304 (15ms)
+[2026-03-29T11:17:01.241Z] ACTION — GET /admin/prompts — 304 (10ms)
+[2026-03-29T11:17:01.243Z] ACTION — GET /ventes/sessions/5 — 304 (11ms)
+[2026-03-29T11:17:02.509Z] ACTION — GET /admin/prompts — 304 (3ms)
+[2026-03-29T11:17:02.512Z] ACTION — GET /ventes/sessions/5 — 304 (4ms)
+[2026-03-29T11:17:02.516Z] ACTION — GET /admin/prompts — 304 (2ms)
+[2026-03-29T11:17:02.526Z] ACTION — GET /ventes/sessions/5 — 304 (5ms)
+[2026-03-29T11:19:02.280Z] ACTION — GET /admin/prompts — 304 (5ms)
+[2026-03-29T11:19:02.282Z] ACTION — GET /ventes/sessions/5 — 304 (5ms)
+[2026-03-29T11:19:02.294Z] ACTION — GET /admin/prompts — 304 (4ms)
+[2026-03-29T11:19:02.297Z] ACTION — GET /ventes/sessions/5 — 304 (5ms)
+[2026-03-29T11:19:06.013Z] ACTION — GET /admin/crons — 200 (3ms)
+[2026-03-29T11:19:06.021Z] ACTION — GET /admin/crons — 304 (2ms)
+[2026-03-29T11:19:17.131Z] ACTION — GET /admin/utilisateurs — 200 (2ms)
+[2026-03-29T11:19:17.137Z] ACTION — GET /admin/utilisateurs — 304 (2ms)
+[2026-03-29T11:19:25.737Z] ACTION — GET /admin/logs?fichier=actions&lignes=300 — 200 (2ms)
+[2026-03-29T11:19:25.744Z] ACTION — GET /admin/logs?fichier=actions&lignes=300 — 200 (2ms)
+[2026-03-29T11:19:40.791Z] ACTION — GET /admin/logs?fichier=errors&lignes=300 — 200 (2ms)
+[2026-03-29T11:19:56.483Z] ACTION — Admin: log errors.log vidé
+[2026-03-29T11:19:56.483Z] ACTION — DELETE /admin/logs?fichier=errors — 204 (2ms)
+[2026-03-29T11:19:59.485Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:19:59.576Z] ACTION — Cron "memoire.consolidation" planifié : 0 3 * * *
+[2026-03-29T11:19:59.576Z] ACTION — Crons : 1 tâche(s) démarrée(s)
+[2026-03-29T11:20:00.330Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:20:07.935Z] ACTION — GET /admin/sauvegardes/info — 200 (9ms)
+[2026-03-29T11:20:07.946Z] ACTION — GET /admin/sauvegardes/info — 304 (5ms)
+[2026-03-29T11:20:28.957Z] ACTION — GET /admin/prompts — 304 (4ms)
+[2026-03-29T11:20:28.964Z] ACTION — GET /admin/prompts — 304 (2ms)
+[2026-03-29T11:20:38.393Z] ACTION — GET /admin/config — 200 (2ms)
+[2026-03-29T11:20:38.401Z] ACTION — GET /admin/config — 304 (2ms)
+[2026-03-29T11:20:41.866Z] ACTION — GET /admin/utilisateurs — 304 (2ms)
+[2026-03-29T11:20:41.876Z] ACTION — GET /admin/utilisateurs — 304 (2ms)
+[2026-03-29T11:20:43.356Z] ACTION — GET /admin/logs?fichier=actions&lignes=300 — 200 (5ms)
+[2026-03-29T11:20:43.361Z] ACTION — GET /admin/logs?fichier=actions&lignes=300 — 200 (3ms)
+[2026-03-29T11:20:49.551Z] ACTION — GET /admin/sauvegardes/info — 304 (3ms)
+[2026-03-29T11:20:49.562Z] ACTION — GET /admin/sauvegardes/info — 304 (1ms)
+[2026-03-29T11:21:08.321Z] ACTION — GET /admin/crons — 200 (5ms)
+[2026-03-29T11:21:08.331Z] ACTION — GET /admin/crons — 304 (1ms)
+[2026-03-29T11:21:09.679Z] ACTION — GET /admin/prompts — 304 (1ms)
+[2026-03-29T11:21:09.686Z] ACTION — GET /admin/prompts — 304 (3ms)
+[2026-03-29T11:21:16.564Z] ACTION — GET /ref/types-frais — 304 (8ms)
+[2026-03-29T11:21:16.566Z] ACTION — GET /ventes/produits — 304 (7ms)
+[2026-03-29T11:21:16.568Z] ACTION — GET /ref/types-frais — 304 (7ms)
+[2026-03-29T11:21:16.571Z] ACTION — GET /ref/methodes-paiement — 304 (9ms)
+[2026-03-29T11:21:16.581Z] ACTION — GET /ventes/produits — 304 (6ms)
+[2026-03-29T11:21:16.582Z] ACTION — GET /ref/methodes-paiement — 304 (4ms)
+[2026-03-29T11:21:27.070Z] ACTION — GET /ventes/produits — 304 (5ms)
+[2026-03-29T11:21:27.083Z] ACTION — GET /ventes/auteurs — 304 (6ms)
+[2026-03-29T11:21:27.086Z] ACTION — GET /ventes/produits — 304 (5ms)
+[2026-03-29T11:21:27.092Z] ACTION — GET /ventes/auteurs — 304 (3ms)
+[2026-03-29T11:21:27.699Z] ACTION — GET /ventes/pdv — 304 (3ms)
+[2026-03-29T11:21:27.709Z] ACTION — GET /ventes/pdv — 304 (3ms)
+[2026-03-29T11:21:28.557Z] ACTION — GET /ventes/produits — 304 (8ms)
+[2026-03-29T11:21:28.559Z] ACTION — GET /ventes/pdv — 304 (7ms)
+[2026-03-29T11:21:28.561Z] ACTION — GET /ventes/depots — 200 (6ms)
+[2026-03-29T11:21:28.572Z] ACTION — GET /ventes/produits — 304 (7ms)
+[2026-03-29T11:21:28.573Z] ACTION — GET /ventes/pdv — 304 (6ms)
+[2026-03-29T11:21:28.575Z] ACTION — GET /ventes/depots — 304 (6ms)
+[2026-03-29T11:21:29.281Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 200 (8ms)
+[2026-03-29T11:21:29.294Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (7ms)
+[2026-03-29T11:21:30.270Z] ACTION — GET /ref/methodes-paiement — 304 (6ms)
+[2026-03-29T11:21:30.273Z] ACTION — GET /ref/types-frais — 304 (6ms)
+[2026-03-29T11:21:30.282Z] ACTION — GET /ref/categories — 304 (6ms)
+[2026-03-29T11:21:30.288Z] ACTION — GET /ref/types-pdv — 304 (10ms)
+[2026-03-29T11:21:30.290Z] ACTION — GET /ref/types-hors-stock — 304 (10ms)
+[2026-03-29T11:21:30.291Z] ACTION — GET /ref/types-perte — 304 (8ms)
+[2026-03-29T11:21:30.296Z] ACTION — GET /ref/types-contact — 304 (11ms)
+[2026-03-29T11:21:30.298Z] ACTION — GET /ref/methodes-paiement — 304 (6ms)
+[2026-03-29T11:21:30.307Z] ACTION — GET /ref/types-frais — 304 (13ms)
+[2026-03-29T11:21:30.309Z] ACTION — GET /ref/categories — 304 (8ms)
+[2026-03-29T11:21:30.310Z] ACTION — GET /ref/types-pdv — 304 (7ms)
+[2026-03-29T11:21:30.311Z] ACTION — GET /ref/types-hors-stock — 304 (7ms)
+[2026-03-29T11:21:30.314Z] ACTION — GET /ref/types-perte — 304 (8ms)
+[2026-03-29T11:21:30.317Z] ACTION — GET /ref/types-contact — 304 (5ms)
+[2026-03-29T11:23:12.103Z] ACTION — GET /ref/methodes-paiement — 304 (8ms)
+[2026-03-29T11:23:12.105Z] ACTION — GET /ref/types-frais — 304 (8ms)
+[2026-03-29T11:23:12.108Z] ACTION — GET /ventes/produits — 304 (8ms)
+[2026-03-29T11:23:12.115Z] ACTION — GET /ref/methodes-paiement — 304 (4ms)
+[2026-03-29T11:23:12.117Z] ACTION — GET /ref/types-frais — 304 (4ms)
+[2026-03-29T11:23:12.122Z] ACTION — GET /ventes/produits — 304 (4ms)
+[2026-03-29T11:23:12.131Z] ACTION — GET /ventes/produits — 304 (4ms)
+[2026-03-29T11:23:12.139Z] ACTION — GET /ventes/produits — 304 (4ms)
+[2026-03-29T11:23:12.866Z] ACTION — GET /ventes/auteurs — 304 (3ms)
+[2026-03-29T11:23:12.878Z] ACTION — GET /ventes/auteurs — 304 (2ms)
+[2026-03-29T11:23:13.945Z] ACTION — GET /ventes/pdv — 304 (3ms)
+[2026-03-29T11:23:13.971Z] ACTION — GET /ventes/pdv — 304 (4ms)
+[2026-03-29T11:23:15.010Z] ACTION — GET /ventes/depots — 304 (6ms)
+[2026-03-29T11:23:15.012Z] ACTION — GET /ventes/pdv — 304 (5ms)
+[2026-03-29T11:23:15.013Z] ACTION — GET /ventes/produits — 304 (5ms)
+[2026-03-29T11:23:15.021Z] ACTION — GET /ventes/depots — 304 (4ms)
+[2026-03-29T11:23:15.022Z] ACTION — GET /ventes/pdv — 304 (4ms)
+[2026-03-29T11:23:15.030Z] ACTION — GET /ventes/produits — 304 (4ms)
+[2026-03-29T11:23:15.762Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (7ms)
+[2026-03-29T11:23:15.773Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (7ms)
+[2026-03-29T11:24:00.479Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:24:00.580Z] ACTION — Cron "memoire.consolidation" planifié : 0 3 * * *
+[2026-03-29T11:24:00.580Z] ACTION — Crons : 1 tâche(s) démarrée(s)
+[2026-03-29T11:24:03.140Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:24:03.225Z] ACTION — Cron "memoire.consolidation" planifié : 0 3 * * *
+[2026-03-29T11:24:03.225Z] ACTION — Crons : 1 tâche(s) démarrée(s)
+[2026-03-29T11:24:03.972Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:24:10.579Z] ACTION — EVA backend démarré sur le port 3000
+[2026-03-29T11:24:10.673Z] ACTION — Cron "memoire.consolidation" planifié : 0 3 * * *
+[2026-03-29T11:24:10.673Z] ACTION — Crons : 1 tâche(s) démarrée(s)
+[2026-03-29T11:24:11.313Z] ACTION — Discord : bot connecté en tant que Eva Project#0441
+[2026-03-29T11:24:19.599Z] ACTION — GET /ventes/sessions/5 — 304 (9ms)
+[2026-03-29T11:24:19.602Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (22ms)
+[2026-03-29T11:24:19.613Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (7ms)
+[2026-03-29T11:24:20.837Z] ACTION — GET /ventes/sessions/5 — 304 (6ms)
+[2026-03-29T11:24:20.842Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (8ms)
+[2026-03-29T11:24:20.851Z] ACTION — GET /ventes/sessions/5 — 304 (6ms)
+[2026-03-29T11:24:20.860Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (12ms)
+[2026-03-29T11:41:25.420Z] ACTION — GET /ventes/sessions/5 — 304 (7ms)
+[2026-03-29T11:41:25.423Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (14ms)
+[2026-03-29T11:41:25.430Z] ACTION — GET /ventes/sessions/5 — 304 (5ms)
+[2026-03-29T11:41:25.439Z] ACTION — GET /ventes/compta?debut=2026-01-01 — 304 (6ms)
+[2026-03-29T11:41:31.485Z] ACTION — GET /admin/prompts — 304 (3ms)
+[2026-03-29T11:41:31.491Z] ACTION — GET /admin/prompts — 304 (2ms)
+[2026-03-29T11:41:33.631Z] ACTION — GET /admin/systeme/status — 200 (3ms)
+[2026-03-29T11:41:33.635Z] ACTION — GET /admin/sauvegardes/info — 200 (2ms)
+[2026-03-29T11:41:33.641Z] ACTION — GET /admin/systeme/status — 200 (3ms)
+[2026-03-29T11:41:33.643Z] ACTION — GET /admin/config — 200 (7ms)
+[2026-03-29T11:41:33.650Z] ACTION — GET /admin/sauvegardes/info — 304 (5ms)
+[2026-03-29T11:41:33.656Z] ACTION — GET /admin/config — 304 (3ms)
+[2026-03-29T11:41:55.327Z] ACTION — GET /admin/logs?fichier=actions&lignes=300 — 200 (5ms)
+[2026-03-29T11:41:55.335Z] ACTION — GET /admin/logs?fichier=actions&lignes=300 — 200 (3ms)
+[2026-03-29T11:42:01.500Z] ACTION — GET /admin/logs?fichier=errors&lignes=300 — 200 (1ms)
+[2026-03-29T11:42:07.027Z] ACTION — GET /admin/logs?fichier=actions&lignes=300 — 200 (3ms)
+[2026-03-29T11:42:12.581Z] ACTION — GET /admin/sauvegardes/info — 304 (1ms)
+[2026-03-29T11:42:12.585Z] ACTION — GET /admin/systeme/status — 200 (2ms)
+[2026-03-29T11:42:12.590Z] ACTION — GET /admin/config — 304 (4ms)
+[2026-03-29T11:42:12.594Z] ACTION — GET /admin/sauvegardes/info — 304 (3ms)
+[2026-03-29T11:42:12.597Z] ACTION — GET /admin/systeme/status — 200 (2ms)
+[2026-03-29T11:42:12.601Z] ACTION — GET /admin/config — 304 (3ms)
+[2026-03-29T11:42:12.703Z] ACTION — GET /admin/crons — 304 (2ms)
+[2026-03-29T11:42:12.710Z] ACTION — GET /admin/crons — 304 (2ms)
+[2026-03-29T11:42:14.214Z] ACTION — GET /admin/utilisateurs — 304 (3ms)
+[2026-03-29T11:42:14.220Z] ACTION — GET /admin/utilisateurs — 304 (2ms)
+[2026-03-29T11:42:16.101Z] ACTION — GET /admin/prompts — 304 (2ms)
+[2026-03-29T11:42:16.110Z] ACTION — GET /admin/prompts — 304 (4ms)
+[2026-03-29T11:42:19.035Z] ACTION — GET /health — 200 (0ms)
+[2026-03-29T11:42:19.042Z] ACTION — GET /ventes/produits — 304 (5ms)
+[2026-03-29T11:42:19.047Z] ACTION — GET /health — 200 (1ms)
+[2026-03-29T11:42:19.052Z] ACTION — GET /ventes/produits — 304 (4ms)
