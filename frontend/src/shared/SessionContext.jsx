@@ -46,7 +46,7 @@ export function SessionProvider({ children }) {
       }
     }
 
-    detecterSession().catch(() => setLoadingSession(false))
+    detecterSession().finally(() => setLoadingSession(false))
   }, [])
 
   const ouvrirSession = useCallback(async (pointDeVenteId, debut) => {
