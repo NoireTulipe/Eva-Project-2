@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { sessions } from './api.js'
+import { sessions, auth } from './api.js'
 
 const SessionContext = createContext(null)
 
@@ -14,6 +14,10 @@ export function SessionProvider({ children }) {
   // 2. Sinon, interroger le backend pour détecter une session ouverte existante
   useEffect(() => {
     async function detecterSession() {
+      if (!auth.isLoggedIn()) {
+        setLoadingSession(false)
+        return
+      }
       const savedId = localStorage.getItem(STORAGE_KEY)
 
       if (savedId) {
@@ -42,7 +46,7 @@ export function SessionProvider({ children }) {
       }
     }
 
-    detecterSession().finally(() => setLoadingSession(false))
+    detecterSession().catch(() => setLoadingSession(false))
   }, [])
 
   const ouvrirSession = useCallback(async (pointDeVenteId, debut) => {
