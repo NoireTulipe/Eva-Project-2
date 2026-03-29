@@ -55,7 +55,11 @@ async function request(method, path, body) {
   if (res.status === 401) {
     // Tenter un refresh
     const refreshToken = getRefreshToken()
-    if (!refreshToken) { logout(); return }
+    if (!refreshToken) {
+      // Seulement rediriger si l'utilisateur était connecté (token présent)
+      if (getToken()) logout()
+      throw new Error('Non authentifié')
+    }
 
     const refreshRes = await fetch(`${BASE}/auth/refresh`, {
       method: 'POST',
