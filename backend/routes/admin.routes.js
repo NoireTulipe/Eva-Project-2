@@ -4,7 +4,8 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import bcrypt from 'bcrypt'
 import { authMiddleware } from '../middleware/auth.js'
-import { invalidatePromptCache } from '../llm/prompts.js'
+import { invalidatePromptCache, resolvePromptTags, PROMPTS_DEFAUT, TAGS_PAR_MODULE, VALEURS_TAGS_DEVELOPPEUR } from '../llm/prompts.js'
+import { getToolsDescription } from '../tools/registry.js'
 import { startCron, stopCron, runCronNow, getActiveCrons } from '../crons/cron.manager.js'
 import prisma from '../config/db.js'
 import { logAction, logError } from '../logs/logger.js'
@@ -47,6 +48,70 @@ router.put('/prompts/:id', async (req, res) => {
   invalidatePromptCache()
   logAction(`Admin: prompt ${id} modifié (module=${prompt.module}, role=${prompt.role})`)
   res.json(prompt)
+})
+
+// GET /admin/prompts/tags — liste tous les tags disponibles par module
+router.get('/prompts/tags', (req, res) => {
+  res.json({
+    tags: TAGS_PAR_MODULE,
+    valeurs_developpeur: VALEURS_TAGS_DEVELOPPEUR
+  })
+})
+
+// POST /admin/prompts/:id/preview — aperçu du prompt résolu avec les tags remplacés
+router.post('/prompts/:id/preview', async (req, res) => {
+  const id = parseInt(req.params.id)
+  const prompt = await prisma.prompt.findUnique({ where: { id } })
+  if (!prompt) return res.status(404).json({ error: 'Prompt introuvable' })
+
+  const now = new Date()
+  const dateHeure = now.toLocaleString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+
+  const config = await prisma.configParam.findMany({
+    where: { cle: { in: ['llm.provider', 'llm.flash_model', 'llm.pro_model', 'llm.pro_provider'] } }
+  })
+  const cfgMap = Object.fromEntries(config.map(p => [p.cle, p.valeur]))
+
+  // Résoudre tous les tags possibles selon le module
+  const vars = {
+    TOOLS: getToolsDescription(),
+    DATE_HEURE: dateHeure,
+    REGLES_MEMOIRE: VALEURS_TAGS_DEVELOPPEUR.REGLES_MEMOIRE,
+    MODELE_LLM: `${cfgMap['llm.pro_provider'] || 'gemini'} / ${cfgMap['llm.pro_model'] || 'gemini-2.5-pro'}`,
+    ECHANGES: '[exemple : contenu du buffer mémoire à consolider]'
+  }
+
+  // Utiliser le contenu fourni dans le body (édition en cours) ou le contenu sauvegardé
+  const template = req.body?.contenu ?? prompt.contenu
+  const resolu = resolvePromptTags(template, vars)
+
+  res.json({
+    module: prompt.module,
+    role: prompt.role,
+    actif: prompt.actif,
+    template,      // prompt brut avec tags
+    resolu,        // prompt tel qu'envoyé au LLM
+    source: prompt.actif ? 'base_de_donnees' : 'inactif_fallback_code'
+  })
+})
+
+// POST /admin/prompts/:id/reset — remet le contenu par défaut (défini dans le code)
+router.post('/prompts/:id/reset', async (req, res) => {
+  const id = parseInt(req.params.id)
+  const prompt = await prisma.prompt.findUnique({ where: { id } })
+  if (!prompt) return res.status(404).json({ error: 'Prompt introuvable' })
+
+  const defaut = PROMPTS_DEFAUT[prompt.module]?.[prompt.role]
+  if (!defaut) return res.status(404).json({ error: `Aucun défaut défini pour ${prompt.module}/${prompt.role}` })
+
+  const updated = await prisma.prompt.update({
+    where: { id },
+    data: { contenu: defaut, actif: true }
+  })
+
+  invalidatePromptCache()
+  logAction(`Admin: prompt ${id} remis aux valeurs par défaut (module=${prompt.module})`)
+  res.json(updated)
 })
 
 // ─── CONFIG LLM ───────────────────────────────────────────────────────────────

@@ -1,25 +1,11 @@
 import prisma from '../../config/db.js'
 import { callAI } from '../../llm/providers.js'
+import { getPrompt, resolvePromptTags, PROMPTS_DEFAUT } from '../../llm/prompts.js'
 import { embed, serializeVector, deserializeVector, cosineSimilarity } from './embeddings.js'
 import { logAction, logError } from '../../logs/logger.js'
 
 // Seuil de similarité pour considérer deux souvenirs comme doublons
 const SEUIL_DOUBLON_SOUVENIR = 0.88
-
-const PROMPT_CONSOLIDATION = `Tu es un système d'extraction de mémoire. Analyse ces échanges et extrais les informations importantes sur l'utilisateur.
-
-RÈGLE ABSOLUE : Réponds UNIQUEMENT en JSON valide, rien d'autre.
-
-Format de réponse :
-{
-  "souvenirs": ["fait important sur l'utilisateur ou un événement notable"],
-  "preferences": [{"cle": "clé_courte", "contenu": "description de la préférence"}],
-  "contacts": [{"nom": "Prénom Nom", "contenu": "ce qu'on sait de cette personne"}]
-}
-
-Si rien de mémorisable → {"souvenirs": [], "preferences": [], "contacts": []}
-
-N'extrais que ce qui est réellement significatif. Ignore les questions banales et les réponses génériques.`
 
 /**
  * Consolide le MemBuffer non traité d'un utilisateur vers la mémoire long terme.
@@ -43,8 +29,11 @@ export async function consolidateUser(userId, provider, model) {
 
   let extraction
   try {
+    const promptTemplate = await getPrompt('consolidation', 'system') || PROMPTS_DEFAUT.consolidation.system
+    const prompt = resolvePromptTags(promptTemplate, { ECHANGES: texte })
+
     const raw = await callAI(provider, model, [
-      { role: 'user', content: `${PROMPT_CONSOLIDATION}\n\nÉCHANGES :\n${texte}` }
+      { role: 'user', content: prompt }
     ])
 
     let cleaned = raw.trim()

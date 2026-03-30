@@ -1,71 +1,31 @@
 import { callAI } from './providers.js'
-import { getPrompt } from './prompts.js'
+import { getPrompt, resolvePromptTags, PROMPTS_DEFAUT, VALEURS_TAGS_DEVELOPPEUR } from './prompts.js'
 import { getToolsDescription, executeTool } from '../tools/registry.js'
 import { rechercheMemoire } from '../modules/memoire/recherche.js'
 import prisma from '../config/db.js'
 import { logAction, logError } from '../logs/logger.js'
-
-// ─── Prompts par défaut (utilisés si absent de la DB) ─────────────────────────
-
-const DEFAULT_ORCHESTRATOR = `Tu es EVA, une assistante IA personnelle et professionnelle pour une Maison d'Édition.
-Tu es intelligente, fiable, directe et légèrement chaleureuse.
-
-RÈGLE ABSOLUE : Tu réponds UNIQUEMENT en JSON valide. Jamais de texte libre, jamais de markdown.
-
-FORMAT obligatoire quand des outils sont nécessaires :
-{
-  "intention": "description claire de la demande",
-  "actions": [
-    { "tool": "nom_outil_exact", "params": { ... }, "raison": "pourquoi cet outil" }
-  ]
-}
-
-FORMAT obligatoire quand aucun outil n'est nécessaire :
-{
-  "intention": "description",
-  "actions": [],
-  "reponse_directe": "ta réponse conversationnelle ici"
-}
-
-OUTILS DISPONIBLES :
-{{TOOLS}}
-
-MÉMOIRE LONG TERME :
-Si le message de l'utilisateur contient une section "PRÉFÉRENCES CONNUES" ou "MÉMOIRE PERTINENTE", ces informations proviennent de ta mémoire persistante. Tu DOIS les utiliser pour répondre — ne les ignore jamais. Si la mémoire contient la réponse à la question posée, réponds directement avec "reponse_directe" en t'appuyant sur ces informations sans appeler d'outil.
-
-RÈGLES D'UTILISATION :
-- Utilise les outils dès que la demande porte sur des données (stock, ventes, sessions, recherche web).
-- Si l'utilisateur partage une information personnelle → utilise remember_info automatiquement.
-- Si une question nécessite une recherche → utilise search_web.
-- Plusieurs outils peuvent être appelés en parallèle dans le tableau "actions".
-- Ne dis JAMAIS "je vais faire X" sans avoir mis l'outil dans les actions.
-- Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`
-
-const DEFAULT_REDACTEUR = `Tu es EVA, une assistante IA chaleureuse et précise.
-Rédige une réponse naturelle et concise basée sur les résultats fournis.
-Sois directe et utile. Parle des résultats, pas de tes actions.
-N'utilise pas de markdown excessif — du texte clair est préférable.`
 
 // ─── Pipeline principal ────────────────────────────────────────────────────────
 
 /**
  * Mode conversation : appel direct au Pro sans Flash ni outils.
  * Utilisé pour les salons Discord en mode "conversation".
- * @param {string} message
- * @param {object} context - { userId, userName, history }
- * @returns {Promise<string>}
  */
 export async function processConversation(message, context) {
   const now = new Date()
-  const dateInfo = `Date et heure : ${now.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`
+  const dateHeure = now.toLocaleString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
 
   const [redacteurRaw, config] = await Promise.all([
     getPrompt('redacteur', 'system'),
     getLLMConfig()
   ])
-  const systemPrompt = redacteurRaw || DEFAULT_REDACTEUR
 
-  // Mémoire récente depuis MemBuffer
+  const redacteurTemplate = redacteurRaw || PROMPTS_DEFAUT.redacteur.system
+  const systemPrompt = resolvePromptTags(redacteurTemplate, {
+    DATE_HEURE: dateHeure,
+    MODELE_LLM: `${config.proProvider} / ${config.proModel}`
+  })
+
   const recentBuffer = await prisma.memBuffer.findMany({
     where: { source: { startsWith: `discord:${context.userId}` } },
     orderBy: { createdAt: 'desc' },
@@ -81,12 +41,7 @@ export async function processConversation(message, context) {
       ).join('\n')
     : ''
 
-  const modelInfo = `Modèle LLM actif : ${config.proProvider} / ${config.proModel}`
-
-  const prompt = `${systemPrompt}
-${modelInfo}
-
-${dateInfo}${memoryText}${historyText}
+  const prompt = `${systemPrompt}${memoryText}${historyText}
 
 ${context.userName} : ${message}`
 
@@ -100,16 +55,16 @@ ${context.userName} : ${message}`
 }
 
 /**
- * Traite un message utilisateur via le pipeline EVA.
- * @param {string} message - Le message de l'utilisateur
- * @param {object} context - { userId, userName, history: [{role, content}] }
- * @param {object} options - { categories: string[]|null } — filtre les outils disponibles
- * @returns {Promise<string>} La réponse finale
+ * Traite un message utilisateur via le pipeline EVA complet.
+ * @param {string} message
+ * @param {object} context - { userId, userName, history }
+ * @param {object} options - { categories: string[]|null }
+ * @returns {Promise<string>}
  */
 export async function processMessage(message, context, options = {}) {
   const { categories = null } = options
   const now = new Date()
-  const dateInfo = `Date et heure : ${now.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}, ${now.toLocaleDateString('fr-FR', { weekday: 'long', timeZone: 'Europe/Paris' })}`
+  const dateHeure = now.toLocaleString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
 
   // 1. Charger les prompts, la config LLM et la mémoire en parallèle
   const [orchestratorRaw, redacteurRaw, config, memoireContext] = await Promise.all([
@@ -119,11 +74,22 @@ export async function processMessage(message, context, options = {}) {
     buildMemoireContext(message, context.userId)
   ])
 
-  const orchestratorPrompt = (orchestratorRaw || DEFAULT_ORCHESTRATOR)
-    .replace('{{TOOLS}}', getToolsDescription(categories))
-  const redacteurPrompt = redacteurRaw || DEFAULT_REDACTEUR
+  // 2. Résoudre les tags du prompt orchestrateur
+  const orchestratorTemplate = orchestratorRaw || PROMPTS_DEFAUT.orchestrateur.system
+  const orchestratorPrompt = resolvePromptTags(orchestratorTemplate, {
+    TOOLS: getToolsDescription(categories),
+    DATE_HEURE: dateHeure,
+    REGLES_MEMOIRE: VALEURS_TAGS_DEVELOPPEUR.REGLES_MEMOIRE
+  })
 
-  // 2. Construire le contexte historique
+  // 3. Résoudre les tags du prompt rédacteur
+  const redacteurTemplate = redacteurRaw || PROMPTS_DEFAUT.redacteur.system
+  const redacteurPrompt = resolvePromptTags(redacteurTemplate, {
+    DATE_HEURE: dateHeure,
+    MODELE_LLM: `${config.proProvider} / ${config.proModel}`
+  })
+
+  // 4. Construire le message utilisateur (mémoire + historique + message)
   const historyText = context.history?.length
     ? '\nHISTORIQUE RÉCENT :\n' + context.history
         .slice(-8)
@@ -131,19 +97,17 @@ export async function processMessage(message, context, options = {}) {
         .join('\n')
     : ''
 
-  // 3. Appel orchestrateur (Flash) avec mémoire injectée
-  const userPrompt = `${dateInfo}${memoireContext}${historyText}
+  const userPrompt = `${dateHeure}${memoireContext}${historyText}
 
 Message de ${context.userName} : ${message}`
 
-  const flashMessages = [
+  // 5. Appel orchestrateur (Flash)
+  const rawResponse = await callAI(config.provider, config.flashModel, [
     { role: 'system', content: orchestratorPrompt },
     { role: 'user', content: userPrompt }
-  ]
+  ])
 
-  const rawResponse = await callAI(config.provider, config.flashModel, flashMessages)
-
-  // 4. Parser le plan JSON
+  // 6. Parser le plan JSON
   let plan
   try {
     let cleaned = rawResponse.trim()
@@ -152,20 +116,19 @@ Message de ${context.userName} : ${message}`
     }
     plan = JSON.parse(cleaned)
   } catch {
-    // Réponse non-JSON → retourner tel quel
     logAction(`EVA: réponse directe non-JSON (${rawResponse.length} chars)`)
     await pushToBuffer(message, rawResponse, context)
     return rawResponse
   }
 
-  // 5. Réponse directe sans outils
+  // 7. Réponse directe sans outils
   if (!plan.actions || plan.actions.length === 0) {
     const response = plan.reponse_directe || rawResponse
     await pushToBuffer(message, response, context)
     return response
   }
 
-  // 6. Exécuter les outils
+  // 8. Exécuter les outils
   logAction(`EVA: exécution ${plan.actions.length} outil(s) — ${plan.intention}`)
 
   const results = await Promise.allSettled(
@@ -178,12 +141,8 @@ Message de ${context.userName} : ${message}`
 
   const toolResults = results.map(r => r.value || r.reason)
 
-  // 7. Appel rédacteur (Pro) pour synthèse finale
-  const modelInfo = `Modèle LLM actif : ${config.proProvider} / ${config.proModel}`
+  // 9. Appel rédacteur (Pro) pour synthèse finale
   const writerPrompt = `${redacteurPrompt}
-${modelInfo}
-
-${dateInfo}
 
 ${context.userName} a demandé : "${message}"
 
@@ -196,7 +155,6 @@ Rédige une réponse naturelle et concise basée sur ces résultats.`
     { role: 'user', content: writerPrompt }
   ])
 
-  // 8. Mémoriser l'échange (async, sans bloquer)
   pushToBuffer(message, finalResponse, context).catch(err =>
     logError(`pushToBuffer: ${err.message}`)
   )
@@ -212,7 +170,6 @@ async function getLLMConfig() {
     where: { cle: { in: ['llm.provider', 'llm.flash_model', 'llm.pro_model', 'llm.pro_provider'] } }
   })
   const map = Object.fromEntries(params.map(p => [p.cle, p.valeur]))
-
   return {
     provider: map['llm.provider'] || 'gemini',
     flashModel: map['llm.flash_model'] || 'gemini-2.5-flash',
@@ -231,9 +188,8 @@ async function pushToBuffer(message, response, context) {
 }
 
 /**
- * Construit le bloc mémoire à injecter dans le prompt Flash.
- * Fait une recherche sémantique sur le message + récupère les préférences clés.
- * Retourne une chaîne vide si aucun résultat pertinent.
+ * Construit le bloc mémoire injecté dans le message utilisateur.
+ * Recherche sémantique sur le message + préférences récentes.
  */
 async function buildMemoireContext(message, userId) {
   try {
@@ -250,7 +206,7 @@ async function buildMemoireContext(message, userId) {
     const lines = []
 
     if (preferences.length > 0) {
-      lines.push('PRÉFÉRENCES CONNUES :')
+      lines.push('\nPRÉFÉRENCES CONNUES :')
       for (const p of preferences) {
         lines.push(`  • ${p.cle} : ${p.contenu}`)
       }
@@ -267,7 +223,6 @@ async function buildMemoireContext(message, userId) {
 
     return lines.length > 0 ? '\n\n' + lines.join('\n') : ''
   } catch {
-    // La mémoire ne doit jamais bloquer le pipeline
     return ''
   }
 }

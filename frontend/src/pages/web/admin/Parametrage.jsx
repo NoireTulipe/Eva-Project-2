@@ -40,14 +40,31 @@ export default function Parametrage() {
 
 // ─── Onglet Prompts ───────────────────────────────────────────────────────────
 
+const MODULE_LABELS = {
+  orchestrateur: { label: 'Orchestrateur (Flash)', desc: 'Interprète l\'intention et planifie les outils. Reçoit chaque message utilisateur.' },
+  redacteur:     { label: 'Rédacteur (Pro)',        desc: 'Synthétise les résultats des outils en réponse naturelle.' },
+  consolidation: { label: 'Consolidation mémoire',  desc: 'Extrait souvenirs, préférences et contacts depuis le buffer pour la mémoire long terme.' },
+}
+
 function OngletPrompts() {
   const [prompts, setPrompts] = useState([])
-  const [editing, setEditing] = useState(null)
+  const [tagsInfo, setTagsInfo] = useState(null)
+  const [editing, setEditing] = useState(null)         // { id, contenu }
+  const [preview, setPreview] = useState(null)          // { template, resolu, source }
+  const [previewLoading, setPreviewLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(null)
   const [error, setError] = useState('')
+  const [showTags, setShowTags] = useState(false)
 
   useEffect(() => {
-    admin.getPrompts().then(setPrompts).catch(() => setError('Erreur chargement'))
+    Promise.all([
+      admin.getPrompts(),
+      admin.getPromptTags()
+    ]).then(([p, t]) => {
+      setPrompts(p)
+      setTagsInfo(t)
+    }).catch(() => setError('Erreur chargement'))
   }, [])
 
   async function saveEdit() {
@@ -57,6 +74,7 @@ function OngletPrompts() {
       const updated = await admin.updatePrompt(editing.id, { contenu: editing.contenu })
       setPrompts(prev => prev.map(p => p.id === updated.id ? updated : p))
       setEditing(null)
+      setPreview(null)
     } catch {
       setError('Erreur sauvegarde')
     } finally {
@@ -69,61 +87,186 @@ function OngletPrompts() {
     setPrompts(prev => prev.map(x => x.id === updated.id ? updated : x))
   }
 
+  async function handlePreview(promptId, contenu) {
+    setPreviewLoading(true)
+    setPreview(null)
+    try {
+      const result = await admin.previewPrompt(promptId, contenu)
+      setPreview(result)
+    } catch {
+      setError('Erreur prévisualisation')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  async function handleReset(p) {
+    if (!confirm(`Remettre le prompt "${p.module}" aux valeurs par défaut ? Ton contenu actuel sera perdu.`)) return
+    setResetting(p.id)
+    try {
+      const updated = await admin.resetPrompt(p.id)
+      setPrompts(prev => prev.map(x => x.id === updated.id ? updated : x))
+      if (editing?.id === p.id) setEditing({ id: p.id, contenu: updated.contenu })
+      setPreview(null)
+    } catch {
+      setError('Erreur reset')
+    } finally {
+      setResetting(null)
+    }
+  }
+
   if (error) return <p className="text-red-600 text-sm">{error}</p>
 
   return (
-    <div className="space-y-4">
-      {prompts.map(p => (
-        <div key={p.id} className="bg-white rounded-lg shadow border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <span className="font-medium text-gray-800">{p.module}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span className="text-sm text-gray-500">{p.role}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => toggleActif(p)}
-                className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  p.actif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                }`}
-              >
-                {p.actif ? 'Actif' : 'Inactif'}
-              </button>
-              <button
-                onClick={() => editing?.id === p.id ? setEditing(null) : setEditing({ id: p.id, contenu: p.contenu })}
-                className="text-sm text-indigo-600 hover:underline"
-              >
-                {editing?.id === p.id ? 'Annuler' : 'Modifier'}
-              </button>
-            </div>
-          </div>
+    <div className="space-y-6">
 
-          {editing?.id === p.id ? (
-            <div>
-              <textarea
-                className="w-full border border-gray-300 rounded-lg p-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                rows={12}
-                value={editing.contenu}
-                onChange={e => setEditing(prev => ({ ...prev, contenu: e.target.value }))}
-              />
-              <div className="mt-2 flex justify-end">
+      {/* Référence des tags */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded-xl overflow-hidden">
+        <button
+          onClick={() => setShowTags(o => !o)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-indigo-800 hover:bg-indigo-100 transition-colors"
+        >
+          <span>Référence des tags disponibles dans les prompts</span>
+          <span className="text-indigo-500">{showTags ? '▲' : '▼'}</span>
+        </button>
+
+        {showTags && tagsInfo && (
+          <div className="px-4 pb-4 space-y-4">
+            {Object.entries(tagsInfo.tags).map(([module, tags]) => (
+              <div key={module}>
+                <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-2">
+                  {MODULE_LABELS[module]?.label ?? module}
+                </p>
+                <div className="space-y-2">
+                  {tags.map(t => (
+                    <div key={t.tag} className="bg-white rounded-lg border border-indigo-100 p-3">
+                      <div className="flex items-start gap-3">
+                        <code className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded flex-shrink-0">{t.tag}</code>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-700">{t.description}</p>
+                          {t.tag === '{{REGLES_MEMOIRE}}' && tagsInfo.valeurs_developpeur?.REGLES_MEMOIRE && (
+                            <details className="mt-1">
+                              <summary className="text-xs text-indigo-500 cursor-pointer">Voir le contenu injecté</summary>
+                              <pre className="text-xs text-gray-600 bg-gray-50 rounded p-2 mt-1 whitespace-pre-wrap overflow-auto max-h-32">
+                                {tagsInfo.valeurs_developpeur.REGLES_MEMOIRE}
+                              </pre>
+                            </details>
+                          )}
+                          {t.exemple && t.tag !== '{{REGLES_MEMOIRE}}' && (
+                            <pre className="text-xs text-gray-400 mt-1 italic whitespace-pre-wrap overflow-hidden text-ellipsis" style={{maxHeight:'2.5rem'}}>
+                              ex: {t.exemple.slice(0, 120)}{t.exemple.length > 120 ? '…' : ''}
+                            </pre>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Liste des prompts */}
+      {prompts.map(p => {
+        const isEditing = editing?.id === p.id
+        const meta = MODULE_LABELS[p.module]
+        return (
+          <div key={p.id} className={`bg-white rounded-xl border-2 ${isEditing ? 'border-indigo-300' : 'border-gray-200'} overflow-hidden`}>
+
+            {/* En-tête */}
+            <div className="flex items-start justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-800">{meta?.label ?? p.module}</span>
+                  <span className="text-xs text-gray-400">· {p.role}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    p.actif ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {p.actif ? 'Actif — DB' : 'Inactif — fallback code'}
+                  </span>
+                </div>
+                {meta?.desc && <p className="text-xs text-gray-500 mt-0.5">{meta.desc}</p>}
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                 <button
-                  onClick={saveEdit}
-                  disabled={saving}
-                  className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                  onClick={() => toggleActif(p)}
+                  className="text-xs px-2 py-1 border border-gray-300 rounded text-gray-500 hover:bg-gray-100"
                 >
-                  {saving ? 'Sauvegarde…' : 'Sauvegarder'}
+                  {p.actif ? 'Désactiver' : 'Activer'}
+                </button>
+                <button
+                  onClick={() => handleReset(p)}
+                  disabled={resetting === p.id}
+                  className="text-xs px-2 py-1 border border-amber-300 text-amber-700 rounded hover:bg-amber-50 disabled:opacity-50"
+                >
+                  {resetting === p.id ? '…' : 'Reset défaut'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (isEditing) { setEditing(null); setPreview(null) }
+                    else setEditing({ id: p.id, contenu: p.contenu })
+                  }}
+                  className="text-xs px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                >
+                  {isEditing ? 'Annuler' : 'Modifier'}
                 </button>
               </div>
             </div>
-          ) : (
-            <pre className="text-xs text-gray-600 bg-gray-50 rounded p-3 overflow-auto max-h-40 whitespace-pre-wrap">
-              {p.contenu}
-            </pre>
-          )}
-        </div>
-      ))}
+
+            {/* Éditeur */}
+            {isEditing ? (
+              <div className="p-4 space-y-3">
+                <textarea
+                  className="w-full border border-gray-300 rounded-lg p-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  rows={14}
+                  value={editing.contenu}
+                  onChange={e => setEditing(prev => ({ ...prev, contenu: e.target.value }))}
+                />
+                <div className="flex justify-between items-center">
+                  <button
+                    onClick={() => handlePreview(p.id, editing.contenu)}
+                    disabled={previewLoading}
+                    className="text-xs px-3 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {previewLoading ? 'Calcul…' : 'Aperçu avec tags résolus'}
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving}
+                    className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {saving ? 'Sauvegarde…' : 'Sauvegarder'}
+                  </button>
+                </div>
+
+                {/* Prévisualisation */}
+                {preview && preview.module === p.module && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between bg-gray-100 px-3 py-2">
+                      <span className="text-xs font-medium text-gray-600">Prompt exact envoyé au LLM</span>
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                        preview.source === 'base_de_donnees' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {preview.source === 'base_de_donnees' ? 'Source : BDD (actif)' : 'Source : fallback code (inactif)'}
+                      </span>
+                    </div>
+                    <pre className="text-xs text-gray-700 bg-white p-4 overflow-auto max-h-96 whitespace-pre-wrap">
+                      {preview.resolu}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <pre className="text-xs text-gray-600 bg-gray-50 p-4 overflow-auto max-h-48 whitespace-pre-wrap">
+                {p.contenu}
+              </pre>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

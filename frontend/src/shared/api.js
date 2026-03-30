@@ -218,6 +218,9 @@ export const admin = {
   // Prompts
   getPrompts: () => request('GET', '/admin/prompts'),
   updatePrompt: (id, data) => request('PUT', `/admin/prompts/${id}`, data),
+  previewPrompt: (id, contenu) => request('POST', `/admin/prompts/${id}/preview`, { contenu }),
+  resetPrompt: (id) => request('POST', `/admin/prompts/${id}/reset`),
+  getPromptTags: () => request('GET', '/admin/prompts/tags'),
 
   // Config LLM
   getConfig: () => request('GET', '/admin/config'),

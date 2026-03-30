@@ -108,6 +108,8 @@ async function main() {
 
   // ─── Prompts EVA ──────────────────────────────────────────────────────────────
 
+  // Prompts — le seed met à jour le contenu à chaque exécution
+  // (pour s'assurer que les nouveaux tags sont présents dans la DB)
   const prompts = [
     {
       module: 'orchestrateur',
@@ -135,11 +137,14 @@ FORMAT obligatoire quand aucun outil n'est nécessaire :
 OUTILS DISPONIBLES :
 {{TOOLS}}
 
+{{REGLES_MEMOIRE}}
+
 RÈGLES D'UTILISATION :
 - Utilise les outils dès que la demande porte sur des données (stock, ventes, sessions, recherche web).
 - Si l'utilisateur partage une information personnelle → utilise remember_info automatiquement.
 - Si une question nécessite une recherche → utilise search_web.
 - Plusieurs outils peuvent être appelés en parallèle dans le tableau "actions".
+- Ne dis JAMAIS "je vais faire X" sans avoir mis l'outil dans les actions.
 - Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`,
     },
     {
@@ -148,14 +153,38 @@ RÈGLES D'UTILISATION :
       contenu: `Tu es EVA, une assistante IA chaleureuse et précise pour une Maison d'Édition.
 Rédige une réponse naturelle et concise basée sur les résultats fournis.
 Sois directe et utile. Parle des résultats, pas de tes actions.
-N'utilise pas de markdown excessif — du texte clair est préférable.`,
+N'utilise pas de markdown excessif — du texte clair est préférable.
+Modèle actif : {{MODELE_LLM}}`,
+    },
+    {
+      module: 'consolidation',
+      role: 'system',
+      contenu: `Tu es un système d'extraction de mémoire. Analyse ces échanges et extrais les informations importantes sur l'utilisateur.
+
+RÈGLE ABSOLUE : Réponds UNIQUEMENT en JSON valide, rien d'autre.
+
+Format de réponse :
+{
+  "souvenirs": ["fait important sur l'utilisateur ou un événement notable"],
+  "preferences": [{"cle": "clé_courte", "contenu": "description de la préférence"}],
+  "contacts": [{"nom": "Prénom Nom", "contenu": "ce qu'on sait de cette personne"}]
+}
+
+Si rien de mémorisable → {"souvenirs": [], "preferences": [], "contacts": []}
+
+N'extrais que ce qui est réellement significatif. Ignore les questions banales et les réponses génériques.
+
+ÉCHANGES À ANALYSER :
+{{ECHANGES}}`,
     },
   ]
 
   for (const { module, role, contenu } of prompts) {
     await prisma.prompt.upsert({
       where: { module_role: { module, role } },
-      update: {},
+      // update: le contenu est mis à jour à chaque seed pour intégrer les nouveaux tags
+      // Si tu as personnalisé un prompt, utilise le bouton "Reset" dans Admin > Paramétrage
+      update: { contenu },
       create: { module, role, contenu }
     })
   }
