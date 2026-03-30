@@ -73,6 +73,18 @@ export default function Utilisateurs() {
                       onChange={e => setEditing(p => ({ ...p, password: e.target.value }))}
                     />
                   </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-gray-600 block mb-1">
+                      ID Discord
+                      <span className="ml-1 text-gray-400 font-normal">(pour lier la mémoire EVA au compte Discord)</span>
+                    </label>
+                    <input
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="ex: 793412345678901234"
+                      value={editing.discordId || ''}
+                      onChange={e => setEditing(p => ({ ...p, discordId: e.target.value || null }))}
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -124,6 +136,10 @@ export default function Utilisateurs() {
                     }`}>
                       {u.role}
                     </span>
+                    {u.discordId
+                      ? <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-mono">Discord lié</span>
+                      : <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">Discord non lié</span>
+                    }
                     {!u.actif && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600">inactif</span>
                     )}

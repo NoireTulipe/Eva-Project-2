@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits } from 'discord.js'
 import { processMessage, processConversation } from '../llm/orchestrateur.js'
 import { getCanalConfig } from './canal.service.js'
 import { logAction, logError } from '../logs/logger.js'
+import prisma from '../config/db.js'
 
 const DISCORD_LIMIT = 2000
 
@@ -43,8 +44,11 @@ client.on('messageCreate', async (message) => {
     // Exclure le message courant (dernier)
     const historyWithoutCurrent = history.slice(0, -1)
 
+    // Résoudre l'ID DB depuis l'ID Discord
+    const dbUserId = await resolveDbUserId(message.author.id)
+
     const context = {
-      userId: message.author.id,
+      userId: dbUserId,
       userName: message.author.displayName || message.author.username,
       history: historyWithoutCurrent
     }
@@ -78,6 +82,30 @@ client.on('messageCreate', async (message) => {
     await message.reply('Désolée, j\'ai eu un souci technique. Réessaie dans un instant.')
   }
 })
+
+/**
+ * Résout l'ID utilisateur DB depuis un ID Discord.
+ * Si l'utilisateur Discord n'est pas lié à un compte, retourne l'ID du premier admin.
+ * @param {string} discordId
+ * @returns {Promise<number>}
+ */
+async function resolveDbUserId(discordId) {
+  // Chercher un utilisateur avec ce discordId
+  const user = await prisma.user.findUnique({ where: { discordId } })
+  if (user) return user.id
+
+  // Fallback : premier admin actif
+  const admin = await prisma.user.findFirst({
+    where: { role: 'admin', actif: true },
+    orderBy: { id: 'asc' }
+  })
+  if (admin) {
+    logAction(`Discord: discordId ${discordId} non lié — fallback user id=${admin.id}. Liez le compte dans Admin > Utilisateurs.`)
+    return admin.id
+  }
+
+  return 1
+}
 
 async function fetchHistory(channel, botId, count) {
   try {
