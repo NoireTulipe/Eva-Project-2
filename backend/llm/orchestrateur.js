@@ -26,14 +26,7 @@ export async function processConversation(message, context) {
     MODELE_LLM: `${config.proProvider} / ${config.proModel}`
   })
 
-  const recentBuffer = await prisma.memBuffer.findMany({
-    where: { source: { startsWith: `discord:${context.userId}` } },
-    orderBy: { createdAt: 'desc' },
-    take: 5
-  })
-  const memoryText = recentBuffer.length
-    ? '\nMÉMOIRE RÉCENTE :\n' + recentBuffer.reverse().map(b => b.contenu).join('\n---\n')
-    : ''
+  const memoireContext = await buildMemoireContext(message, context.userId)
 
   const historyText = context.history?.length
     ? '\nHISTORIQUE :\n' + context.history.slice(-6).map(m =>
@@ -41,7 +34,7 @@ export async function processConversation(message, context) {
       ).join('\n')
     : ''
 
-  const prompt = `${systemPrompt}${memoryText}${historyText}
+  const prompt = `${systemPrompt}${memoireContext}${historyText}
 
 ${context.userName} : ${message}`
 
