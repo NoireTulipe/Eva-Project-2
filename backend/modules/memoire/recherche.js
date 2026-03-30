@@ -1,7 +1,7 @@
 import prisma from '../../config/db.js'
 import { embed, deserializeVector, cosineSimilarity } from './embeddings.js'
 
-const SEUIL = 0.45  // Similarité minimale pour qu'un résultat soit pertinent
+const SEUIL = 0.35  // Similarité minimale pour qu'un résultat soit pertinent
 const MAX_RESULTS = 5
 
 /**

@@ -30,6 +30,9 @@ FORMAT obligatoire quand aucun outil n'est nécessaire :
 OUTILS DISPONIBLES :
 {{TOOLS}}
 
+MÉMOIRE LONG TERME :
+Si le message de l'utilisateur contient une section "PRÉFÉRENCES CONNUES" ou "MÉMOIRE PERTINENTE", ces informations proviennent de ta mémoire persistante. Tu DOIS les utiliser pour répondre — ne les ignore jamais. Si la mémoire contient la réponse à la question posée, réponds directement avec "reponse_directe" en t'appuyant sur ces informations sans appeler d'outil.
+
 RÈGLES D'UTILISATION :
 - Utilise les outils dès que la demande porte sur des données (stock, ventes, sessions, recherche web).
 - Si l'utilisateur partage une information personnelle → utilise remember_info automatiquement.

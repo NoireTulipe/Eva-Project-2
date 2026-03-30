@@ -1,7 +1,10 @@
 import prisma from '../../config/db.js'
 import { callAI } from '../../llm/providers.js'
-import { embed, serializeVector } from './embeddings.js'
+import { embed, serializeVector, deserializeVector, cosineSimilarity } from './embeddings.js'
 import { logAction, logError } from '../../logs/logger.js'
+
+// Seuil de similarité pour considérer deux souvenirs comme doublons
+const SEUIL_DOUBLON_SOUVENIR = 0.88
 
 const PROMPT_CONSOLIDATION = `Tu es un système d'extraction de mémoire. Analyse ces échanges et extrais les informations importantes sur l'utilisateur.
 
@@ -54,29 +57,98 @@ export async function consolidateUser(userId, provider, model) {
     return { userId, traites: 0, erreur: err.message }
   }
 
-  // Sauvegarder avec embeddings
   const ops = []
+  let nbSouvenirs = 0, nbPrefs = 0, nbContacts = 0
+
+  // ─── SOUVENIRS : déduplication sémantique ────────────────────────────────────
+  const existantsSouvenirs = await prisma.memSouvenir.findMany({
+    where: { userId },
+    select: { id: true, contenu: true, embedding: true }
+  })
 
   for (const contenu of (extraction.souvenirs || [])) {
     if (!contenu?.trim()) continue
-    const embedding = serializeVector(await embed(contenu))
-    ops.push(prisma.memSouvenir.create({ data: { userId, contenu, embedding } }))
+    const vec = await embed(contenu)
+
+    // Chercher un souvenir existant très similaire
+    let doublon = null
+    for (const s of existantsSouvenirs) {
+      if (!s.embedding) continue
+      const score = cosineSimilarity(vec, deserializeVector(s.embedding))
+      if (score >= SEUIL_DOUBLON_SOUVENIR) {
+        doublon = s
+        break
+      }
+    }
+
+    if (doublon) {
+      // Mettre à jour avec la formulation la plus récente
+      const embedding = serializeVector(vec)
+      ops.push(prisma.memSouvenir.update({
+        where: { id: doublon.id },
+        data: { contenu: contenu.trim(), embedding }
+      }))
+      logAction(`Consolidation: souvenir mis à jour (id=${doublon.id})`)
+    } else {
+      const embedding = serializeVector(vec)
+      ops.push(prisma.memSouvenir.create({
+        data: { userId, contenu: contenu.trim(), embedding }
+      }))
+      nbSouvenirs++
+    }
   }
 
+  // ─── PRÉFÉRENCES : upsert par clé ────────────────────────────────────────────
   for (const { cle, contenu } of (extraction.preferences || [])) {
     if (!cle?.trim() || !contenu?.trim()) continue
     const embedding = serializeVector(await embed(contenu))
-    ops.push(prisma.memPreference.upsert({
-      where: { id: 0 }, // force create via catch
-      update: { contenu, embedding },
-      create: { userId, cle, contenu, embedding }
-    }).catch(() => prisma.memPreference.create({ data: { userId, cle, contenu, embedding } })))
+
+    ops.push(
+      prisma.memPreference.upsert({
+        where: { userId_cle: { userId, cle: cle.trim() } },
+        update: { contenu: contenu.trim(), embedding },
+        create: { userId, cle: cle.trim(), contenu: contenu.trim(), embedding }
+      })
+    )
+    nbPrefs++
   }
+
+  // ─── CONTACTS : upsert par nom (insensible à la casse) ───────────────────────
+  const existantsContacts = await prisma.memContact.findMany({
+    where: { userId },
+    select: { id: true, nom: true, contenu: true }
+  })
 
   for (const { nom, contenu } of (extraction.contacts || [])) {
     if (!nom?.trim() || !contenu?.trim()) continue
     const embedding = serializeVector(await embed(contenu))
-    ops.push(prisma.memContact.create({ data: { userId, nom, contenu, embedding } }))
+
+    // Recherche par nom insensible à la casse
+    const nomNormalisé = nom.trim().toLowerCase()
+    const existant = existantsContacts.find(c =>
+      c.nom.toLowerCase() === nomNormalisé ||
+      c.nom.toLowerCase().includes(nomNormalisé) ||
+      nomNormalisé.includes(c.nom.toLowerCase())
+    )
+
+    if (existant) {
+      // Fusionner : ajouter les nouvelles infos si elles ne sont pas déjà présentes
+      const contenuFusionné = fusionnerContenu(existant.contenu, contenu.trim())
+      ops.push(prisma.memContact.update({
+        where: { id: existant.id },
+        data: {
+          nom: nom.trim(), // Mettre à jour avec le nom le plus récent (plus complet)
+          contenu: contenuFusionné,
+          embedding: serializeVector(await embed(contenuFusionné))
+        }
+      }))
+      logAction(`Consolidation: contact fusionné "${nom}"`)
+    } else {
+      ops.push(prisma.memContact.create({
+        data: { userId, nom: nom.trim(), contenu: contenu.trim(), embedding }
+      }))
+      nbContacts++
+    }
   }
 
   await Promise.allSettled(ops)
@@ -87,12 +159,21 @@ export async function consolidateUser(userId, provider, model) {
     data: { traite: true }
   })
 
-  const nbSouvenirs = (extraction.souvenirs || []).length
-  const nbPrefs = (extraction.preferences || []).length
-  const nbContacts = (extraction.contacts || []).length
-
   logAction(`Consolidation userId=${userId} : ${entries.length} entrées → ${nbSouvenirs} souvenirs, ${nbPrefs} prefs, ${nbContacts} contacts`)
   return { userId, traites: entries.length, nbSouvenirs, nbPrefs, nbContacts }
+}
+
+/**
+ * Fusionne deux contenus en évitant les répétitions évidentes.
+ * Ajoute le nouveau contenu seulement si sa substance n'est pas déjà présente.
+ */
+function fusionnerContenu(existant, nouveau) {
+  // Si le nouveau est déjà contenu dans l'existant, on garde l'existant
+  if (existant.toLowerCase().includes(nouveau.toLowerCase())) return existant
+  // Si l'existant est contenu dans le nouveau, le nouveau est plus complet
+  if (nouveau.toLowerCase().includes(existant.toLowerCase())) return nouveau
+  // Sinon, on concatène
+  return `${existant} | ${nouveau}`
 }
 
 /**
@@ -101,14 +182,12 @@ export async function consolidateUser(userId, provider, model) {
 export async function consolidateAll() {
   const config = await getLLMConfig()
 
-  // Trouver les userId distincts avec buffer non traité
   const buffers = await prisma.memBuffer.findMany({
     where: { traite: false },
     select: { source: true },
     distinct: ['source']
   })
 
-  // Extraire les userId depuis "web:123" ou "discord:123"
   const userIds = [...new Set(
     buffers
       .map(b => b.source.split(':')[1])
