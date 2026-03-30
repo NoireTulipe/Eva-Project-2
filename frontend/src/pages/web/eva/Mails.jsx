@@ -474,6 +474,118 @@ function OngletBoites() {
   )
 }
 
+// ─── OAuth2 Outlook ───────────────────────────────────────────────────────────
+
+function OutlookOAuth({ boiteId }) {
+  const [etape, setEtape] = useState('idle') // idle | url | code
+  const [authUrl, setAuthUrl] = useState('')
+  const [callbackUrl, setCallbackUrl] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState(null) // { type, text }
+
+  async function genererUrl() {
+    setLoading(true)
+    setMsg(null)
+    try {
+      const res = await mail.getOutlookAuthUrl()
+      setAuthUrl(res.url)
+      setEtape('url')
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function validerCode() {
+    if (!callbackUrl.trim()) return
+    setLoading(true)
+    setMsg(null)
+    try {
+      await mail.exchangeOutlookCode(boiteId, callbackUrl.trim())
+      setMsg({ type: 'success', text: 'Refresh token sauvegardé. IMAP et SMTP sont maintenant configurés.' })
+      setEtape('idle')
+      setCallbackUrl('')
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded p-4 space-y-3">
+      <p className="text-sm font-medium text-blue-800">Connexion Outlook via OAuth2</p>
+
+      {msg && (
+        <div className={`text-sm px-3 py-2 rounded ${msg.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          {msg.text}
+        </div>
+      )}
+
+      {etape === 'idle' && (
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-blue-700">Clique sur le bouton pour obtenir l'URL d'autorisation Microsoft.</p>
+          <button
+            onClick={genererUrl}
+            disabled={loading}
+            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+          >
+            {loading ? 'Génération…' : 'Générer l\'URL'}
+          </button>
+        </div>
+      )}
+
+      {etape === 'url' && (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <p className="text-sm text-blue-700">
+              <strong>Étape 1 :</strong> Ouvre ce lien, connecte-toi avec le compte Outlook et accepte les permissions.
+            </p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={authUrl}
+                className="flex-1 border border-blue-300 rounded px-2 py-1 text-xs bg-white font-mono"
+              />
+              <button
+                onClick={() => window.open(authUrl, '_blank')}
+                className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
+              >
+                Ouvrir
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm text-blue-700">
+              <strong>Étape 2 :</strong> Microsoft redirige vers <code className="bg-blue-100 px-1 rounded">http://localhost</code> (page blanche). Copie l'URL complète de la barre d'adresse et colle-la ici.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={callbackUrl}
+                onChange={e => setCallbackUrl(e.target.value)}
+                placeholder="http://localhost/?code=M.C3_BAY...&state=..."
+                className="flex-1 border border-blue-300 rounded px-2 py-1 text-xs bg-white font-mono"
+              />
+              <button
+                onClick={validerCode}
+                disabled={loading || !callbackUrl.trim()}
+                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
+              >
+                {loading ? 'Validation…' : 'Valider'}
+              </button>
+            </div>
+          </div>
+          <button onClick={() => setEtape('idle')} className="text-xs text-blue-500 hover:text-blue-700">
+            ← Recommencer
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FormulaireBoite({ form, champ, sauvegarder, fermer, saving, testerConnexion, testLoading, test, error, isNew, boiteId }) {
   const [section, setSection] = useState('general')
 
@@ -528,14 +640,8 @@ function FormulaireBoite({ form, champ, sauvegarder, fermer, saving, testerConne
       {section === 'imap' && (
         <div className="grid grid-cols-2 gap-3">
           {form.provider === 'outlook' && !isNew && (
-            <div className="col-span-2 bg-blue-50 border border-blue-200 rounded p-3 flex items-center justify-between">
-              <p className="text-sm text-blue-700">Le refresh token Outlook s'obtient via le bouton ci-contre. Il sera sauvegardé automatiquement.</p>
-              <a
-                href={`/api/mail/oauth/outlook/start?boiteId=${boiteId}`}
-                className="ml-3 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
-              >
-                Connecter Outlook
-              </a>
+            <div className="col-span-2">
+              <OutlookOAuth boiteId={boiteId} />
             </div>
           )}
           <Field label="Hôte IMAP">
