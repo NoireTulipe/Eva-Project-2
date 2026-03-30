@@ -19,10 +19,23 @@ const ACTION_LABELS = {
 
 export default function Mails() {
   const [onglet, setOnglet] = useState('journal')
+  const [oauthMsg, setOauthMsg] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('oauth_success')) return { type: 'success', text: 'Connexion Outlook autorisée — refresh token sauvegardé.' }
+    if (params.get('oauth_error'))   return { type: 'error',   text: `Erreur OAuth2 : ${params.get('oauth_error')}` }
+    return null
+  })
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Mails</h1>
+
+      {oauthMsg && (
+        <div className={`mb-4 px-4 py-3 rounded text-sm flex justify-between items-center ${oauthMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <span>{oauthMsg.text}</span>
+          <button onClick={() => setOauthMsg(null)} className="ml-4 font-bold opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
 
       <div className="flex gap-1 mb-6 border-b border-gray-200">
         {[
@@ -438,7 +451,7 @@ function OngletBoites() {
               form={form} champ={champ}
               sauvegarder={sauvegarder} fermer={fermer} saving={saving}
               testerConnexion={testerConnexion} testLoading={testLoading}
-              test={test} error={error} isNew={false}
+              test={test} error={error} isNew={false} boiteId={b.id}
             />
           )}
         </div>
@@ -461,7 +474,7 @@ function OngletBoites() {
   )
 }
 
-function FormulaireBoite({ form, champ, sauvegarder, fermer, saving, testerConnexion, testLoading, test, error, isNew }) {
+function FormulaireBoite({ form, champ, sauvegarder, fermer, saving, testerConnexion, testLoading, test, error, isNew, boiteId }) {
   const [section, setSection] = useState('general')
 
   return (
@@ -514,6 +527,17 @@ function FormulaireBoite({ form, champ, sauvegarder, fermer, saving, testerConne
 
       {section === 'imap' && (
         <div className="grid grid-cols-2 gap-3">
+          {form.provider === 'outlook' && !isNew && (
+            <div className="col-span-2 bg-blue-50 border border-blue-200 rounded p-3 flex items-center justify-between">
+              <p className="text-sm text-blue-700">Le refresh token Outlook s'obtient via le bouton ci-contre. Il sera sauvegardé automatiquement.</p>
+              <a
+                href={`/api/mail/oauth/outlook/start?boiteId=${boiteId}`}
+                className="ml-3 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
+              >
+                Connecter Outlook
+              </a>
+            </div>
+          )}
           <Field label="Hôte IMAP">
             <input type="text" value={form.imapHost} onChange={champ('imapHost')} className={inputCls} placeholder="imap.gmail.com" />
           </Field>

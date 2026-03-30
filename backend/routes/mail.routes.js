@@ -6,6 +6,95 @@ import { testConnection, fetchEmails, listerDossiers } from '../modules/mail/ima
 import { testSmtp, envoyerEmail } from '../modules/mail/smtp.service.js'
 
 const router = Router()
+
+// ─── OAUTH2 OUTLOOK (sans authMiddleware — callback Microsoft ne porte pas de JWT) ──
+
+const OUTLOOK_SCOPES = 'offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send'
+
+// GET /mail/oauth/outlook/start?boiteId=X
+// Redirige vers Microsoft pour autorisation
+router.get('/oauth/outlook/start', (req, res) => {
+  const { boiteId } = req.query
+  if (!boiteId) return res.status(400).send('boiteId requis')
+
+  const clientId  = process.env.AZURE_CLIENT_ID
+  const tenantId  = process.env.AZURE_TENANT_ID || 'common'
+  const appUrl    = process.env.APP_URL || 'https://eva.echodeplumes.com'
+  const redirectUri = `${appUrl}/api/mail/oauth/outlook/callback`
+
+  if (!clientId) return res.status(500).send('AZURE_CLIENT_ID manquant dans .env')
+
+  const url = new URL(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`)
+  url.searchParams.set('client_id', clientId)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('redirect_uri', redirectUri)
+  url.searchParams.set('response_mode', 'query')
+  url.searchParams.set('scope', OUTLOOK_SCOPES)
+  url.searchParams.set('state', boiteId)  // on passe l'id de la boîte dans state
+
+  res.redirect(url.toString())
+})
+
+// GET /mail/oauth/outlook/callback?code=...&state=boiteId
+// Microsoft redirige ici après autorisation — échange le code contre les tokens
+router.get('/oauth/outlook/callback', async (req, res) => {
+  const { code, state: boiteId, error, error_description } = req.query
+
+  if (error) {
+    logError(`OAuth2 Outlook callback : ${error} — ${error_description}`)
+    return res.redirect(`/eva/mails?oauth_error=${encodeURIComponent(error_description || error)}`)
+  }
+
+  if (!code || !boiteId) {
+    return res.redirect('/eva/mails?oauth_error=code+ou+boiteId+manquant')
+  }
+
+  const clientId     = process.env.AZURE_CLIENT_ID
+  const clientSecret = process.env.AZURE_CLIENT_SECRET
+  const tenantId     = process.env.AZURE_TENANT_ID || 'common'
+  const appUrl       = process.env.APP_URL || 'https://eva.echodeplumes.com'
+  const redirectUri  = `${appUrl}/api/mail/oauth/outlook/callback`
+
+  try {
+    const params = new URLSearchParams()
+    params.append('client_id', clientId)
+    params.append('scope', OUTLOOK_SCOPES)
+    params.append('code', code)
+    params.append('redirect_uri', redirectUri)
+    params.append('grant_type', 'authorization_code')
+    params.append('client_secret', clientSecret)
+
+    const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    })
+
+    const data = await response.json()
+
+    if (!response.ok || !data.refresh_token) {
+      logError(`OAuth2 Outlook token : ${data.error} — ${data.error_description}`)
+      return res.redirect(`/eva/mails?oauth_error=${encodeURIComponent(data.error_description || 'Token non obtenu')}`)
+    }
+
+    // Sauvegarder le refresh token dans les deux champs password de la boîte
+    await prisma.boiteMail.update({
+      where: { id: parseInt(boiteId) },
+      data: {
+        imapPassword: data.refresh_token,
+        smtpPassword: data.refresh_token
+      }
+    })
+
+    logAction(`OAuth2 Outlook : refresh token mis à jour pour boite ${boiteId}`)
+    res.redirect(`/eva/mails?oauth_success=${boiteId}`)
+
+  } catch (err) {
+    logError(`OAuth2 Outlook callback erreur : ${err.message}`)
+    res.redirect(`/eva/mails?oauth_error=${encodeURIComponent(err.message)}`)
+  }
+})
+
 router.use(authMiddleware)
 
 // ─── BOÎTES MAIL ──────────────────────────────────────────────────────────────
