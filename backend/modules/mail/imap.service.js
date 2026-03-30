@@ -1,14 +1,51 @@
 import { ImapFlow } from 'imapflow'
 import { logError, logAction } from '../../logs/logger.js'
 
+// ─── OAuth2 Microsoft ─────────────────────────────────────────────────────────
+
+/**
+ * Échange le refresh token de la boîte contre un access token frais via Azure.
+ * Le refresh token est stocké dans boite.imapPassword pour les comptes Outlook.
+ */
+async function getMicrosoftAccessToken(refreshToken) {
+  const clientId     = process.env.AZURE_CLIENT_ID
+  const clientSecret = process.env.AZURE_CLIENT_SECRET
+  const tenantId     = process.env.AZURE_TENANT_ID || 'common'
+
+  if (!clientId || !clientSecret) {
+    throw new Error('AZURE_CLIENT_ID ou AZURE_CLIENT_SECRET manquant dans .env')
+  }
+
+  const params = new URLSearchParams()
+  params.append('client_id', clientId)
+  params.append('scope', 'https://outlook.office.com/IMAP.AccessAsUser.All offline_access')
+  params.append('refresh_token', refreshToken)
+  params.append('grant_type', 'refresh_token')
+  params.append('client_secret', clientSecret)
+
+  const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params
+  })
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(`Azure OAuth2 : ${data.error} — ${data.error_description}`)
+  }
+
+  return data.access_token
+}
+
 // ─── Configuration IMAP ───────────────────────────────────────────────────────
 
-function buildImapConfig(boite) {
+async function buildImapConfig(boite) {
   const hostLower = boite.imapHost.toLowerCase()
-  const isMicrosoft = hostLower.includes('outlook') ||
+  const isMicrosoft = boite.provider === 'outlook' ||
+                      hostLower.includes('outlook') ||
                       hostLower.includes('office365') ||
-                      boite.imapLogin.toLowerCase().includes('hotmail') ||
-                      boite.provider === 'outlook'
+                      boite.imapLogin.toLowerCase().includes('hotmail')
 
   const config = {
     host: boite.imapHost,
@@ -28,11 +65,23 @@ function buildImapConfig(boite) {
     }
   }
 
-  // Microsoft : forcer LOGIN (mot de passe d'application)
   if (isMicrosoft) {
-    config.authMethod = 'LOGIN'
+    // Outlook : auth basique désactivée → OAuth2 obligatoire
+    // imapPassword contient le refresh token
     config.greetingTimeout = 30000
     config.connectionTimeout = 30000
+
+    try {
+      const accessToken = await getMicrosoftAccessToken(boite.imapPassword)
+      config.auth = {
+        user: boite.imapLogin,
+        accessToken   // ImapFlow passe automatiquement en XOAUTH2
+      }
+      delete config.auth.pass
+    } catch (err) {
+      logError(`IMAP OAuth2 Outlook ${boite.email} : ${err.message}`)
+      throw err
+    }
   }
 
   return config
@@ -41,7 +90,7 @@ function buildImapConfig(boite) {
 // ─── Test de connexion ────────────────────────────────────────────────────────
 
 export async function testConnection(boite) {
-  const client = new ImapFlow(buildImapConfig(boite))
+  const client = new ImapFlow(await buildImapConfig(boite))
   try {
     await client.connect()
     await client.logout()
@@ -60,7 +109,7 @@ export async function testConnection(boite) {
  * Retourne uniquement les mails dont l'UID n'est pas dans `uidsDejaTraites`.
  */
 export async function fetchEmails(boite, uidsDejaTraites = new Set()) {
-  const client = new ImapFlow(buildImapConfig(boite))
+  const client = new ImapFlow(await buildImapConfig(boite))
   const emails = []
 
   try {
@@ -159,7 +208,7 @@ export async function fetchEmails(boite, uidsDejaTraites = new Set()) {
 // ─── Actions IMAP ─────────────────────────────────────────────────────────────
 
 export async function supprimerEmail(boite, uid) {
-  const client = new ImapFlow(buildImapConfig(boite))
+  const client = new ImapFlow(await buildImapConfig(boite))
   try {
     await client.connect()
     await client.mailboxOpen('INBOX')
@@ -185,7 +234,7 @@ export async function supprimerEmail(boite, uid) {
 }
 
 export async function archiverEmail(boite, uid) {
-  const client = new ImapFlow(buildImapConfig(boite))
+  const client = new ImapFlow(await buildImapConfig(boite))
   try {
     await client.connect()
     await client.mailboxOpen('INBOX')
@@ -217,7 +266,7 @@ export async function archiverEmail(boite, uid) {
 }
 
 export async function deplacerEmail(boite, uid, dossierCible) {
-  const client = new ImapFlow(buildImapConfig(boite))
+  const client = new ImapFlow(await buildImapConfig(boite))
   try {
     await client.connect()
     await client.mailboxOpen('INBOX')
@@ -233,7 +282,7 @@ export async function deplacerEmail(boite, uid, dossierCible) {
 }
 
 export async function marquerLu(boite, uid) {
-  const client = new ImapFlow(buildImapConfig(boite))
+  const client = new ImapFlow(await buildImapConfig(boite))
   try {
     await client.connect()
     await client.mailboxOpen('INBOX')
@@ -248,7 +297,7 @@ export async function marquerLu(boite, uid) {
 }
 
 export async function listerDossiers(boite) {
-  const client = new ImapFlow(buildImapConfig(boite))
+  const client = new ImapFlow(await buildImapConfig(boite))
   try {
     await client.connect()
     const list = await client.list()

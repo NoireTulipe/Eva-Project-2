@@ -523,8 +523,11 @@ function FormulaireBoite({ form, champ, sauvegarder, fermer, saving, testerConne
           <Field label="Identifiant">
             <input type="text" value={form.imapLogin} onChange={champ('imapLogin')} className={inputCls} placeholder="votre@email.com" />
           </Field>
-          <Field label={isNew ? 'Mot de passe (app)' : 'Mot de passe (vide = inchangé)'}>
-            <input type="password" value={form.imapPassword} onChange={champ('imapPassword')} className={inputCls} placeholder="••••••••" />
+          <Field label={form.provider === 'outlook'
+            ? (isNew ? 'Refresh Token Azure' : 'Refresh Token Azure (vide = inchangé)')
+            : (isNew ? 'Mot de passe (app)' : 'Mot de passe (vide = inchangé)')}>
+            <input type="password" value={form.imapPassword} onChange={champ('imapPassword')} className={inputCls}
+              placeholder={form.provider === 'outlook' ? 'Refresh token obtenu via getHotmailToken.js' : '••••••••'} />
           </Field>
           <Field label="Scan" className="col-span-2">
             <div className="flex flex-wrap items-center gap-4 mt-1">
