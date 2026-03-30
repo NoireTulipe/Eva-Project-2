@@ -228,7 +228,7 @@ router.delete('/logs', (req, res) => {
 router.get('/utilisateurs', async (req, res) => {
   const users = await prisma.user.findMany({
     orderBy: { nom: 'asc' },
-    select: { id: true, nom: true, prenom: true, email: true, role: true, actif: true, createdAt: true }
+    select: { id: true, nom: true, prenom: true, email: true, role: true, actif: true, discordId: true, createdAt: true }
   })
   res.json(users)
 })
@@ -236,7 +236,7 @@ router.get('/utilisateurs', async (req, res) => {
 // PUT /admin/utilisateurs/:id
 router.put('/utilisateurs/:id', async (req, res) => {
   const id = parseInt(req.params.id)
-  const { nom, prenom, email, role, actif, password } = req.body
+  const { nom, prenom, email, role, actif, password, discordId } = req.body
 
   const data = {}
   if (nom !== undefined) data.nom = nom
@@ -245,11 +245,12 @@ router.put('/utilisateurs/:id', async (req, res) => {
   if (role !== undefined) data.role = role
   if (actif !== undefined) data.actif = actif
   if (password) data.password = await bcrypt.hash(password, 10)
+  if (discordId !== undefined) data.discordId = discordId || null
 
   const user = await prisma.user.update({
     where: { id },
     data,
-    select: { id: true, nom: true, prenom: true, email: true, role: true, actif: true }
+    select: { id: true, nom: true, prenom: true, email: true, role: true, actif: true, discordId: true }
   })
 
   logAction(`Admin: utilisateur ${id} modifié`)
