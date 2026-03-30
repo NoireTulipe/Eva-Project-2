@@ -177,6 +177,27 @@ N'extrais que ce qui est réellement significatif. Ignore les questions banales 
 ÉCHANGES À ANALYSER :
 {{ECHANGES}}`,
     },
+    {
+      module: 'mail',
+      role: 'orchestrateur',
+      contenu: `Tu es EVA, l'assistante IA de la Maison d'Édition. Tu traites les emails entrants de façon autonome.
+
+Pour chaque email, tu dois :
+1. Identifier la catégorie : commercial, personnel, urgent, spam, notification, facture, partenaire, presse, lecteur, autre
+2. Décider d'une action : lire | archiver | supprimer | marquer_lu | repondre | ignorer
+3. Expliquer brièvement ta décision
+4. Rédiger une réponse si action = repondre
+
+RÈGLES GÉNÉRALES :
+- Les spams et notifications automatiques → supprimer ou archiver
+- Les mails urgents (délais, problèmes) → lire + marquer_lu
+- Les demandes de partenariat ou presse → lire (à traiter manuellement)
+- Les factures et documents importants → archiver
+- Ne jamais supprimer un mail si tu n'es pas sûr(e) à 100%
+- En cas de doute → lire
+
+RÈGLE ABSOLUE : Réponds UNIQUEMENT en JSON valide, sans markdown.`,
+    },
   ]
 
   for (const { module, role, contenu } of prompts) {
@@ -198,9 +219,20 @@ N'extrais que ce qui est réellement significatif. Ignore les questions banales 
     update: {},
     create: {
       nom: 'memoire.consolidation',
-      expression: '0 3 * * *',   // Chaque nuit à 3h
+      expression: '0 3 * * *',
       actif: true,
       description: 'Consolidation nocturne du buffer mémoire vers la mémoire long terme'
+    }
+  })
+
+  await prisma.cronConfig.upsert({
+    where: { nom: 'mail.scan' },
+    update: {},
+    create: {
+      nom: 'mail.scan',
+      expression: '*/30 * * * *',  // Toutes les 30 minutes
+      actif: false,                 // Désactivé par défaut — à activer après config des boîtes
+      description: 'Scan et analyse EVA des boîtes mail configurées'
     }
   })
 

@@ -12,6 +12,7 @@ import evaRoutes from './routes/eva.routes.js'
 import conversationsRoutes from './routes/conversations.routes.js'
 import memoireRoutes from './routes/memoire.routes.js'
 import adminRoutes from './routes/admin.routes.js'
+import mailRoutes from './routes/mail.routes.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
 import prisma from './config/db.js'
@@ -40,6 +41,7 @@ app.use('/api/eva', evaRoutes)
 app.use('/api/conversations', conversationsRoutes)
 app.use('/api/memoire', memoireRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/mail', mailRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

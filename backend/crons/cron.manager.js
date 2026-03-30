@@ -2,13 +2,15 @@ import cron from 'node-cron'
 import prisma from '../config/db.js'
 import { logAction, logError } from '../logs/logger.js'
 import { consolidateAll } from '../modules/memoire/consolidation.js'
+import { scannerTousLesMails } from './mail.cron.js'
 
 // Registre des tâches actives { nom → task }
 const activeTasks = new Map()
 
 // Catalogue des handlers disponibles
 const HANDLERS = {
-  'memoire.consolidation': consolidateAll
+  'memoire.consolidation': consolidateAll,
+  'mail.scan': scannerTousLesMails
 }
 
 /**

@@ -323,3 +323,31 @@ export const compta = {
     return request('GET', `/ventes/compta${qs ? `?${qs}` : ''}`)
   }
 }
+
+// --- Mail ---
+
+export const mail = {
+  // Boîtes
+  getBoites: () => request('GET', '/mail/boites'),
+  createBoite: (data) => request('POST', '/mail/boites', data),
+  updateBoite: (id, data) => request('PUT', `/mail/boites/${id}`, data),
+  deleteBoite: (id) => request('DELETE', `/mail/boites/${id}`),
+  testBoite: (id) => request('POST', `/mail/boites/${id}/test`),
+  getEmails: (id) => request('GET', `/mail/boites/${id}/emails`),
+  getDossiers: (id) => request('GET', `/mail/boites/${id}/dossiers`),
+
+  // Journal
+  getJournal: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.date) qs.set('date', params.date)
+    if (params.boiteId) qs.set('boiteId', params.boiteId)
+    return request('GET', `/mail/journal${qs.toString() ? `?${qs}` : ''}`)
+  },
+  getJournalDates: () => request('GET', '/mail/journal/dates'),
+
+  // Brouillons
+  getBrouillons: () => request('GET', '/mail/brouillons'),
+  updateBrouillon: (id, brouillon) => request('PUT', `/mail/brouillons/${id}`, { brouillon }),
+  envoyerBrouillon: (id) => request('POST', `/mail/brouillons/${id}/envoyer`)
+}
+

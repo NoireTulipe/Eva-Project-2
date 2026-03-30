@@ -2,8 +2,9 @@ import { ventesTools } from './categories/ventes.tools.js'
 import { memoireTools } from './categories/memoire.tools.js'
 import { webTools } from './categories/web.tools.js'
 import { rechercheTools } from './categories/recherche.tools.js'
+import { mailTools } from './categories/mail.tools.js'
 
-const ALL_TOOLS = [...ventesTools, ...memoireTools, ...webTools, ...rechercheTools]
+const ALL_TOOLS = [...ventesTools, ...memoireTools, ...webTools, ...rechercheTools, ...mailTools]
 
 /**
  * Retourne la description textuelle des outils pour injection dans le prompt.

@@ -255,39 +255,55 @@ model User {
 // ─── MAIL ─────────────────────────────────────────────────────────────────────
 
 model BoiteMail {
-  id           Int        @id @default(autoincrement())
-  nom          String
-  email        String     @unique
-  provider     String
-  actif        Boolean    @default(true)
-  regles       RegleMail[]
+  id                    Int        @id @default(autoincrement())
+  nom                   String
+  email                 String     @unique
+  provider              String     // "gmail" | "outlook" | "imap"
+  actif                 Boolean    @default(true)
+
+  // IMAP
+  imapHost              String     @default("")
+  imapPort              Int        @default(993)
+  imapLogin             String     @default("")
+  imapPassword          String     @default("")
+
+  // SMTP
+  smtpHost              String     @default("")
+  smtpPort              Int        @default(587)
+  smtpLogin             String     @default("")
+  smtpPassword          String     @default("")
+
+  // Scan
+  scanNonLuSeulement    Boolean    @default(true)
+  scanNombre            Int        @default(20)
+
+  // Instruction EVA spécifique à cette boîte
+  instructionSpecifique String     @default("")
+
+  // Canal Discord pour le rapport quotidien (ID du salon)
+  salonDiscordRapport   String     @default("")
+
   emailLogs    EmailLog[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 }
 
-model RegleMail {
-  id           Int        @id @default(autoincrement())
-  boiteMailId  Int
-  boiteMail    BoiteMail  @relation(fields: [boiteMailId], references: [id])
-  nom          String
-  conditions   String
-  action       String
-  actif        Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-}
-
 model EmailLog {
-  id           Int        @id @default(autoincrement())
-  boiteMailId  Int
-  boiteMail    BoiteMail  @relation(fields: [boiteMailId], references: [id])
-  sujet        String?
-  expediteur   String?
-  categorie    String?
-  action       String?
-  valide       Boolean?
-  createdAt    DateTime   @default(now())
+  id               Int        @id @default(autoincrement())
+  boiteMailId      Int
+  boiteMail        BoiteMail  @relation(fields: [boiteMailId], references: [id])
+  uid              Int?       // UID IMAP du mail
+  sujet            String?
+  expediteur       String?
+  corps            String?    // résumé du corps (500 cars max)
+  dossier          String?    // dossier IMAP source
+  categorie        String?    // catégorie attribuée par EVA
+  action           String?    // action prise par EVA
+  raison           String?    // explication d'EVA
+  actionAppliquee  Boolean    @default(false)
+  brouillon        String?    // corps rédigé par EVA si action = "repondre"
+  brouillonEnvoye  Boolean    @default(false)
+  createdAt        DateTime   @default(now())
 }
 
 // ─── NOTES ET RAPPELS ─────────────────────────────────────────────────────────

@@ -130,3 +130,34 @@ export async function startBot() {
   }
   await client.login(token)
 }
+
+/**
+ * Envoie un message dans un salon Discord par son ID.
+ * Découpe automatiquement si > 2000 chars.
+ */
+export async function envoyerMessageDiscord(channelId, message) {
+  if (!client.isReady()) {
+    logError('Discord : bot non connecté — impossible d\'envoyer le message')
+    return
+  }
+  try {
+    const channel = await client.channels.fetch(channelId)
+    if (!channel) throw new Error(`Salon ${channelId} introuvable`)
+
+    // Découper si > 2000 chars
+    const chunks = []
+    let remaining = message
+    while (remaining.length > DISCORD_LIMIT) {
+      const cut = remaining.lastIndexOf('\n', DISCORD_LIMIT)
+      chunks.push(remaining.slice(0, cut > 0 ? cut : DISCORD_LIMIT))
+      remaining = remaining.slice(cut > 0 ? cut + 1 : DISCORD_LIMIT)
+    }
+    if (remaining) chunks.push(remaining)
+
+    for (const chunk of chunks) {
+      await channel.send(chunk)
+    }
+  } catch (err) {
+    logError(`Discord envoyerMessage ${channelId} : ${err.message}`)
+  }
+}
