@@ -122,8 +122,8 @@ export async function fetchEmails(boite, uidsDejaTraites = new Set()) {
       return []
     }
 
-    // Critères de recherche
-    const searchCriteria = boite.scanNonLuSeulement ? ['UNSEEN'] : ['ALL']
+    // Critères de recherche (ImapFlow utilise un format objet)
+    const searchCriteria = boite.scanNonLuSeulement ? { unseen: true } : { all: true }
     const uids = await client.search(searchCriteria, { uid: true })
 
     if (!uids.length) {
