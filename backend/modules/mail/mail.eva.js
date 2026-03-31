@@ -3,6 +3,7 @@ import { callAI } from '../../llm/providers.js'
 import { getPrompt } from '../../llm/prompts.js'
 import { supprimerEmail, archiverEmail, marquerLu, deplacerEmail } from './imap.service.js'
 import { logAction, logError } from '../../logs/logger.js'
+import { rechercheMemoire } from '../memoire/recherche.js'
 
 // Actions reconnues par EVA
 const ACTIONS_VALIDES = ['lire', 'archiver', 'supprimer', 'marquer_lu', 'repondre', 'ignorer']
@@ -25,14 +26,61 @@ async function getLLMConfig() {
  * Analyse un email et retourne la décision d'EVA.
  * Retourne : { categorie, action, raison, brouillon? }
  */
-async function analyserEmail(email, boite, promptGlobal) {
+/**
+ * Récupère les 20 dernières corrections humaines pour cette boîte,
+ * formatées pour injection dans le prompt.
+ */
+/**
+ * Récupère les règles mail depuis deux sources :
+ * 1. Les 20 dernières corrections dans EmailLog (mémoire courte)
+ * 2. La mémoire long terme via recherche sémantique (consolidations passées)
+ */
+async function getReglesApprisesmail(boiteId, emailSujet, userId) {
+  // ── Mémoire courte : 20 dernières corrections pour cette boîte ──────────────
+  const corrections = await prisma.emailLog.findMany({
+    where: { boiteMailId: boiteId, corrige: true },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: { sujet: true, expediteur: true, categorie: true, action: true, correctionAction: true, correctionRaison: true }
+  })
+
+  let bloc = ''
+
+  if (corrections.length) {
+    const lignes = corrections.map(c =>
+      `- Mail "${c.sujet || '?'}" de ${c.expediteur || '?'} (${c.categorie}) : "${c.action}" → corrigé en "${c.correctionAction}"${c.correctionRaison ? ` (${c.correctionRaison})` : ''}`
+    )
+    bloc += `\n\n--- Corrections récentes (règles à appliquer) ---\n${lignes.join('\n')}`
+  }
+
+  // ── Mémoire long terme : souvenirs/préférences liés aux mails ───────────────
+  if (userId) {
+    try {
+      const query = `règle mail correction ${emailSujet || 'email'}`
+      const resultats = await rechercheMemoire(query, userId)
+      const pertinents = resultats.filter(r => r.contenu.toLowerCase().includes('mail') || r.contenu.toLowerCase().includes('correction'))
+      if (pertinents.length) {
+        const lignes = pertinents.map(r => `- ${r.contenu}`)
+        bloc += `\n\n--- Règles mémorisées long terme ---\n${lignes.join('\n')}`
+      }
+    } catch {
+      // La mémoire long terme peut ne pas être disponible (embeddings non chargés)
+    }
+  }
+
+  return bloc
+}
+
+async function analyserEmail(email, boite, promptGlobal, context = {}) {
   const { provider, model } = await getLLMConfig()
 
   const instructionBoite = boite.instructionSpecifique
     ? `\n\n--- Instructions spécifiques pour ${boite.nom} ---\n${boite.instructionSpecifique}`
     : ''
 
-  const systemPrompt = promptGlobal + instructionBoite
+  const reglesApprises = await getReglesApprisesmail(boite.id, email.sujet, context?.userId)
+
+  const systemPrompt = promptGlobal + instructionBoite + reglesApprises
 
   const userMessage = `Analyse cet email reçu dans la boîte "${boite.nom}" (${boite.email}) :
 
@@ -97,13 +145,13 @@ async function appliquerAction(boite, email, action) {
  * Point d'entrée principal.
  * Analyse et traite un email, enregistre le résultat dans EmailLog.
  */
-export async function analyserEtAgir(boite, email) {
+export async function analyserEtAgir(boite, email, context = {}) {
   // Récupérer le prompt global mail
   const promptGlobal = await getPrompt('mail', 'orchestrateur')
 
   let decision
   try {
-    decision = await analyserEmail(email, boite, promptGlobal)
+    decision = await analyserEmail(email, boite, promptGlobal, context)
   } catch (err) {
     logError(`EVA mail: erreur analyse email UID ${email.uid} (${boite.email}) — ${err.message}`)
     // En cas d'erreur LLM : on log sans agir

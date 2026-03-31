@@ -289,21 +289,25 @@ model BoiteMail {
 }
 
 model EmailLog {
-  id               Int        @id @default(autoincrement())
-  boiteMailId      Int
-  boiteMail        BoiteMail  @relation(fields: [boiteMailId], references: [id])
-  uid              Int?       // UID IMAP du mail
-  sujet            String?
-  expediteur       String?
-  corps            String?    // résumé du corps (500 cars max)
-  dossier          String?    // dossier IMAP source
-  categorie        String?    // catégorie attribuée par EVA
-  action           String?    // action prise par EVA
-  raison           String?    // explication d'EVA
-  actionAppliquee  Boolean    @default(false)
-  brouillon        String?    // corps rédigé par EVA si action = "repondre"
-  brouillonEnvoye  Boolean    @default(false)
-  createdAt        DateTime   @default(now())
+  id                Int        @id @default(autoincrement())
+  boiteMailId       Int
+  boiteMail         BoiteMail  @relation(fields: [boiteMailId], references: [id])
+  uid               Int?       // UID IMAP du mail
+  sujet             String?
+  expediteur        String?
+  corps             String?    // résumé du corps (500 cars max)
+  dossier           String?    // dossier IMAP source
+  categorie         String?    // catégorie attribuée par EVA
+  action            String?    // action prise par EVA
+  raison            String?    // explication d'EVA
+  actionAppliquee   Boolean    @default(false)
+  brouillon         String?    // corps rédigé par EVA si action = "repondre"
+  brouillonEnvoye   Boolean    @default(false)
+  // ─── Correction humaine ───────────────────────────────────────────────────
+  corrige           Boolean    @default(false)
+  correctionAction  String?    // action corrigée par l'humain
+  correctionRaison  String?    // explication de la correction (pour apprentissage EVA)
+  createdAt         DateTime   @default(now())
 }
 
 // ─── NOTES ET RAPPELS ─────────────────────────────────────────────────────────

@@ -352,6 +352,9 @@ export const mail = {
 
   // OAuth2 Outlook
   getOutlookAuthUrl: () => request('GET', '/mail/oauth/outlook/url'),
-  exchangeOutlookCode: (boiteId, callbackUrl) => request('POST', '/mail/oauth/outlook/exchange', { boiteId, callbackUrl })
+  exchangeOutlookCode: (boiteId, callbackUrl) => request('POST', '/mail/oauth/outlook/exchange', { boiteId, callbackUrl }),
+
+  // Corrections
+  corrigerLog: (id, action, raison) => request('POST', `/mail/journal/${id}/corriger`, { action, raison })
 }
 

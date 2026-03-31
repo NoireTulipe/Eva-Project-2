@@ -235,6 +235,57 @@ router.get('/boites/:id/dossiers', async (req, res) => {
   }
 })
 
+// ─── CORRECTIONS ─────────────────────────────────────────────────────────────
+
+// POST /mail/journal/:id/corriger
+router.post('/journal/:id/corriger', async (req, res) => {
+  const id = parseInt(req.params.id)
+  const { action, raison } = req.body
+
+  if (!action) return res.status(400).json({ error: 'action requise' })
+
+  const log = await prisma.emailLog.findUnique({
+    where: { id },
+    include: { boiteMail: true }
+  })
+  if (!log) return res.status(404).json({ error: 'Log introuvable' })
+
+  // Appliquer la nouvelle action IMAP si possible (uid requis)
+  if (log.uid) {
+    try {
+      const { supprimerEmail, archiverEmail, marquerLu } = await import('../modules/mail/imap.service.js')
+      switch (action) {
+        case 'supprimer': await supprimerEmail(log.boiteMail, log.uid); break
+        case 'archiver':  await archiverEmail(log.boiteMail, log.uid);  break
+        case 'marquer_lu': await marquerLu(log.boiteMail, log.uid);     break
+      }
+    } catch (err) {
+      logError(`Correction mail ${id} application IMAP : ${err.message}`)
+      // On continue — la correction est sauvegardée même si l'action IMAP échoue
+    }
+  }
+
+  // Sauvegarder la correction
+  const updated = await prisma.emailLog.update({
+    where: { id },
+    data: {
+      corrige: true,
+      correctionAction: action,
+      correctionRaison: raison || null
+    },
+    include: { boiteMail: { select: { id: true, nom: true, email: true } } }
+  })
+
+  // Mémoriser la correction dans MemBuffer pour apprentissage EVA
+  const memo = `Correction mail : EVA avait décidé "${log.action}" pour un mail "${log.categorie}" (sujet: "${log.sujet || '?'}", de: ${log.expediteur || '?'}). Correction humaine : "${action}"${raison ? `. Raison : ${raison}` : ''}. EVA doit retenir cette règle pour les prochains mails similaires.`
+  await prisma.memBuffer.create({
+    data: { source: 'mail.correction', contenu: memo, traite: false }
+  })
+
+  logAction(`Correction mail ${id} : ${log.action} → ${action}${raison ? ` (${raison})` : ''}`)
+  res.json(updated)
+})
+
 // ─── JOURNAL (EmailLog) ───────────────────────────────────────────────────────
 
 // GET /mail/journal?date=2026-03-30&boiteId=1

@@ -159,6 +159,7 @@ function OngletJournal() {
                   log={log}
                   ouvert={detailOuvert === log.id}
                   onToggle={() => setDetailOuvert(detailOuvert === log.id ? null : log.id)}
+                  onCorriger={updated => setLogs(prev => prev.map(l => l.id === updated.id ? updated : l))}
                 />
               ))}
             </tbody>
@@ -169,7 +170,30 @@ function OngletJournal() {
   )
 }
 
-function LogRow({ log, ouvert, onToggle }) {
+function LogRow({ log, ouvert, onToggle, onCorriger }) {
+  const [correction, setCorrection] = useState(false)
+  const [corrAction, setCorrAction] = useState('')
+  const [corrRaison, setCorrRaison] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [erreur, setErreur] = useState('')
+
+  async function soumettre() {
+    if (!corrAction) return
+    setSaving(true); setErreur('')
+    try {
+      const updated = await mail.corrigerLog(log.id, corrAction, corrRaison)
+      onCorriger(updated)
+      setCorrection(false)
+      setCorrAction(''); setCorrRaison('')
+    } catch (err) {
+      setErreur(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const actionAffichee = log.corrige ? log.correctionAction : log.action
+
   return (
     <>
       <tr className="hover:bg-gray-50">
@@ -180,24 +204,97 @@ function LogRow({ log, ouvert, onToggle }) {
           <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">{log.categorie}</span>
         </td>
         <td className="px-4 py-3">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ACTION_LABELS[log.action]?.color || 'bg-gray-100 text-gray-600'}`}>
-            {ACTION_LABELS[log.action]?.label || log.action}
-          </span>
+          <div className="flex items-center gap-1">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ACTION_LABELS[actionAffichee]?.color || 'bg-gray-100 text-gray-600'}`}>
+              {ACTION_LABELS[actionAffichee]?.label || actionAffichee}
+            </span>
+            {log.corrige && (
+              <span className="text-xs text-orange-500" title={`Corrigé : ${log.correctionRaison || ''}`}>✎</span>
+            )}
+          </div>
         </td>
         <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
           {new Date(log.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
         </td>
-        <td className="px-4 py-3">
+        <td className="px-4 py-3 flex gap-2">
           <button onClick={onToggle} className="text-xs text-indigo-500 hover:text-indigo-700">
             {ouvert ? 'Masquer' : 'Détail'}
           </button>
+          <button
+            onClick={() => { setCorrection(!correction); setCorrAction(''); setCorrRaison(''); setErreur('') }}
+            className="text-xs text-orange-500 hover:text-orange-700"
+          >
+            Corriger
+          </button>
         </td>
       </tr>
+
+      {/* Formulaire de correction */}
+      {correction && (
+        <tr className="bg-orange-50">
+          <td colSpan={7} className="px-6 py-4">
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-orange-700">
+                Corriger la décision d'EVA
+                <span className="ml-2 text-xs font-normal text-orange-500">
+                  (EVA avait choisi : {ACTION_LABELS[log.action]?.label || log.action})
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Nouvelle action</label>
+                  <select
+                    value={corrAction}
+                    onChange={e => setCorrAction(e.target.value)}
+                    className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+                  >
+                    <option value="">-- Choisir --</option>
+                    {Object.entries(ACTION_LABELS).map(([val, { label }]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[240px]">
+                  <label className="block text-xs text-gray-500 mb-1">Pourquoi cette correction ? <span className="text-gray-400">(EVA va retenir cette règle)</span></label>
+                  <input
+                    type="text"
+                    value={corrRaison}
+                    onChange={e => setCorrRaison(e.target.value)}
+                    placeholder="Ex: Les mails de cet expéditeur sont toujours importants"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              {erreur && <p className="text-xs text-red-600">{erreur}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={soumettre}
+                  disabled={saving || !corrAction}
+                  className="px-4 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {saving ? 'Application…' : 'Appliquer la correction'}
+                </button>
+                <button
+                  onClick={() => setCorrection(false)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+
+      {/* Détail */}
       {ouvert && (
         <tr className="bg-indigo-50">
           <td colSpan={7} className="px-6 py-4">
             <div className="space-y-2 text-sm">
-              <p><span className="font-medium text-gray-600">Raison :</span> <span className="text-gray-700">{log.raison || '—'}</span></p>
+              <p><span className="font-medium text-gray-600">Décision EVA :</span> <span className="text-gray-700">{log.raison || '—'}</span></p>
+              {log.corrige && (
+                <p><span className="font-medium text-orange-600">Correction :</span> <span className="text-orange-700">{ACTION_LABELS[log.correctionAction]?.label} — {log.correctionRaison || 'sans explication'}</span></p>
+              )}
               {log.corps && (
                 <p><span className="font-medium text-gray-600">Aperçu :</span> <span className="text-gray-500 italic">{log.corps.substring(0, 300)}{log.corps.length > 300 ? '…' : ''}</span></p>
               )}
