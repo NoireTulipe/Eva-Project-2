@@ -287,7 +287,7 @@ function LogRow({ log, ouvert, onToggle, onCorriger }) {
                         className="border border-gray-300 rounded px-3 py-1.5 text-sm"
                       >
                         <option value="">-- Choisir un dossier --</option>
-                        {dossiers.map(d => <option key={d} value={d}>{d}</option>)}
+                        {dossiers.map(d => <option key={d.path} value={d.path}>{d.path}</option>)}
                       </select>
                     ) : (
                       <input
