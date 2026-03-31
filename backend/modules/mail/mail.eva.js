@@ -6,7 +6,7 @@ import { logAction, logError } from '../../logs/logger.js'
 import { rechercheMemoire } from '../memoire/recherche.js'
 
 // Actions reconnues par EVA
-const ACTIONS_VALIDES = ['lire', 'archiver', 'supprimer', 'marquer_lu', 'repondre', 'ignorer']
+const ACTIONS_VALIDES = ['lire', 'archiver', 'supprimer', 'marquer_lu', 'repondre', 'ignorer', 'deplacer']
 
 /**
  * Récupère la config LLM (flash model pour l'analyse mail).
@@ -94,7 +94,8 @@ ${email.corps}
 Réponds UNIQUEMENT en JSON valide, sans markdown :
 {
   "categorie": "string (ex: commercial, personnel, urgent, spam, notification, facture, autre)",
-  "action": "une parmi : lire | archiver | supprimer | marquer_lu | repondre | ignorer",
+  "action": "une parmi : lire | archiver | supprimer | marquer_lu | repondre | ignorer | deplacer",
+  "dossierCible": "null OU chemin IMAP exact si action=deplacer (ex: 'Factures', 'Archive/2026')",
   "raison": "explication courte de ta décision (1-2 phrases)",
   "brouillon": "null OU le corps de la réponse si action=repondre"
 }`
@@ -120,7 +121,7 @@ Réponds UNIQUEMENT en JSON valide, sans markdown :
  * Applique l'action décidée sur l'email via IMAP.
  * Retourne true si l'action a été appliquée.
  */
-async function appliquerAction(boite, email, action) {
+async function appliquerAction(boite, email, action, dossierCible) {
   switch (action) {
     case 'supprimer':
       await supprimerEmail(boite, email.uid)
@@ -131,10 +132,13 @@ async function appliquerAction(boite, email, action) {
     case 'marquer_lu':
       await marquerLu(boite, email.uid)
       return true
+    case 'deplacer':
+      if (!dossierCible) throw new Error('dossierCible requis pour action deplacer')
+      await deplacerEmail(boite, email.uid, dossierCible)
+      return true
     case 'repondre':
     case 'lire':
     case 'ignorer':
-      // Pas d'action IMAP — juste log
       return false
     default:
       return false
@@ -167,7 +171,7 @@ export async function analyserEtAgir(boite, email, context = {}) {
   let actionAppliquee = false
   if (decision.action !== 'repondre' && decision.action !== 'lire' && decision.action !== 'ignorer') {
     try {
-      actionAppliquee = await appliquerAction(boite, email, decision.action)
+      actionAppliquee = await appliquerAction(boite, email, decision.action, decision.dossierCible)
     } catch (err) {
       logError(`EVA mail: erreur application action "${decision.action}" UID ${email.uid} — ${err.message}`)
       decision.raison += ` [erreur application : ${err.message}]`
@@ -175,6 +179,11 @@ export async function analyserEtAgir(boite, email, context = {}) {
   }
 
   // Enregistrer dans EmailLog
+  // La raison inclut le dossier cible si action=deplacer
+  const raisonComplete = decision.action === 'deplacer' && decision.dossierCible
+    ? `${decision.raison} → dossier : ${decision.dossierCible}`
+    : decision.raison
+
   const log = await prisma.emailLog.create({
     data: {
       boiteMailId: boite.id,
@@ -185,7 +194,7 @@ export async function analyserEtAgir(boite, email, context = {}) {
       dossier: email.dossier || 'INBOX',
       categorie: decision.categorie,
       action: decision.action,
-      raison: decision.raison,
+      raison: raisonComplete,
       actionAppliquee,
       brouillon: decision.brouillon || null,
       brouillonEnvoye: false

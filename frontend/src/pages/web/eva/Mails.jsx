@@ -14,6 +14,7 @@ const ACTION_LABELS = {
   marquer_lu: { label: 'Marqué lu', color: 'bg-blue-50 text-blue-500' },
   repondre:   { label: 'Réponse',   color: 'bg-green-100 text-green-700' },
   ignorer:    { label: 'Ignoré',    color: 'bg-yellow-100 text-yellow-700' },
+  deplacer:   { label: 'Déplacé',   color: 'bg-purple-100 text-purple-700' },
   erreur:     { label: 'Erreur',    color: 'bg-red-50 text-red-400' }
 }
 
@@ -174,17 +175,37 @@ function LogRow({ log, ouvert, onToggle, onCorriger }) {
   const [correction, setCorrection] = useState(false)
   const [corrAction, setCorrAction] = useState('')
   const [corrRaison, setCorrRaison] = useState('')
+  const [corrDossier, setCorrDossier] = useState('')
+  const [dossiers, setDossiers] = useState([])
+  const [loadingDossiers, setLoadingDossiers] = useState(false)
   const [saving, setSaving] = useState(false)
   const [erreur, setErreur] = useState('')
 
+  async function onChangeCorrAction(val) {
+    setCorrAction(val)
+    setCorrDossier('')
+    if (val === 'deplacer' && dossiers.length === 0) {
+      setLoadingDossiers(true)
+      try {
+        const liste = await mail.getDossiers(log.boiteMail.id)
+        setDossiers(liste)
+      } catch {
+        setDossiers([])
+      } finally {
+        setLoadingDossiers(false)
+      }
+    }
+  }
+
   async function soumettre() {
     if (!corrAction) return
+    if (corrAction === 'deplacer' && !corrDossier) return
     setSaving(true); setErreur('')
     try {
-      const updated = await mail.corrigerLog(log.id, corrAction, corrRaison)
+      const updated = await mail.corrigerLog(log.id, corrAction, corrRaison, corrAction === 'deplacer' ? corrDossier : undefined)
       onCorriger(updated)
       setCorrection(false)
-      setCorrAction(''); setCorrRaison('')
+      setCorrAction(''); setCorrRaison(''); setCorrDossier('')
     } catch (err) {
       setErreur(err.message)
     } finally {
@@ -245,7 +266,7 @@ function LogRow({ log, ouvert, onToggle, onCorriger }) {
                   <label className="block text-xs text-gray-500 mb-1">Nouvelle action</label>
                   <select
                     value={corrAction}
-                    onChange={e => setCorrAction(e.target.value)}
+                    onChange={e => onChangeCorrAction(e.target.value)}
                     className="border border-gray-300 rounded px-3 py-1.5 text-sm"
                   >
                     <option value="">-- Choisir --</option>
@@ -254,6 +275,31 @@ function LogRow({ log, ouvert, onToggle, onCorriger }) {
                     ))}
                   </select>
                 </div>
+                {corrAction === 'deplacer' && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Dossier cible</label>
+                    {loadingDossiers ? (
+                      <span className="text-xs text-gray-400">Chargement…</span>
+                    ) : dossiers.length > 0 ? (
+                      <select
+                        value={corrDossier}
+                        onChange={e => setCorrDossier(e.target.value)}
+                        className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+                      >
+                        <option value="">-- Choisir un dossier --</option>
+                        {dossiers.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={corrDossier}
+                        onChange={e => setCorrDossier(e.target.value)}
+                        placeholder="Ex: Factures ou Archive/2026"
+                        className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+                      />
+                    )}
+                  </div>
+                )}
                 <div className="flex-1 min-w-[240px]">
                   <label className="block text-xs text-gray-500 mb-1">Pourquoi cette correction ? <span className="text-gray-400">(EVA va retenir cette règle)</span></label>
                   <input
@@ -269,7 +315,7 @@ function LogRow({ log, ouvert, onToggle, onCorriger }) {
               <div className="flex gap-2">
                 <button
                   onClick={soumettre}
-                  disabled={saving || !corrAction}
+                  disabled={saving || !corrAction || (corrAction === 'deplacer' && !corrDossier)}
                   className="px-4 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
                 >
                   {saving ? 'Application…' : 'Appliquer la correction'}

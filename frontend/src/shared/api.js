@@ -355,6 +355,6 @@ export const mail = {
   exchangeOutlookCode: (boiteId, callbackUrl) => request('POST', '/mail/oauth/outlook/exchange', { boiteId, callbackUrl }),
 
   // Corrections
-  corrigerLog: (id, action, raison) => request('POST', `/mail/journal/${id}/corriger`, { action, raison })
+  corrigerLog: (id, action, raison, dossierCible) => request('POST', `/mail/journal/${id}/corriger`, { action, raison, dossierCible })
 }
 

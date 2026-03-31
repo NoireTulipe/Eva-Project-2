@@ -240,9 +240,12 @@ router.get('/boites/:id/dossiers', async (req, res) => {
 // POST /mail/journal/:id/corriger
 router.post('/journal/:id/corriger', async (req, res) => {
   const id = parseInt(req.params.id)
-  const { action, raison } = req.body
+  const { action, raison, dossierCible } = req.body
 
   if (!action) return res.status(400).json({ error: 'action requise' })
+  if (action === 'deplacer' && !dossierCible) {
+    return res.status(400).json({ error: 'dossierCible requis pour action deplacer' })
+  }
 
   const log = await prisma.emailLog.findUnique({
     where: { id },
@@ -253,11 +256,12 @@ router.post('/journal/:id/corriger', async (req, res) => {
   // Appliquer la nouvelle action IMAP si possible (uid requis)
   if (log.uid) {
     try {
-      const { supprimerEmail, archiverEmail, marquerLu } = await import('../modules/mail/imap.service.js')
+      const { supprimerEmail, archiverEmail, marquerLu, deplacerEmail } = await import('../modules/mail/imap.service.js')
       switch (action) {
-        case 'supprimer': await supprimerEmail(log.boiteMail, log.uid); break
-        case 'archiver':  await archiverEmail(log.boiteMail, log.uid);  break
-        case 'marquer_lu': await marquerLu(log.boiteMail, log.uid);     break
+        case 'supprimer':  await supprimerEmail(log.boiteMail, log.uid); break
+        case 'archiver':   await archiverEmail(log.boiteMail, log.uid);  break
+        case 'marquer_lu': await marquerLu(log.boiteMail, log.uid);      break
+        case 'deplacer':   await deplacerEmail(log.boiteMail, log.uid, dossierCible); break
       }
     } catch (err) {
       logError(`Correction mail ${id} application IMAP : ${err.message}`)
@@ -265,13 +269,17 @@ router.post('/journal/:id/corriger', async (req, res) => {
     }
   }
 
-  // Sauvegarder la correction
+  // Sauvegarder la correction (dossier inclus dans la raison si déplacement)
+  const raisonComplete = action === 'deplacer' && dossierCible
+    ? `${raison || 'Déplacé'} → dossier : ${dossierCible}`
+    : raison || null
+
   const updated = await prisma.emailLog.update({
     where: { id },
     data: {
       corrige: true,
       correctionAction: action,
-      correctionRaison: raison || null
+      correctionRaison: raisonComplete
     },
     include: { boiteMail: { select: { id: true, nom: true, email: true } } }
   })
