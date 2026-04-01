@@ -1,0 +1,11 @@
+{
+  "appId": "com.echodeplumes.eva",
+  "appName": "EVA",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Haptics": {}
+  }
+}
