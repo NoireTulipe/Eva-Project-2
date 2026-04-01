@@ -33,9 +33,14 @@ Interfaces : Web (principale), App Android (Capacitor), Discord (secondaire).
 - `react-router-dom` v6
 - Monorepo npm workspaces (`backend/` + `frontend/`)
 
-### App Android
-- Capacitor — build depuis la base React du frontend
-- UI spécifique mobile, pas une transposition du web
+### App Android (`mobile/`)
+- React + Vite + Tailwind + Capacitor — workspace indépendant (`mobile/`)
+- **Hash routing** (`#/caisse`) — obligatoire sous Capacitor (pas de serveur HTTP)
+- **API URL** : en dev proxy Vite → `localhost:3000` ; en prod APK `VITE_API_URL=https://eva.echodeplumes.com`
+- Build APK : `cd mobile && npm run build && npx cap sync && npx cap open android`
+- UI focalisée ME/ventes : ergonomie terrain, grandes zones tactiles (min 48px), feedback immédiat
+- Haptics via `@capacitor/haptics` sur chaque ajout panier
+- Pas de sidebar — navigation bottom bar 3 onglets (Caisse / Stock / Sessions)
 
 ### Infra
 - Caddy — reverse proxy + HTTPS Let's Encrypt auto
@@ -218,6 +223,31 @@ eva-v2/
 │               ├── Logs.jsx         # stub
 │               ├── Sauvegardes.jsx  # stub
 │               └── Notifications.jsx # stub
+│
+├── mobile/
+│   ├── package.json              # workspace mobile — React + Capacitor
+│   ├── vite.config.js            # proxy /api → localhost:3000 (dev)
+│   ├── capacitor.config.json     # appId: com.echodeplumes.eva, webDir: dist
+│   ├── tailwind.config.js
+│   ├── index.html                # viewport no-scale, viewport-fit=cover
+│   └── src/
+│       ├── main.jsx              # ToastProvider + SessionProvider + App
+│       ├── App.jsx               # HashRouter — /login + AppLayout (3 onglets)
+│       ├── index.css             # Tailwind + scrollbar-none + pb-safe/pt-safe
+│       ├── shared/
+│       │   ├── api.js            # client HTTP JWT — modules: auth, produits, pdv,
+│       │   │                     #   sessions, ventes, frais, ref
+│       │   ├── SessionContext.jsx # session active localStorage + vérif backend au démarrage
+│       │   └── toast.jsx         # ToastProvider + useToast() hook
+│       ├── components/
+│       │   ├── BottomNav.jsx     # 3 onglets + pastille verte si session active
+│       │   ├── Toast.jsx         # affiche les toasts (succès/erreur/info)
+│       │   └── OuvrirSession.jsx # écran plein PDV selector + [+] + bouton ouvrir
+│       └── pages/
+│           ├── Login.jsx         # formulaire email/password
+│           ├── Caisse.jsx        # cœur : tuiles produits, panier slide-up, paiement modal
+│           ├── Stock.jsx         # liste produits + édition stock rapide + ajout produit
+│           └── Sessions.jsx      # session active (stats + ventes annulables + frais) + historique
 │
 └── caddy/
     └── Caddyfile
@@ -419,4 +449,11 @@ npm run seed:fixtures           # charger les données de test ME
 - [ ] Dashboard (widgets configurables)
 - [ ] EVA > tous les modules (stubs en place)
 - [ ] Admin > tous les modules (stubs en place)
-- [ ] App Android (Capacitor)
+### Mobile (Capacitor Android) ← EN COURS
+- [x] Structure `mobile/` workspace (React + Vite + Tailwind + Capacitor)
+- [x] Login, SessionContext, api.js adapté
+- [x] Caisse : tuiles produits par catégorie, panier, paiement, toast feedback
+- [x] Stock : liste produits, édition stock rapide, ajout produit
+- [x] Sessions : session active (ventes + annulation + frais), historique lazy load, clôture
+- [x] BottomNav 3 onglets + pastille session active
+- [ ] Build APK (npm run build dans mobile/ puis npx cap sync && cap open android)
