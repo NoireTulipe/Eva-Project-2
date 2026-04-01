@@ -269,8 +269,24 @@ export async function deplacerEmail(boite, uid, dossierCible) {
   const client = new ImapFlow(await buildImapConfig(boite))
   try {
     await client.connect()
-    await client.mailboxOpen('INBOX')
-    await client.messageMove([uid], dossierCible, { uid: true })
+    const mailbox = await client.mailboxOpen('INBOX')
+
+    const hostLower = boite.imapHost.toLowerCase()
+    const isGmail = hostLower.includes('gmail') || hostLower.includes('googlemail') || boite.provider === 'gmail'
+
+    if (isGmail) {
+      // Gmail ne supporte pas MOVE vers des libellés personnalisés via IMAP MOVE.
+      // Séquence correcte : COPY vers le libellé cible + marquer \Deleted + EXPUNGE
+      await client.messageCopy([uid], dossierCible, { uid: true })
+      await client.messageFlagsAdd([uid], ['\\Deleted'], { uid: true })
+      await client.mailboxClose()
+      // Ré-ouvrir en mode expunge pour appliquer la suppression côté INBOX
+      await client.mailboxOpen('INBOX')
+      await client.messageDelete([uid], { uid: true })
+    } else {
+      await client.messageMove([uid], dossierCible, { uid: true })
+    }
+
     logAction(`IMAP: email UID ${uid} déplacé vers ${dossierCible} (${boite.email})`)
     await client.logout()
     return { success: true }

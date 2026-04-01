@@ -391,4 +391,15 @@ router.post('/brouillons/:id/envoyer', async (req, res) => {
   }
 })
 
+// DELETE /mail/brouillons/:id — supprimer un brouillon (reset brouillon + action → ignorer)
+router.delete('/brouillons/:id', async (req, res) => {
+  const id = parseInt(req.params.id)
+  await prisma.emailLog.update({
+    where: { id },
+    data: { brouillon: null, action: 'ignorer', actionAppliquee: false }
+  })
+  logAction(`Mail: brouillon ${id} supprimé`)
+  res.status(204).end()
+})
+
 export default router

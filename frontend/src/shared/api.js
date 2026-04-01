@@ -348,6 +348,7 @@ export const mail = {
   // Brouillons
   getBrouillons: () => request('GET', '/mail/brouillons'),
   updateBrouillon: (id, brouillon) => request('PUT', `/mail/brouillons/${id}`, { brouillon }),
+  supprimerBrouillon: (id) => request('DELETE', `/mail/brouillons/${id}`),
   envoyerBrouillon: (id) => request('POST', `/mail/brouillons/${id}/envoyer`),
 
   // OAuth2 Outlook

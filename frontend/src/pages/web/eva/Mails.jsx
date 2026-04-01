@@ -363,6 +363,7 @@ function OngletBrouillons() {
   const [editId, setEditId] = useState(null)
   const [editTexte, setEditTexte] = useState('')
   const [envoi, setEnvoi] = useState(null)
+  const [suppression, setSuppression] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -385,6 +386,18 @@ function OngletBrouillons() {
       setError(`Erreur d'envoi : ${err.message}`)
     } finally {
       setEnvoi(null)
+    }
+  }
+
+  async function supprimer(id) {
+    setSuppression(id)
+    try {
+      await mail.supprimerBrouillon(id)
+      setBrouillons(prev => prev.filter(b => b.id !== id))
+    } catch (err) {
+      setError(`Erreur suppression : ${err.message}`)
+    } finally {
+      setSuppression(null)
     }
   }
 
@@ -447,6 +460,13 @@ function OngletBrouillons() {
                   className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
                 >
                   {envoi === b.id ? 'Envoi…' : 'Envoyer le mail'}
+                </button>
+                <button
+                  onClick={() => supprimer(b.id)}
+                  disabled={suppression === b.id}
+                  className="px-3 py-1.5 text-sm bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 disabled:opacity-50"
+                >
+                  {suppression === b.id ? 'Suppression…' : 'Supprimer'}
                 </button>
               </div>
             </div>
