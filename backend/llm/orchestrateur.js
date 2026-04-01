@@ -135,7 +135,7 @@ Message de ${context.userName} : ${message}`
   const toolResults = results.map(r => r.value || r.reason)
 
   // 9. Appel rédacteur (Pro) pour synthèse finale
-  const writerPrompt = `${redacteurPrompt}
+  const writerPrompt = `${redacteurPrompt}${historyText}
 
 ${context.userName} a demandé : "${message}"
 

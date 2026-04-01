@@ -28,6 +28,22 @@ client.on('messageCreate', async (message) => {
 
   if (!userMessage) return
 
+  // Commande !clear — efface intégralement le salon
+  if (userMessage.toLowerCase() === '!clear' && !isDM) {
+    try {
+      const fetched = await message.channel.messages.fetch({ limit: 100 })
+      // true = ignorer silencieusement les messages > 14 jours (non supprimables en bulk)
+      await message.channel.bulkDelete(fetched, true)
+      const confirm = await message.channel.send('Salon effacé.')
+      setTimeout(() => confirm.delete().catch(() => {}), 3000)
+      logAction(`Discord !clear : salon ${message.channel.name} effacé par ${message.author.username}`)
+    } catch (err) {
+      logError(`Discord !clear: ${err.message}`)
+      await message.reply('Impossible d\'effacer le salon (permission MANAGE_MESSAGES requise).')
+    }
+    return
+  }
+
   const channelId = message.channel.id
 
   try {

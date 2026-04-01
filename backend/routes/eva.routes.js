@@ -29,10 +29,11 @@ router.post('/chat', authMiddleware, async (req, res) => {
   if (conversationId) {
     conv = await prisma.conversation.findFirst({
       where: { id: Number(conversationId), userId: req.user.id },
-      include: { messages: { orderBy: { createdAt: 'asc' }, take: 20 } }
+      include: { messages: { orderBy: { createdAt: 'desc' }, take: 20 } }
     })
     if (!conv) return res.status(404).json({ error: 'Conversation introuvable' })
-    history = conv.messages.map(m => ({ role: m.role, content: m.content }))
+    // desc + take(20) = 20 derniers ; on remet en ordre chronologique
+    history = conv.messages.reverse().map(m => ({ role: m.role, content: m.content }))
   }
 
   const context = {
