@@ -25,6 +25,29 @@ const FRONTEND_DIST = resolve(__dirname, '../frontend/dist')
 const app = express()
 const PORT = process.env.PORT || 3000
 
+// CORS — autorise le web local, l'app Capacitor Android et les origines nulles (fichier local)
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://eva.echodeplumes.com',
+  'capacitor://localhost',
+  'ionic://localhost',
+  'http://localhost',
+  'null'
+]
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin
+  if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*')
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  if (req.method === 'OPTIONS') return res.sendStatus(204)
+  next()
+})
+
 app.use(express.json())
 app.use(loggerMiddleware)
 
