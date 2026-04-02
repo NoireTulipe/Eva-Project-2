@@ -1,6 +1,18 @@
-// En dev : proxy Vite → localhost:3000
-// En prod APK : variable d'env VITE_API_URL=https://eva.echodeplumes.com
-const BASE = (import.meta.env.VITE_API_URL || '') + '/api'
+// URL de base : priorité localStorage (réglage manuel) → défaut production
+const DEFAULT_API = 'https://eva.echodeplumes.com'
+
+export function getApiBase() {
+  return (localStorage.getItem('api_url') || DEFAULT_API) + '/api'
+}
+
+export function setApiUrl(url) {
+  const clean = url.replace(/\/+$/, '') // retirer slash final
+  localStorage.setItem('api_url', clean)
+}
+
+export function getApiUrl() {
+  return localStorage.getItem('api_url') || DEFAULT_API
+}
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
@@ -34,6 +46,7 @@ async function request(method, path, body) {
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
 
+  const BASE = getApiBase()
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
@@ -44,7 +57,7 @@ async function request(method, path, body) {
     const refreshToken = getRefreshToken()
     if (!refreshToken) { if (getToken()) logout(); throw new Error('Non authentifié') }
 
-    const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+    const refreshRes = await fetch(`${getApiBase()}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken })
@@ -53,7 +66,7 @@ async function request(method, path, body) {
     const data = await refreshRes.json()
     saveTokens({ token: data.token })
 
-    const retryRes = await fetch(`${BASE}${path}`, {
+    const retryRes = await fetch(`${getApiBase()}${path}`, {
       method,
       headers: { ...headers, 'Authorization': `Bearer ${data.token}` },
       body: body !== undefined ? JSON.stringify(body) : undefined
