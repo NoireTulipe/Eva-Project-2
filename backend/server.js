@@ -26,21 +26,11 @@ const app = express()
 const PORT = process.env.PORT || 3000
 
 // CORS — autorise le web local, l'app Capacitor Android et les origines nulles (fichier local)
-const ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'https://eva.echodeplumes.com',
-  'capacitor://localhost',
-  'ionic://localhost',
-  'http://localhost',
-  'null'
-]
 
 app.use((req, res, next) => {
   const origin = req.headers.origin
-  if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*')
-  }
+  // Toujours autoriser — EVA est une app privée, pas exposée publiquement
+  res.setHeader('Access-Control-Allow-Origin', origin || '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
   res.setHeader('Access-Control-Allow-Credentials', 'true')
