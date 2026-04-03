@@ -42,7 +42,7 @@ import {
 import { logError } from '../logs/logger.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const UPLOADS_DIR = resolve(__dirname, '../../uploads/produits')
+const UPLOADS_DIR = resolve(__dirname, '../uploads/produits')
 mkdirSync(UPLOADS_DIR, { recursive: true })
 
 const storage = multer.diskStorage({
@@ -136,7 +136,7 @@ router.post('/produits/:id/image', upload.single('image'), async (req, res) => {
     if (!produit) return res.status(404).json({ error: 'Produit introuvable' })
     // Supprimer l'ancienne image si elle existe
     if (produit.imageUrl) {
-      const oldPath = resolve(__dirname, '../../', produit.imageUrl.replace(/^\//, ''))
+      const oldPath = resolve(__dirname, '../', produit.imageUrl.replace(/^\//, ''))
       if (existsSync(oldPath)) unlinkSync(oldPath)
     }
     const imageUrl = `/uploads/produits/${req.file.filename}`
@@ -154,7 +154,7 @@ router.delete('/produits/:id/image', async (req, res) => {
     const produit = await getProduitById(id)
     if (!produit) return res.status(404).json({ error: 'Produit introuvable' })
     if (produit.imageUrl) {
-      const filePath = resolve(__dirname, '../../', produit.imageUrl.replace(/^\//, ''))
+      const filePath = resolve(__dirname, '../', produit.imageUrl.replace(/^\//, ''))
       if (existsSync(filePath)) unlinkSync(filePath)
     }
     const updated = await updateImageProduit(id, null)
