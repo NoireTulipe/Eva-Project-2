@@ -45,6 +45,13 @@ export async function deleteProduit(id) {
   })
 }
 
+export async function updateImageProduit(id, imageUrl) {
+  return prisma.produit.update({
+    where: { id },
+    data: { imageUrl },
+  })
+}
+
 // ─── STOCK ────────────────────────────────────────────────────────────────────
 
 export async function updateStock(produitId, delta) {

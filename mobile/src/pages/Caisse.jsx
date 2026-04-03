@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { produits as produitsApi, ref as refApi, ventes as ventesApi } from '../shared/api.js'
+import { produits as produitsApi, ref as refApi, ventes as ventesApi, getImageUrl } from '../shared/api.js'
 import { getApiUrl, setApiUrl, getApiBase } from '../shared/api.js'
 import { useSession } from '../shared/SessionContext.jsx'
 import { useToast } from '../shared/toast.jsx'
@@ -15,14 +15,37 @@ function eur(v) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(isNaN(n) ? 0 : n)
 }
 
-const CAT_STYLES = [
-  { bg: 'bg-violet-500', text: 'text-violet-600', tab: 'bg-violet-600' },
-  { bg: 'bg-indigo-500', text: 'text-indigo-600', tab: 'bg-indigo-600' },
-  { bg: 'bg-pink-500',   text: 'text-pink-600',   tab: 'bg-pink-600'   },
-  { bg: 'bg-amber-500',  text: 'text-amber-600',  tab: 'bg-amber-600'  },
-  { bg: 'bg-teal-500',   text: 'text-teal-600',   tab: 'bg-teal-600'   },
-  { bg: 'bg-rose-500',   text: 'text-rose-600',   tab: 'bg-rose-600'   },
+// ─── Palette couleurs catégories ───────────────────────────────────────────────
+
+export const CAT_STYLES = [
+  { key: 'violet', bg: 'bg-violet-500', text: 'text-violet-600', tab: 'bg-violet-600', hex: '#7c3aed' },
+  { key: 'indigo', bg: 'bg-indigo-500', text: 'text-indigo-600', tab: 'bg-indigo-600', hex: '#4f46e5' },
+  { key: 'pink',   bg: 'bg-pink-500',   text: 'text-pink-600',   tab: 'bg-pink-600',   hex: '#ec4899' },
+  { key: 'amber',  bg: 'bg-amber-500',  text: 'text-amber-600',  tab: 'bg-amber-600',  hex: '#f59e0b' },
+  { key: 'teal',   bg: 'bg-teal-500',   text: 'text-teal-600',   tab: 'bg-teal-600',   hex: '#14b8a6' },
+  { key: 'rose',   bg: 'bg-rose-500',   text: 'text-rose-600',   tab: 'bg-rose-600',   hex: '#f43f5e' },
+  { key: 'sky',    bg: 'bg-sky-500',    text: 'text-sky-600',    tab: 'bg-sky-600',    hex: '#0ea5e9' },
+  { key: 'emerald',bg: 'bg-emerald-500',text: 'text-emerald-600',tab: 'bg-emerald-600',hex: '#10b981' },
 ]
+
+function loadCatColors() {
+  try { return JSON.parse(localStorage.getItem('cat_colors') || '{}') } catch { return {} }
+}
+
+function saveCatColors(colors) {
+  localStorage.setItem('cat_colors', JSON.stringify(colors))
+}
+
+function buildCatStyleMap(categories, catColors) {
+  const map = {}
+  categories.forEach((c, i) => {
+    const idx = catColors[String(c.id)] ?? (i % CAT_STYLES.length)
+    map[c.id] = CAT_STYLES[idx]
+  })
+  return map
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 export default function Caisse() {
   const { session, loading: sessionLoading } = useSession()
@@ -45,13 +68,14 @@ function CaisseActive({ session }) {
   const [produits, setProduits] = useState([])
   const [methodes, setMethodes] = useState([])
   const [categorieActive, setCategorieActive] = useState('__tous__')
-  const [panier, setPanier] = useState([]) // { produit, quantite, prixFinal }
+  const [panier, setPanier] = useState([])
   const [showCart, setShowCart] = useState(false)
   const [showPaiement, setShowPaiement] = useState(false)
   const [methodePaiementId, setMethodePaiementId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [apiUrlInput, setApiUrlInput] = useState(getApiUrl())
+  const [catColors, setCatColors] = useState(loadCatColors)
 
   const chargerProduits = useCallback(() => {
     produitsApi.getAll().then(prods => setProduits(prods.filter(p => p.actif !== false)))
@@ -76,8 +100,13 @@ function CaisseActive({ session }) {
     return () => clearInterval(interval)
   }, [chargerProduits])
 
-  const catStyleMap = {}
-  categories.forEach((c, i) => { catStyleMap[c.id] = CAT_STYLES[i % CAT_STYLES.length] })
+  const catStyleMap = buildCatStyleMap(categories, catColors)
+
+  function setCouleurCategorie(catId, idx) {
+    const updated = { ...catColors, [String(catId)]: idx }
+    setCatColors(updated)
+    saveCatColors(updated)
+  }
 
   const produitsFiltres = categorieActive === '__tous__'
     ? produits
@@ -268,36 +297,18 @@ function CaisseActive({ session }) {
         />
       )}
 
-      {/* Sheet paramètres serveur */}
+      {/* Sheet paramètres : serveur + couleurs catégories */}
       {showSettings && (
-        <>
-          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowSettings(false)} />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 px-6 pt-5 pb-safe shadow-2xl">
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-1">Serveur EVA</h3>
-            <p className="text-xs text-gray-400 mb-4">URL actuelle : {getApiBase()}</p>
-            <input
-              type="url"
-              value={apiUrlInput}
-              onChange={e => setApiUrlInput(e.target.value)}
-              placeholder="https://eva.echodeplumes.com"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-            <p className="text-xs text-gray-400 mb-4">Ex : http://192.168.1.42:3000</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowSettings(false)} className="flex-1 py-3.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-500">
-                Annuler
-              </button>
-              <button onClick={sauvegarderApi} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl text-sm font-bold">
-                Enregistrer
-              </button>
-            </div>
-          </div>
-        </>
+        <SettingsSheet
+          categories={categories}
+          catStyleMap={catStyleMap}
+          catColors={catColors}
+          apiUrlInput={apiUrlInput}
+          setApiUrlInput={setApiUrlInput}
+          onSauvegarderApi={sauvegarderApi}
+          onCouleur={setCouleurCategorie}
+          onClose={() => setShowSettings(false)}
+        />
       )}
     </div>
   )
@@ -309,6 +320,7 @@ function ProduitTile({ produit, quantiteCart, catStyle, onPress }) {
   const prix = parseFloat(produit.prixVenteTTC) || 0
   const stockNul = produit.stock !== null && produit.stock === 0
   const stockFaible = produit.stock !== null && produit.stockAlerte != null && produit.stock > 0 && produit.stock <= produit.stockAlerte
+  const imgUrl = getImageUrl(produit.imageUrl)
 
   return (
     <button
@@ -320,27 +332,129 @@ function ProduitTile({ produit, quantiteCart, catStyle, onPress }) {
         : 'border-transparent'
       }`}
     >
-      <div className={`h-1.5 w-full ${catStyle?.bg || 'bg-gray-300'}`} />
+      {/* Barre couleur catégorie */}
+      <div className={`h-1.5 w-full flex-shrink-0 ${catStyle?.bg || 'bg-gray-300'}`} />
 
       {quantiteCart > 0 && (
-        <span className="absolute top-3 right-3 bg-indigo-600 text-white text-xs font-extrabold rounded-full w-6 h-6 flex items-center justify-center shadow">
+        <span className="absolute top-3 right-3 bg-indigo-600 text-white text-xs font-extrabold rounded-full w-6 h-6 flex items-center justify-center shadow z-10">
           {quantiteCart}
         </span>
       )}
 
-      <div className="flex-1 px-3 pt-2.5 pr-8">
-        <p className="font-bold text-gray-800 text-sm leading-tight line-clamp-3">{produit.nom}</p>
-      </div>
+      {/* Contenu : texte à gauche, image à droite */}
+      <div className="flex flex-1 items-stretch min-h-0">
+        {/* Texte */}
+        <div className="flex-1 flex flex-col justify-between px-3 pt-2 pb-3 min-w-0">
+          <p className="font-bold text-gray-800 text-sm leading-tight line-clamp-3 pr-1">{produit.nom}</p>
+          <div className="mt-1">
+            <p className={`font-extrabold text-base ${catStyle?.text || 'text-indigo-600'}`}>{eur(prix)}</p>
+            {produit.stock !== null && (
+              <p className={`text-xs mt-0.5 ${stockNul ? 'text-red-500 font-semibold' : stockFaible ? 'text-amber-500 font-semibold' : 'text-gray-400'}`}>
+                {stockNul ? 'Rupture' : stockFaible ? `⚠ ${produit.stock} ex.` : `${produit.stock} ex.`}
+              </p>
+            )}
+          </div>
+        </div>
 
-      <div className="px-3 pb-3 pt-2">
-        <p className={`font-extrabold text-base ${catStyle?.text || 'text-indigo-600'}`}>{eur(prix)}</p>
-        {produit.stock !== null && (
-          <p className={`text-xs mt-0.5 ${stockNul ? 'text-red-500 font-semibold' : stockFaible ? 'text-amber-500 font-semibold' : 'text-gray-400'}`}>
-            {stockNul ? 'Rupture' : stockFaible ? `⚠ ${produit.stock} ex.` : `${produit.stock} ex.`}
-          </p>
+        {/* Image à droite */}
+        {imgUrl && (
+          <div className="flex-shrink-0 w-16 self-stretch">
+            <img
+              src={imgUrl}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
         )}
       </div>
     </button>
+  )
+}
+
+// ─── Sheet paramètres ──────────────────────────────────────────────────────────
+
+function SettingsSheet({ categories, catStyleMap, catColors, apiUrlInput, setApiUrlInput, onSauvegarderApi, onCouleur, onClose }) {
+  const [onglet, setOnglet] = useState('serveur') // 'serveur' | 'couleurs'
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 shadow-2xl flex flex-col max-h-[80vh]">
+        <div className="flex-shrink-0 px-6 pt-5 pb-0">
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+          </div>
+          {/* Onglets */}
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
+            <button
+              onClick={() => setOnglet('serveur')}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${onglet === 'serveur' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}
+            >
+              Serveur
+            </button>
+            <button
+              onClick={() => setOnglet('couleurs')}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${onglet === 'couleurs' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}
+            >
+              Couleurs
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 pb-safe">
+          {onglet === 'serveur' && (
+            <div className="py-2">
+              <h3 className="text-base font-bold text-gray-800 mb-1">Serveur EVA</h3>
+              <p className="text-xs text-gray-400 mb-4">URL actuelle : {getApiBase()}</p>
+              <input
+                type="url"
+                value={apiUrlInput}
+                onChange={e => setApiUrlInput(e.target.value)}
+                placeholder="https://eva.echodeplumes.com"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+              <p className="text-xs text-gray-400 mb-4">Ex : http://192.168.1.42:3000</p>
+              <div className="flex gap-3">
+                <button onClick={onClose} className="flex-1 py-3.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-500">
+                  Annuler
+                </button>
+                <button onClick={onSauvegarderApi} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl text-sm font-bold">
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          )}
+
+          {onglet === 'couleurs' && (
+            <div className="py-2 space-y-4 pb-6">
+              <p className="text-xs text-gray-400">Choisissez une couleur par catégorie. Sauvegardé automatiquement.</p>
+              {categories.map(cat => {
+                const currentIdx = catColors[String(cat.id)] ?? (categories.indexOf(cat) % CAT_STYLES.length)
+                return (
+                  <div key={cat.id} className="flex items-center gap-3">
+                    <span className="flex-1 text-sm font-semibold text-gray-700 truncate">{cat.nom}</span>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      {CAT_STYLES.map((style, idx) => (
+                        <button
+                          key={style.key}
+                          onClick={() => onCouleur(cat.id, idx)}
+                          className={`w-7 h-7 rounded-full transition-all active:scale-90 ${style.bg} ${
+                            currentIdx === idx ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'opacity-60'
+                          }`}
+                          aria-label={style.key}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
 

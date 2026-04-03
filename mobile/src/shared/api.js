@@ -100,10 +100,32 @@ export const auth = {
 
 // ─── Produits ─────────────────────────────────────────────────────────────────
 
+export function getImageUrl(imageUrl) {
+  if (!imageUrl) return null
+  const base = localStorage.getItem('api_url') || 'https://eva.echodeplumes.com'
+  return base + imageUrl
+}
+
+async function requestMultipart(method, path, formData) {
+  const token = getToken()
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const BASE = getApiBase()
+  const res = await fetch(`${BASE}${path}`, { method, headers, body: formData })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Erreur ${res.status}`)
+  }
+  if (res.status === 204) return null
+  return res.json()
+}
+
 export const produits = {
-  getAll:  ()         => request('GET', '/ventes/produits'),
-  create:  (data)     => request('POST', '/ventes/produits', data),
-  update:  (id, data) => request('PUT', `/ventes/produits/${id}`, data),
+  getAll:       ()              => request('GET', '/ventes/produits'),
+  create:       (data)          => request('POST', '/ventes/produits', data),
+  update:       (id, data)      => request('PUT', `/ventes/produits/${id}`, data),
+  uploadImage:  (id, formData)  => requestMultipart('POST', `/ventes/produits/${id}/image`, formData),
+  deleteImage:  (id)            => request('DELETE', `/ventes/produits/${id}/image`),
 }
 
 // ─── Points de vente ─────────────────────────────────────────────────────────

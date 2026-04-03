@@ -1,4 +1,8 @@
 import express from 'express'
+import multer from 'multer'
+import { resolve, extname, dirname } from 'path'
+import { fileURLToPath } from 'url'
+import { mkdirSync, unlinkSync, existsSync } from 'fs'
 import { authMiddleware } from '../middleware/auth.js'
 import {
   getProduits,
@@ -6,6 +10,7 @@ import {
   createProduit,
   updateProduit,
   deleteProduit,
+  updateImageProduit,
   getEtatStock,
   getPointsDeVente,
   createPointDeVente,
@@ -35,6 +40,27 @@ import {
   getRecapCompta,
 } from '../modules/ventes/ventes.service.js'
 import { logError } from '../logs/logger.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const UPLOADS_DIR = resolve(__dirname, '../../uploads/produits')
+mkdirSync(UPLOADS_DIR, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (req, file, cb) => {
+    const ext = extname(file.originalname).toLowerCase() || '.jpg'
+    cb(null, `produit-${req.params.id}-${Date.now()}${ext}`)
+  },
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/image\/(jpeg|png|webp)/.test(file.mimetype)) cb(null, true)
+    else cb(new Error('Format non supporté (jpg, png, webp uniquement)'))
+  },
+})
 
 const router = express.Router()
 router.use(authMiddleware)
@@ -96,6 +122,43 @@ router.put('/produits/:id', async (req, res) => {
 router.delete('/produits/:id', async (req, res) => {
   try {
     res.json(await deleteProduit(Number(req.params.id)))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/produits/:id/image', upload.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu' })
+  try {
+    const id = Number(req.params.id)
+    const produit = await getProduitById(id)
+    if (!produit) return res.status(404).json({ error: 'Produit introuvable' })
+    // Supprimer l'ancienne image si elle existe
+    if (produit.imageUrl) {
+      const oldPath = resolve(__dirname, '../../', produit.imageUrl.replace(/^\//, ''))
+      if (existsSync(oldPath)) unlinkSync(oldPath)
+    }
+    const imageUrl = `/uploads/produits/${req.file.filename}`
+    const updated = await updateImageProduit(id, imageUrl)
+    res.json(updated)
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.delete('/produits/:id/image', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const produit = await getProduitById(id)
+    if (!produit) return res.status(404).json({ error: 'Produit introuvable' })
+    if (produit.imageUrl) {
+      const filePath = resolve(__dirname, '../../', produit.imageUrl.replace(/^\//, ''))
+      if (existsSync(filePath)) unlinkSync(filePath)
+    }
+    const updated = await updateImageProduit(id, null)
+    res.json(updated)
   } catch (err) {
     logError(err.message)
     res.status(500).json({ error: err.message })

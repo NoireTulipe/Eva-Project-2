@@ -41,6 +41,9 @@ app.use((req, res, next) => {
 app.use(express.json())
 app.use(loggerMiddleware)
 
+// Servir les uploads produits (images) — sans auth, accessible depuis l'APK
+app.use('/uploads', express.static(resolve(__dirname, 'uploads')))
+
 // Servir le frontend buildé (production)
 if (existsSync(FRONTEND_DIST)) {
   app.use(express.static(FRONTEND_DIST))

@@ -95,6 +95,7 @@ model Produit {
   stock               Int                  @default(0)
   stockAlerte         Int                  @default(5)
   actif               Boolean              @default(true)
+  imageUrl            String?
   auteurs             AuteurProduit[]
   mouvementsHorsStock MouvementHorsStock[]
   pertes              Perte[]
