@@ -62,7 +62,7 @@ async function request(method, path, body) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken })
     })
-    if (!refreshRes.ok) { logout(); return }
+    if (!refreshRes.ok) { logout(); throw new Error('Session expirée') }
     const data = await refreshRes.json()
     saveTokens({ token: data.token })
 

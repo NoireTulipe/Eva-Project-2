@@ -12,6 +12,7 @@ import {
   updatePointDeVente,
   ouvrirSession,
   cloturerSession,
+  supprimerSession,
   getSessionById,
   getSessions,
   enregistrerVente,
@@ -168,6 +169,16 @@ router.get('/sessions/:id', async (req, res) => {
 router.post('/sessions/:id/cloturer', async (req, res) => {
   try {
     res.json(await cloturerSession(Number(req.params.id)))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.delete('/sessions/:id', async (req, res) => {
+  try {
+    await supprimerSession(Number(req.params.id))
+    res.sendStatus(204)
   } catch (err) {
     logError(err.message)
     res.status(500).json({ error: err.message })

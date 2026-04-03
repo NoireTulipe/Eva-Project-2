@@ -10,22 +10,33 @@ export function SessionProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   // Vérifier au démarrage que la session stockée est encore ouverte
+  // Si aucune session locale, chercher une session ouverte sur le serveur
   useEffect(() => {
     async function verifier() {
-      if (!session?.id) { setLoading(false); return }
       try {
-        const s = await sessionsApi.getById(session.id)
-        if (s.cloture) {
-          localStorage.removeItem('session')
-          setSession(null)
+        if (session?.id) {
+          // Session en mémoire → vérifier qu'elle est toujours ouverte
+          const s = await sessionsApi.getById(session.id)
+          if (s.statut !== 'ouverte') {
+            localStorage.removeItem('session')
+            setSession(null)
+          } else {
+            const updated = { id: s.id, pdvNom: s.pointDeVente?.nom, debut: s.debut }
+            setSession(updated)
+            localStorage.setItem('session', JSON.stringify(updated))
+          }
         } else {
-          // Rafraîchir les données
-          const updated = { id: s.id, pdvNom: s.pointDeVente?.nom, debut: s.debut }
-          setSession(updated)
-          localStorage.setItem('session', JSON.stringify(updated))
+          // Pas de session locale → chercher une session ouverte sur le serveur
+          const liste = await sessionsApi.getAll({ limit: 20 })
+          const active = liste?.find(s => s.statut === 'ouverte')
+          if (active) {
+            const updated = { id: active.id, pdvNom: active.pointDeVente?.nom, debut: active.debut }
+            setSession(updated)
+            localStorage.setItem('session', JSON.stringify(updated))
+          }
         }
       } catch {
-        // En cas d'erreur réseau : on garde la session locale
+        // Non authentifié ou erreur réseau → ignorer, on restera sur l'écran login/ouverture
       } finally {
         setLoading(false)
       }

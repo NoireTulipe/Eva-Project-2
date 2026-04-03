@@ -133,6 +133,29 @@ export async function cloturerSession(sessionId) {
   return recap
 }
 
+export async function supprimerSession(id) {
+  const session = await prisma.session.findUnique({
+    where: { id },
+    include: { ventes: { include: { lignes: true } } },
+  })
+  if (!session) throw new Error('Session introuvable')
+
+  // Restaurer le stock pour les ventes non annulées
+  for (const vente of session.ventes) {
+    if (!vente.annulee) {
+      for (const ligne of vente.lignes) {
+        await updateStock(ligne.produitId, ligne.quantite)
+      }
+    }
+  }
+
+  const venteIds = session.ventes.map(v => v.id)
+  await prisma.ligneVente.deleteMany({ where: { venteId: { in: venteIds } } })
+  await prisma.vente.deleteMany({ where: { sessionId: id } })
+  await prisma.frais.deleteMany({ where: { sessionId: id } })
+  await prisma.session.delete({ where: { id } })
+}
+
 export async function getSessions({ limit = 20, offset = 0 } = {}) {
   return prisma.session.findMany({
     include: {

@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { produits as produitsApi, ref as refApi, ventes as ventesApi } from '../shared/api.js'
+import { getApiUrl, setApiUrl, getApiBase } from '../shared/api.js'
 import { useSession } from '../shared/SessionContext.jsx'
 import { useToast } from '../shared/toast.jsx'
 import OuvrirSession from '../components/OuvrirSession.jsx'
@@ -9,31 +10,34 @@ async function vibrer() {
   try { await Haptics.impact({ style: ImpactStyle.Light }) } catch {}
 }
 
-// ─── Formatage ────────────────────────────────────────────────────────────────
-
 function eur(v) {
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
+  const n = parseFloat(v)
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(isNaN(n) ? 0 : n)
 }
 
-// ─── Caisse principale ────────────────────────────────────────────────────────
+const CAT_STYLES = [
+  { bg: 'bg-violet-500', text: 'text-violet-600', tab: 'bg-violet-600' },
+  { bg: 'bg-indigo-500', text: 'text-indigo-600', tab: 'bg-indigo-600' },
+  { bg: 'bg-pink-500',   text: 'text-pink-600',   tab: 'bg-pink-600'   },
+  { bg: 'bg-amber-500',  text: 'text-amber-600',  tab: 'bg-amber-600'  },
+  { bg: 'bg-teal-500',   text: 'text-teal-600',   tab: 'bg-teal-600'   },
+  { bg: 'bg-rose-500',   text: 'text-rose-600',   tab: 'bg-rose-600'   },
+]
 
 export default function Caisse() {
   const { session, loading: sessionLoading } = useSession()
 
   if (sessionLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full bg-slate-50">
         <div className="text-gray-400 text-sm">Chargement…</div>
       </div>
     )
   }
 
   if (!session) return <OuvrirSession />
-
   return <CaisseActive session={session} />
 }
-
-// ─── Caisse active ────────────────────────────────────────────────────────────
 
 function CaisseActive({ session }) {
   const { show } = useToast()
@@ -41,12 +45,17 @@ function CaisseActive({ session }) {
   const [produits, setProduits] = useState([])
   const [methodes, setMethodes] = useState([])
   const [categorieActive, setCategorieActive] = useState('__tous__')
-  const [panier, setPanier] = useState([]) // [{ produit, quantite }]
+  const [panier, setPanier] = useState([]) // { produit, quantite, prixFinal }
   const [showCart, setShowCart] = useState(false)
   const [showPaiement, setShowPaiement] = useState(false)
   const [methodePaiementId, setMethodePaiementId] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const catRef = useRef(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [apiUrlInput, setApiUrlInput] = useState(getApiUrl())
+
+  const chargerProduits = useCallback(() => {
+    produitsApi.getAll().then(prods => setProduits(prods.filter(p => p.actif !== false)))
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -61,17 +70,25 @@ function CaisseActive({ session }) {
     })
   }, [])
 
-  // Produits filtrés par catégorie
+  // Sync stock toutes les 45s
+  useEffect(() => {
+    const interval = setInterval(chargerProduits, 45000)
+    return () => clearInterval(interval)
+  }, [chargerProduits])
+
+  const catStyleMap = {}
+  categories.forEach((c, i) => { catStyleMap[c.id] = CAT_STYLES[i % CAT_STYLES.length] })
+
   const produitsFiltres = categorieActive === '__tous__'
     ? produits
     : produits.filter(p => p.categorieId === parseInt(categorieActive))
 
-  // Total panier
-  const totalPanier = panier.reduce((s, l) => s + l.produit.prixTTC * l.quantite, 0)
+  const totalPanier = panier.reduce((s, l) => s + l.prixFinal * l.quantite, 0)
   const nbArticles = panier.reduce((s, l) => s + l.quantite, 0)
 
   function ajouterAuPanier(produit) {
     vibrer()
+    const prix = parseFloat(produit.prixVenteTTC) || 0
     setPanier(prev => {
       const idx = prev.findIndex(l => l.produit.id === produit.id)
       if (idx >= 0) {
@@ -79,17 +96,21 @@ function CaisseActive({ session }) {
         updated[idx] = { ...updated[idx], quantite: updated[idx].quantite + 1 }
         return updated
       }
-      return [...prev, { produit, quantite: 1 }]
+      return [...prev, { produit, quantite: 1, prixFinal: prix }]
     })
   }
 
   function modifierQuantite(produitId, delta) {
-    setPanier(prev => {
-      const updated = prev.map(l =>
-        l.produit.id === produitId ? { ...l, quantite: l.quantite + delta } : l
-      ).filter(l => l.quantite > 0)
-      return updated
-    })
+    setPanier(prev =>
+      prev.map(l => l.produit.id === produitId ? { ...l, quantite: l.quantite + delta } : l)
+         .filter(l => l.quantite > 0)
+    )
+  }
+
+  function modifierPrix(produitId, nouveauPrix) {
+    setPanier(prev =>
+      prev.map(l => l.produit.id === produitId ? { ...l, prixFinal: parseFloat(nouveauPrix) || 0 } : l)
+    )
   }
 
   function viderPanier() {
@@ -105,12 +126,11 @@ function CaisseActive({ session }) {
       const lignes = panier.map(l => ({
         produitId: l.produit.id,
         quantite: l.quantite,
-        prixUnitaire: l.produit.prixTTC
+        prixUnitaire: l.prixFinal
       }))
       await ventesApi.enregistrer(session.id, parseInt(methodePaiementId), lignes)
       viderPanier()
-      show(`Vente de ${eur(totalPanier)} enregistrée !`, 'success')
-      // Rafraîchir les stocks
+      show(`Vente enregistrée — ${eur(totalPanier)} ✓`, 'success')
       produitsApi.getAll().then(prods => setProduits(prods.filter(p => p.actif !== false)))
     } catch (err) {
       show(`Erreur : ${err.message}`, 'error')
@@ -120,46 +140,65 @@ function CaisseActive({ session }) {
     }
   }
 
-  return (
-    <div className="flex flex-col h-full overflow-hidden bg-gray-50">
+  function sauvegarderApi() {
+    setApiUrl(apiUrlInput.trim().replace(/\/+$/, ''))
+    setShowSettings(false)
+    show('URL serveur mise à jour', 'success')
+  }
 
-      {/* Header session */}
-      <div className="flex-shrink-0 bg-indigo-600 pt-safe px-4 pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-indigo-200 text-xs font-medium uppercase tracking-wide">Session en cours</p>
-            <p className="text-white font-semibold text-base">{session.pdvNom}</p>
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-slate-50">
+
+      {/* Header */}
+      <div className="flex-shrink-0 bg-gradient-to-r from-indigo-600 to-violet-700 pt-safe px-4 pb-4">
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex-1 min-w-0">
+            <p className="text-indigo-200 text-xs font-semibold uppercase tracking-widest">En vente</p>
+            <p className="text-white font-bold text-lg leading-tight truncate">{session.pdvNom}</p>
           </div>
-          <div className="bg-indigo-500 rounded-xl px-3 py-1.5">
-            <p className="text-white text-xs">
-              {new Date(session.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-            </p>
+          <div className="flex items-center gap-2">
+            {nbArticles > 0 && (
+              <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-3 py-2 text-right">
+                <p className="text-white font-bold text-lg leading-none">{eur(totalPanier)}</p>
+                <p className="text-indigo-200 text-xs">{nbArticles} art.</p>
+              </div>
+            )}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="w-9 h-9 bg-white/15 rounded-xl flex items-center justify-center active:scale-90 transition-transform"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Onglets catégories */}
-      <div
-        ref={catRef}
-        className="flex-shrink-0 flex gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none bg-white border-b border-gray-100"
-      >
-        <CategoryTab
-          label="Tous"
-          active={categorieActive === '__tous__'}
-          count={produits.length}
+      {/* Catégories */}
+      <div className="flex-shrink-0 flex gap-2 px-4 py-3 overflow-x-auto scrollbar-none bg-white border-b border-gray-100">
+        <button
           onClick={() => setCategorieActive('__tous__')}
-        />
+          className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+            categorieActive === '__tous__' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'
+          }`}
+        >
+          Tous <span className="ml-1 text-xs opacity-60">{produits.length}</span>
+        </button>
         {categories.map(cat => {
           const nb = produits.filter(p => p.categorieId === cat.id).length
           if (nb === 0) return null
+          const style = catStyleMap[cat.id]
           return (
-            <CategoryTab
-              key={cat.id}
-              label={cat.nom}
-              active={categorieActive === String(cat.id)}
-              count={nb}
+            <button key={cat.id}
               onClick={() => setCategorieActive(String(cat.id))}
-            />
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                categorieActive === String(cat.id) ? `${style.tab} text-white` : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {cat.nom} <span className="ml-1 text-xs opacity-60">{nb}</span>
+            </button>
           )
         })}
       </div>
@@ -167,9 +206,7 @@ function CaisseActive({ session }) {
       {/* Grille produits */}
       <div className="flex-1 overflow-y-auto px-3 py-3">
         {produitsFiltres.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-            Aucun produit dans cette catégorie
-          </div>
+          <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Aucun produit</div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {produitsFiltres.map(p => {
@@ -179,6 +216,7 @@ function CaisseActive({ session }) {
                   key={p.id}
                   produit={p}
                   quantiteCart={ligneCart?.quantite || 0}
+                  catStyle={catStyleMap[p.categorieId]}
                   onPress={() => ajouterAuPanier(p)}
                 />
               )
@@ -189,23 +227,20 @@ function CaisseActive({ session }) {
 
       {/* Barre panier */}
       {nbArticles > 0 && (
-        <div className="flex-shrink-0 px-4 py-3 bg-white border-t border-gray-200">
+        <div className="flex-shrink-0 px-4 py-3 bg-white border-t border-gray-100 shadow-lg">
           <button
             onClick={() => setShowCart(true)}
-            className="w-full flex items-center justify-between bg-indigo-600 text-white px-5 py-4 rounded-2xl shadow-lg active:scale-95 transition-transform"
+            className="w-full flex items-center justify-between bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-5 py-4 rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-transform"
           >
             <div className="flex items-center gap-3">
-              <span className="bg-white text-indigo-600 rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold">
-                {nbArticles}
-              </span>
-              <span className="font-medium">Voir le panier</span>
+              <span className="bg-white text-indigo-600 rounded-full w-8 h-8 flex items-center justify-center text-sm font-extrabold">{nbArticles}</span>
+              <span className="font-semibold">Voir le panier</span>
             </div>
-            <span className="font-bold text-lg">{eur(totalPanier)}</span>
+            <span className="font-bold text-xl">{eur(totalPanier)}</span>
           </button>
         </div>
       )}
 
-      {/* Sheet panier */}
       {showCart && (
         <CartSheet
           panier={panier}
@@ -214,13 +249,13 @@ function CaisseActive({ session }) {
           methodePaiementId={methodePaiementId}
           setMethodePaiementId={setMethodePaiementId}
           onModifier={modifierQuantite}
+          onModifierPrix={modifierPrix}
           onVider={viderPanier}
           onValider={() => { setShowCart(false); setShowPaiement(true) }}
           onClose={() => setShowCart(false)}
         />
       )}
 
-      {/* Modal confirmation paiement */}
       {showPaiement && (
         <PaiementModal
           total={totalPanier}
@@ -232,70 +267,76 @@ function CaisseActive({ session }) {
           onAnnuler={() => { setShowPaiement(false); setShowCart(true) }}
         />
       )}
+
+      {/* Sheet paramètres serveur */}
+      {showSettings && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowSettings(false)} />
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 px-6 pt-5 pb-safe shadow-2xl">
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">Serveur EVA</h3>
+            <p className="text-xs text-gray-400 mb-4">URL actuelle : {getApiBase()}</p>
+            <input
+              type="url"
+              value={apiUrlInput}
+              onChange={e => setApiUrlInput(e.target.value)}
+              placeholder="https://eva.echodeplumes.com"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+            <p className="text-xs text-gray-400 mb-4">Ex : http://192.168.1.42:3000</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowSettings(false)} className="flex-1 py-3.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-500">
+                Annuler
+              </button>
+              <button onClick={sauvegarderApi} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl text-sm font-bold">
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
-// ─── Composant : onglet catégorie ─────────────────────────────────────────────
+// ─── Tuile produit ─────────────────────────────────────────────────────────────
 
-function CategoryTab({ label, active, count, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-        active
-          ? 'bg-indigo-600 text-white'
-          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-      }`}
-    >
-      {label}
-      {count > 0 && (
-        <span className={`ml-1.5 text-xs ${active ? 'text-indigo-200' : 'text-gray-400'}`}>
-          {count}
-        </span>
-      )}
-    </button>
-  )
-}
-
-// ─── Composant : tuile produit ────────────────────────────────────────────────
-
-function ProduitTile({ produit, quantiteCart, onPress }) {
-  const stockFaible = produit.stock !== null && produit.alerteStock !== null && produit.stock <= produit.alerteStock
+function ProduitTile({ produit, quantiteCart, catStyle, onPress }) {
+  const prix = parseFloat(produit.prixVenteTTC) || 0
   const stockNul = produit.stock !== null && produit.stock === 0
+  const stockFaible = produit.stock !== null && produit.stockAlerte != null && produit.stock > 0 && produit.stock <= produit.stockAlerte
 
   return (
     <button
       onClick={onPress}
       disabled={stockNul}
-      className={`relative flex flex-col items-start justify-between bg-white rounded-2xl p-4 shadow-sm border-2 min-h-[110px] active:scale-95 transition-transform text-left w-full ${
-        stockNul
-          ? 'opacity-40 cursor-not-allowed border-gray-100'
-          : quantiteCart > 0
-            ? 'border-indigo-400 shadow-indigo-100'
-            : 'border-transparent'
+      className={`relative flex flex-col justify-between bg-white rounded-2xl overflow-hidden shadow-sm min-h-[120px] active:scale-95 transition-transform text-left w-full border-2 ${
+        stockNul ? 'opacity-40 cursor-not-allowed border-gray-100'
+        : quantiteCart > 0 ? 'border-indigo-400 shadow-indigo-100 shadow-md'
+        : 'border-transparent'
       }`}
     >
-      {/* Badge quantité */}
+      <div className={`h-1.5 w-full ${catStyle?.bg || 'bg-gray-300'}`} />
+
       {quantiteCart > 0 && (
-        <span className="absolute top-2.5 right-2.5 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+        <span className="absolute top-3 right-3 bg-indigo-600 text-white text-xs font-extrabold rounded-full w-6 h-6 flex items-center justify-center shadow">
           {quantiteCart}
         </span>
       )}
 
-      <div className="flex-1 pr-6">
-        <p className="font-semibold text-gray-800 text-sm leading-tight line-clamp-2">
-          {produit.nom}
-        </p>
+      <div className="flex-1 px-3 pt-2.5 pr-8">
+        <p className="font-bold text-gray-800 text-sm leading-tight line-clamp-3">{produit.nom}</p>
       </div>
 
-      <div className="mt-2 w-full">
-        <p className="text-indigo-600 font-bold text-base">{eur(produit.prixTTC)}</p>
+      <div className="px-3 pb-3 pt-2">
+        <p className={`font-extrabold text-base ${catStyle?.text || 'text-indigo-600'}`}>{eur(prix)}</p>
         {produit.stock !== null && (
-          <p className={`text-xs mt-0.5 ${stockFaible ? 'text-orange-500 font-medium' : 'text-gray-400'}`}>
-            Stock : {produit.stock}
-            {stockFaible && !stockNul && ' ⚠'}
-            {stockNul && ' — Rupture'}
+          <p className={`text-xs mt-0.5 ${stockNul ? 'text-red-500 font-semibold' : stockFaible ? 'text-amber-500 font-semibold' : 'text-gray-400'}`}>
+            {stockNul ? 'Rupture' : stockFaible ? `⚠ ${produit.stock} ex.` : `${produit.stock} ex.`}
           </p>
         )}
       </div>
@@ -303,81 +344,52 @@ function ProduitTile({ produit, quantiteCart, onPress }) {
   )
 }
 
-// ─── Sheet panier ─────────────────────────────────────────────────────────────
+// ─── Sheet panier ──────────────────────────────────────────────────────────────
 
-function CartSheet({ panier, total, methodes, methodePaiementId, setMethodePaiementId, onModifier, onVider, onValider, onClose }) {
+function CartSheet({ panier, total, methodes, methodePaiementId, setMethodePaiementId, onModifier, onModifierPrix, onVider, onValider, onClose }) {
   return (
     <>
-      {/* Overlay */}
-      <div className="fixed inset-0 bg-black/40 z-30" onClick={onClose} />
-
-      {/* Sheet */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-40 shadow-2xl flex flex-col max-h-[85vh]">
-        {/* Poignée */}
+      <div className="fixed inset-0 bg-black/50 z-30" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-40 shadow-2xl flex flex-col max-h-[88vh]">
         <div className="flex-shrink-0 flex justify-center pt-3 pb-1">
-          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+          <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
         </div>
-
-        {/* Titre */}
-        <div className="flex-shrink-0 flex items-center justify-between px-5 pb-3">
-          <h2 className="text-lg font-bold text-gray-800">Panier</h2>
-          <button onClick={onVider} className="text-xs text-red-500 font-medium py-1 px-2">
+        <div className="flex-shrink-0 flex items-center justify-between px-5 py-3">
+          <h2 className="text-xl font-bold text-gray-800">Panier</h2>
+          <button onClick={onVider} className="text-xs text-red-500 font-semibold bg-red-50 px-3 py-1.5 rounded-lg">
             Vider
           </button>
         </div>
 
-        {/* Liste articles */}
-        <div className="flex-1 overflow-y-auto px-5 pb-3 space-y-3">
-          {panier.map(({ produit, quantite }) => (
-            <div key={produit.id} className="flex items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{produit.nom}</p>
-                <p className="text-xs text-gray-500">{eur(produit.prixTTC)} / unité</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => onModifier(produit.id, -1)}
-                  className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold active:scale-90 transition-transform"
-                >−</button>
-                <span className="w-6 text-center font-semibold text-gray-800">{quantite}</span>
-                <button
-                  onClick={() => onModifier(produit.id, +1)}
-                  className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold active:scale-90 transition-transform"
-                >+</button>
-                <span className="w-16 text-right text-sm font-semibold text-gray-700">
-                  {eur(produit.prixTTC * quantite)}
-                </span>
-              </div>
-            </div>
+        <div className="flex-1 overflow-y-auto px-4 pb-3 space-y-2">
+          {panier.map(({ produit, quantite, prixFinal }) => (
+            <LignePanier
+              key={produit.id}
+              produit={produit}
+              quantite={quantite}
+              prixFinal={prixFinal}
+              onModifier={delta => onModifier(produit.id, delta)}
+              onModifierPrix={val => onModifierPrix(produit.id, val)}
+            />
           ))}
         </div>
 
-        {/* Méthode de paiement */}
         <div className="flex-shrink-0 px-5 pt-3 pb-2 border-t border-gray-100">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Paiement</p>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Paiement</p>
           <div className="flex flex-wrap gap-2">
             {methodes.map(m => (
-              <button
-                key={m.id}
-                onClick={() => setMethodePaiementId(String(m.id))}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  methodePaiementId === String(m.id)
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-600'
+              <button key={m.id} onClick={() => setMethodePaiementId(String(m.id))}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  methodePaiementId === String(m.id) ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600'
                 }`}
-              >
-                {m.nom}
-              </button>
+              >{m.nom}</button>
             ))}
           </div>
         </div>
 
-        {/* Bouton valider */}
         <div className="flex-shrink-0 px-5 py-4 pb-safe">
-          <button
-            onClick={onValider}
-            disabled={!methodePaiementId}
-            className="w-full py-4 bg-green-600 text-white rounded-2xl font-semibold text-base shadow-lg active:scale-95 transition-transform disabled:opacity-40"
+          <button onClick={onValider} disabled={!methodePaiementId}
+            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-bold text-base shadow-lg shadow-emerald-200 active:scale-95 transition-transform disabled:opacity-40"
           >
             Valider — {eur(total)}
           </button>
@@ -387,56 +399,102 @@ function CartSheet({ panier, total, methodes, methodePaiementId, setMethodePaiem
   )
 }
 
-// ─── Modal confirmation finale ────────────────────────────────────────────────
+function LignePanier({ produit, quantite, prixFinal, onModifier, onModifierPrix }) {
+  const [editPrix, setEditPrix] = useState(false)
+  const [prixInput, setPrixInput] = useState(String(prixFinal))
+  const prixOriginal = parseFloat(produit.prixVenteTTC) || 0
+  const remise = prixFinal < prixOriginal
+  const majoration = prixFinal > prixOriginal
+
+  function confirmerPrix() {
+    const val = parseFloat(String(prixInput).replace(',', '.'))
+    if (!isNaN(val) && val >= 0) onModifierPrix(val)
+    setEditPrix(false)
+  }
+
+  return (
+    <div className="bg-gray-50 rounded-2xl px-4 py-3">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-800 truncate">{produit.nom}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => onModifier(-1)} className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-600 font-bold shadow-sm active:scale-90 transition-transform">−</button>
+          <span className="w-6 text-center font-bold text-gray-800">{quantite}</span>
+          <button onClick={() => onModifier(+1)} className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold shadow-sm active:scale-90 transition-transform">+</button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        {editPrix ? (
+          <div className="flex items-center gap-2 flex-1">
+            <input
+              type="text"
+              value={prixInput}
+              onChange={e => setPrixInput(e.target.value)}
+              inputMode="decimal"
+              className="w-24 border border-indigo-400 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none bg-white"
+              autoFocus
+              onBlur={confirmerPrix}
+              onKeyDown={e => e.key === 'Enter' && confirmerPrix()}
+            />
+            <span className="text-xs text-gray-400">€ / unité</span>
+            <button onClick={confirmerPrix} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-lg font-semibold">OK</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => { setPrixInput(String(prixFinal)); setEditPrix(true) }}
+            className="flex items-center gap-1.5 group"
+          >
+            <span className={`text-sm font-bold ${remise ? 'text-emerald-600' : majoration ? 'text-amber-600' : 'text-gray-700'}`}>
+              {eur(prixFinal)} / unité
+            </span>
+            {remise && <span className="text-xs text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-full font-semibold">Remise</span>}
+            {majoration && <span className="text-xs text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-full font-semibold">Majoration</span>}
+            <svg className="w-3.5 h-3.5 text-gray-400 group-active:text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+        )}
+        <span className="font-extrabold text-gray-800">{eur(prixFinal * quantite)}</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal paiement ────────────────────────────────────────────────────────────
 
 function PaiementModal({ total, methodes, methodePaiementId, setMethodePaiementId, submitting, onConfirmer, onAnnuler }) {
   const methodeLabel = methodes.find(m => String(m.id) === methodePaiementId)?.nom || ''
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-6">
       <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
-        {/* Zone montant */}
-        <div className="bg-green-600 px-6 py-8 text-center">
-          <p className="text-green-100 text-sm font-medium mb-1">Montant total</p>
-          <p className="text-white text-4xl font-bold">{eur(total)}</p>
-          <p className="text-green-200 text-sm mt-2">{methodeLabel}</p>
+        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-6 py-10 text-center">
+          <p className="text-emerald-100 text-xs font-bold uppercase tracking-widest mb-2">Total à encaisser</p>
+          <p className="text-white text-5xl font-extrabold">{eur(total)}</p>
+          <p className="text-emerald-200 text-sm mt-3 font-medium">{methodeLabel}</p>
         </div>
-
         <div className="px-6 py-5 space-y-4">
-          {/* Choix méthode de paiement */}
           <div>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Méthode de paiement</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Méthode de paiement</p>
             <div className="flex flex-wrap gap-2">
               {methodes.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => setMethodePaiementId(String(m.id))}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                    methodePaiementId === String(m.id)
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-600'
+                <button key={m.id} onClick={() => setMethodePaiementId(String(m.id))}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    methodePaiementId === String(m.id) ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'
                   }`}
-                >
-                  {m.nom}
-                </button>
+                >{m.nom}</button>
               ))}
             </div>
           </div>
-
-          {/* Boutons */}
-          <button
-            onClick={onConfirmer}
-            disabled={submitting}
-            className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-base shadow active:scale-95 transition-transform disabled:opacity-50"
+          <button onClick={onConfirmer} disabled={submitting}
+            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-bold text-base shadow-lg shadow-emerald-100 active:scale-95 transition-transform disabled:opacity-50"
           >
-            {submitting ? 'Enregistrement…' : 'Confirmer la vente'}
+            {submitting ? 'Enregistrement…' : '✓ Confirmer la vente'}
           </button>
-          <button
-            onClick={onAnnuler}
-            disabled={submitting}
-            className="w-full py-3 text-gray-500 text-sm"
-          >
-            Retour au panier
+          <button onClick={onAnnuler} disabled={submitting} className="w-full py-3 text-gray-400 text-sm font-medium">
+            ← Retour au panier
           </button>
         </div>
       </div>

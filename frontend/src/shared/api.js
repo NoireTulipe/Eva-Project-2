@@ -141,7 +141,8 @@ export const sessions = {
   getAll: ({ limit = 20, offset = 0 } = {}) => request('GET', `/ventes/sessions?limit=${limit}&offset=${offset}`),
   open: (pointDeVenteId, debut) => request('POST', '/ventes/sessions', { pointDeVenteId, debut }),
   getById: (id) => request('GET', `/ventes/sessions/${id}`),
-  cloturer: (id) => request('POST', `/ventes/sessions/${id}/cloturer`)
+  cloturer: (id) => request('POST', `/ventes/sessions/${id}/cloturer`),
+  supprimer: (id) => request('DELETE', `/ventes/sessions/${id}`)
 }
 
 // --- Référentiels ---

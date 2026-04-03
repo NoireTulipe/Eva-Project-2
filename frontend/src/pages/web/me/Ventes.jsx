@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApi } from '../../../shared/hooks/useApi.js'
 import { produits, pdv, ventes, sessions, frais } from '../../../shared/api.js'
 import { useSession } from '../../../shared/SessionContext.jsx'
@@ -408,8 +408,38 @@ function RecapFinancier({ recap }) {
 // ─── Vue : historique des sessions ────────────────────────────────────────────
 
 function VueHistorique() {
-  const { data: historique, loading, error } = useApi(() => sessions.getAll({ limit: 50 }))
+  const [historique, setHistorique] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
+  const [supprimant, setSupprimant] = useState(null)
+
+  async function charger() {
+    try {
+      setLoading(true)
+      setHistorique(await sessions.getAll({ limit: 50 }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { charger() }, [])
+
+  async function handleSupprimer(id) {
+    if (!window.confirm('Supprimer cette session et toutes ses ventes ? Le stock sera restauré.')) return
+    setSupprimant(id)
+    try {
+      await sessions.supprimer(id)
+      setExpanded(null)
+      await charger()
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setSupprimant(null)
+    }
+  }
 
   if (loading) return <Spinner />
   if (error) return <ErrorMessage message={error} />
@@ -457,6 +487,15 @@ function VueHistorique() {
 
               {isOpen && (
                 <div className="border-t border-gray-100 p-5 space-y-4">
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => handleSupprimer(s.id)}
+                      disabled={supprimant === s.id}
+                      className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded disabled:opacity-50"
+                    >
+                      {supprimant === s.id ? 'Suppression…' : 'Supprimer cette session'}
+                    </button>
+                  </div>
                   {/* Ventes */}
                   <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50">
