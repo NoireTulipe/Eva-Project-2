@@ -176,20 +176,44 @@ function GestionProduits() {
   const [auteurIds, setAuteurIds] = useState([])
   const [formError, setFormError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
 
   function ouvrirNouveauForm() {
     setForm({ nom: '', categorieId: '', prixVenteTTC: '', tva: '5.5', cout: '', droitAuteur: false, droitAuteurPourcent: '', stock: '', stockAlerte: '' })
     setAuteurIds([])
+    setImageFile(null)
+    setImagePreview(null)
     setFormError(null)
   }
 
   function ouvrirEditionForm(p) {
     setForm({ ...p, categorieId: p.categorieId ?? '', droitAuteurPourcent: p.droitAuteurPourcent ?? '' })
     setAuteurIds(p.auteurs?.map(a => a.auteurId) ?? [])
+    setImageFile(null)
+    setImagePreview(p.imageUrl || null)
     setFormError(null)
   }
 
-  function fermerForm() { setForm(null); setFormError(null) }
+  function fermerForm() { setForm(null); setImageFile(null); setImagePreview(null); setFormError(null) }
+
+  function handleImageChange(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  async function handleSupprimerImage() {
+    if (!form?.id) return
+    try {
+      const updated = await produits.deleteImage(form.id)
+      setForm(f => ({ ...f, imageUrl: null }))
+      setImagePreview(null)
+      setImageFile(null)
+      refetch()
+    } catch (err) { setFormError(err.message) }
+  }
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target
@@ -221,6 +245,8 @@ function GestionProduits() {
       }
       // Mettre à jour les auteurs
       await auteurs.setForProduit(id, auteurIds)
+      // Uploader l'image si une nouvelle a été sélectionnée
+      if (imageFile) await produits.uploadImage(id, imageFile)
       fermerForm()
       refetch()
     } catch (err) {
@@ -294,6 +320,28 @@ function GestionProduits() {
               <label className="block text-sm font-medium text-gray-700 mb-2">Auteurs</label>
               <SelecteurAuteurs valeur={auteurIds} onChange={setAuteurIds} listeAuteurs={listeAuteurs} />
             </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Image couverture</label>
+              <div className="flex items-center gap-4">
+                {imagePreview && (
+                  <img
+                    src={imagePreview.startsWith('blob:') ? imagePreview : imagePreview}
+                    className="w-16 h-20 object-cover rounded border border-gray-200"
+                    alt="Couverture"
+                  />
+                )}
+                <div className="flex flex-col gap-2">
+                  <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange}
+                    className="text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                  {form?.imageUrl && !imageFile && (
+                    <button type="button" onClick={handleSupprimerImage}
+                      className="text-xs text-red-500 hover:underline text-left">
+                      Supprimer l'image
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
             <ErrorMessage message={formError} />
             <div className="col-span-2 flex gap-2 justify-end">
               <button type="button" onClick={fermerForm} className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-50">Annuler</button>
@@ -309,6 +357,7 @@ function GestionProduits() {
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
+              <th className="px-4 py-3 font-medium text-gray-600 w-12"></th>
               <th className="px-4 py-3 font-medium text-gray-600">Nom</th>
               <th className="px-4 py-3 font-medium text-gray-600">Catégorie</th>
               <th className="px-4 py-3 font-medium text-gray-600">Auteurs</th>
@@ -320,10 +369,16 @@ function GestionProduits() {
           </thead>
           <tbody>
             {liste?.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">Aucun produit</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">Aucun produit</td></tr>
             )}
             {liste?.map(p => (
               <tr key={p.id} className={`border-b border-gray-100 ${p.stock <= p.stockAlerte ? 'bg-yellow-50' : ''}`}>
+                <td className="px-2 py-2">
+                  {p.imageUrl
+                    ? <img src={p.imageUrl} alt="" className="w-8 h-10 object-cover rounded border border-gray-100" />
+                    : <div className="w-8 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-300 text-xs">—</div>
+                  }
+                </td>
                 <td className="px-4 py-3 font-medium">{p.nom}</td>
                 <td className="px-4 py-3 text-gray-500">{p.categorie?.nom ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-500 text-xs">

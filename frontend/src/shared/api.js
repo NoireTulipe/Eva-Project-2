@@ -124,7 +124,20 @@ export const produits = {
   getStock: (id) => request('GET', `/ventes/produits/${id}/stock`),
   create: (data) => request('POST', '/ventes/produits', data),
   update: (id, data) => request('PUT', `/ventes/produits/${id}`, data),
-  remove: (id) => request('DELETE', `/ventes/produits/${id}`)
+  remove: (id) => request('DELETE', `/ventes/produits/${id}`),
+  uploadImage: async (id, file) => {
+    const formData = new FormData()
+    formData.append('image', file)
+    const token = getToken()
+    const res = await fetch(`${BASE}/ventes/produits/${id}/image`, {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body: formData
+    })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Erreur ${res.status}`) }
+    return res.json()
+  },
+  deleteImage: (id) => request('DELETE', `/ventes/produits/${id}/image`)
 }
 
 // --- Points de vente ---
