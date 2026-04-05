@@ -2,6 +2,9 @@
   "appId": "com.echodeplumes.eva",
   "appName": "EVA",
   "webDir": "dist",
+  "server": {
+    "androidScheme": "http"
+  },
   "plugins": {
     "Haptics": {},
     "CapacitorHttp": {

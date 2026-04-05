@@ -18,6 +18,7 @@ import {
   ouvrirSession,
   cloturerSession,
   supprimerSession,
+  rouvrirSession,
   getSessionById,
   getSessions,
   enregistrerVente,
@@ -235,6 +236,16 @@ router.post('/sessions/:id/cloturer', async (req, res) => {
   } catch (err) {
     logError(err.message)
     res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/sessions/:id/rouvrir', async (req, res) => {
+  try {
+    await rouvrirSession(Number(req.params.id))
+    res.json({ ok: true })
+  } catch (err) {
+    logError(err.message)
+    res.status(400).json({ error: err.message })
   }
 })
 

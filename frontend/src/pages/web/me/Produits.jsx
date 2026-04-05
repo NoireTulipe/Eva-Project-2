@@ -278,78 +278,85 @@ function GestionProduits() {
       </div>
 
       {form !== null && (
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h3 className="font-medium mb-4">{form.id ? 'Modifier le produit' : 'Nouveau produit'}</h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-              <input name="nom" value={form.nom} onChange={handleChange} required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie *</label>
-              <SelectRef table="categories" label="Catégorie" value={form.categorieId} onChange={v => setForm(f => ({ ...f, categorieId: v }))} required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Prix TTC (€) *</label>
-              <input name="prixVenteTTC" type="number" step="0.01" value={form.prixVenteTTC} onChange={handleChange} required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">TVA (%)</label>
-              <input name="tva" type="number" step="0.1" value={form.tva} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Coût (€)</label>
-              <input name="cout" type="number" step="0.01" value={form.cout} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Stock *</label>
-              <input name="stock" type="number" value={form.stock} onChange={handleChange} required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Seuil alerte stock</label>
-              <input name="stockAlerte" type="number" value={form.stockAlerte} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
-            </div>
-            <div className="flex items-center gap-2 col-span-2">
-              <input name="droitAuteur" type="checkbox" checked={form.droitAuteur} onChange={handleChange} id="droitAuteur" className="rounded" />
-              <label htmlFor="droitAuteur" className="text-sm font-medium text-gray-700">Droits auteur</label>
-              {form.droitAuteur && (
-                <input name="droitAuteurPourcent" type="number" step="0.1" value={form.droitAuteurPourcent} onChange={handleChange} placeholder="%" className="ml-2 w-24 border border-gray-300 rounded px-3 py-2 text-sm" />
-              )}
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Auteurs</label>
-              <SelecteurAuteurs valeur={auteurIds} onChange={setAuteurIds} listeAuteurs={listeAuteurs} />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Image couverture</label>
-              <div className="flex items-center gap-4">
-                {imagePreview && (
-                  <img
-                    src={imagePreview.startsWith('blob:') ? imagePreview : imagePreview}
-                    className="w-16 h-20 object-cover rounded border border-gray-200"
-                    alt="Couverture"
-                  />
-                )}
-                <div className="flex flex-col gap-2">
-                  <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange}
-                    className="text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-                  {form?.imageUrl && !imageFile && (
-                    <button type="button" onClick={handleSupprimerImage}
-                      className="text-xs text-red-500 hover:underline text-left">
-                      Supprimer l'image
-                    </button>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-medium text-lg">{form.id ? 'Modifier le produit' : 'Nouveau produit'}</h3>
+                <button type="button" onClick={fermerForm} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">×</button>
+              </div>
+              <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                  <input name="nom" value={form.nom} onChange={handleChange} required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie *</label>
+                  <SelectRef table="categories" label="Catégorie" value={form.categorieId} onChange={v => setForm(f => ({ ...f, categorieId: v }))} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Prix TTC (€) *</label>
+                  <input name="prixVenteTTC" type="number" step="0.01" value={form.prixVenteTTC} onChange={handleChange} required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">TVA (%)</label>
+                  <input name="tva" type="number" step="0.1" value={form.tva} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Coût (€)</label>
+                  <input name="cout" type="number" step="0.01" value={form.cout} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock *</label>
+                  <input name="stock" type="number" value={form.stock} onChange={handleChange} required className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Seuil alerte stock</label>
+                  <input name="stockAlerte" type="number" value={form.stockAlerte} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+                </div>
+                <div className="flex items-center gap-2 col-span-2">
+                  <input name="droitAuteur" type="checkbox" checked={form.droitAuteur} onChange={handleChange} id="droitAuteur" className="rounded" />
+                  <label htmlFor="droitAuteur" className="text-sm font-medium text-gray-700">Droits auteur</label>
+                  {form.droitAuteur && (
+                    <input name="droitAuteurPourcent" type="number" step="0.1" value={form.droitAuteurPourcent} onChange={handleChange} placeholder="%" className="ml-2 w-24 border border-gray-300 rounded px-3 py-2 text-sm" />
                   )}
                 </div>
-              </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Auteurs</label>
+                  <SelecteurAuteurs valeur={auteurIds} onChange={setAuteurIds} listeAuteurs={listeAuteurs} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Image couverture</label>
+                  <div className="flex items-center gap-4">
+                    {imagePreview && (
+                      <img
+                        src={imagePreview}
+                        className="w-16 h-20 object-cover rounded border border-gray-200"
+                        alt="Couverture"
+                      />
+                    )}
+                    <div className="flex flex-col gap-2">
+                      <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange}
+                        className="text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                      {form?.imageUrl && !imageFile && (
+                        <button type="button" onClick={handleSupprimerImage}
+                          className="text-xs text-red-500 hover:underline text-left">
+                          Supprimer l'image
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <ErrorMessage message={formError} />
+                <div className="col-span-2 flex gap-2 justify-end">
+                  <button type="button" onClick={fermerForm} className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-50">Annuler</button>
+                  <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded text-sm">
+                    {saving ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                </div>
+              </form>
             </div>
-            <ErrorMessage message={formError} />
-            <div className="col-span-2 flex gap-2 justify-end">
-              <button type="button" onClick={fermerForm} className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-50">Annuler</button>
-              <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded text-sm">
-                {saving ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
       )}
 

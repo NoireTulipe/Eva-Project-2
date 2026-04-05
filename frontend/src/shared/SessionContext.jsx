@@ -73,8 +73,17 @@ export function SessionProvider({ children }) {
     return { recap, session: detail }
   }, [session])
 
+  const changerSession = useCallback((s) => {
+    if (s) {
+      localStorage.setItem(STORAGE_KEY, String(s.id))
+    } else {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+    setSession(s)
+  }, [])
+
   return (
-    <SessionContext.Provider value={{ session, loadingSession, ouvrirSession, rechargerSession, cloturerSession }}>
+    <SessionContext.Provider value={{ session, loadingSession, ouvrirSession, rechargerSession, cloturerSession, changerSession }}>
       {children}
     </SessionContext.Provider>
   )

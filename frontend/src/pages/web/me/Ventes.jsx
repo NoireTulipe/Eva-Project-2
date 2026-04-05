@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useApi } from '../../../shared/hooks/useApi.js'
 import { produits, pdv, ventes, sessions, frais } from '../../../shared/api.js'
 import { useSession } from '../../../shared/SessionContext.jsx'
@@ -11,19 +11,21 @@ const DATE = d => new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', time
 
 // ─── Vue : ouvrir une nouvelle session ────────────────────────────────────────
 
-function VueOuvrirSession() {
+function VueOuvrirSession({ onSessionOuverte }) {
   const { data: listePDV, loading } = useApi(() => pdv.getAll())
   const [form, setForm] = useState({ pointDeVenteId: '', debut: new Date().toISOString().slice(0, 16) })
   const [error, setError] = useState(null)
   const [opening, setOpening] = useState(false)
-  const { ouvrirSession } = useSession()
+  const { ouvrirSession, changerSession } = useSession()
 
   async function handleSubmit(e) {
     e.preventDefault()
     setOpening(true)
     setError(null)
     try {
-      await ouvrirSession(Number(form.pointDeVenteId), new Date(form.debut).toISOString())
+      const s = await ouvrirSession(Number(form.pointDeVenteId), new Date(form.debut).toISOString())
+      changerSession(s)
+      if (onSessionOuverte) onSessionOuverte(s.id)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -171,10 +173,37 @@ function VueFraisSession({ sessionId, fraisList, onRefresh }) {
   )
 }
 
-// ─── Vue : session active ──────────────────────────────────────────────────────
+// ─── Composant récap financier réutilisable ───────────────────────────────────
 
-function VueSessionActive() {
-  const { session, rechargerSession, cloturerSession } = useSession()
+function RecapFinancier({ recap }) {
+  const lignes = [
+    { label: 'CA total', value: recap.ca },
+    { label: 'Commission PDV', value: recap.commissionPDV, negatif: true },
+    { label: 'Droits auteur', value: recap.droitsAuteur, negatif: true },
+    { label: 'Frais', value: recap.totalFrais, negatif: true },
+    { label: 'Bénéfice net', value: recap.beneficeNet, highlight: true },
+  ]
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {lignes.map(({ label, value, highlight, negatif }) => (
+        <div key={label} className={`rounded p-3 ${highlight ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
+          <p className="text-xs text-gray-500 mb-1">{label}</p>
+          <p className={`font-semibold ${highlight ? 'text-blue-700' : negatif ? 'text-red-600' : 'text-gray-800'}`}>
+            {value != null ? EUR(value) : '—'}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Vue : détail d'une session active ────────────────────────────────────────
+
+function VueDetailSession({ sessionId, onRetour }) {
+  const { session: contextSession, changerSession } = useSession()
+  const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const { data: listeProduits } = useApi(() => produits.getAll())
 
   const [venteForm, setVenteForm] = useState({ produitId: '', quantite: 1, prixUnitaire: '', remise: 0, methodePaiementId: '' })
@@ -182,6 +211,20 @@ function VueSessionActive() {
   const [venteLoading, setVenteLoading] = useState(false)
   const [recap, setRecap] = useState(null)
   const [cloturing, setCloturing] = useState(false)
+
+  const charger = useCallback(async () => {
+    try {
+      setLoading(true)
+      const s = await sessions.getById(sessionId)
+      setSession(s)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [sessionId])
+
+  useEffect(() => { charger() }, [charger])
 
   function handleProduitChange(e) {
     const id = e.target.value
@@ -206,7 +249,7 @@ function VueSessionActive() {
         }]
       })
       setVenteForm(f => ({ ...f, produitId: '', quantite: 1, prixUnitaire: '', remise: 0 }))
-      await rechargerSession()
+      await charger()
     } catch (err) {
       setVenteError(err.message)
     } finally {
@@ -217,7 +260,7 @@ function VueSessionActive() {
   async function handleAnnulerVente(id) {
     try {
       await ventes.annuler(id)
-      await rechargerSession()
+      await charger()
     } catch (err) {
       alert(err.message)
     }
@@ -226,7 +269,9 @@ function VueSessionActive() {
   async function handleCloturer() {
     setCloturing(true)
     try {
-      const { recap: r } = await cloturerSession()
+      const r = await sessions.cloturer(session.id)
+      // Mettre à jour le contexte global si c'était la session active
+      if (contextSession?.id === session.id) changerSession(null)
       setRecap(r)
     } catch (err) {
       alert(err.message)
@@ -234,6 +279,9 @@ function VueSessionActive() {
       setCloturing(false)
     }
   }
+
+  if (loading) return <Spinner />
+  if (error) return <ErrorMessage message={error} />
 
   if (recap) {
     return (
@@ -246,6 +294,9 @@ function VueSessionActive() {
           <h2 className="font-semibold text-gray-800 mb-4">Récapitulatif financier</h2>
           <RecapFinancier recap={recap} />
         </div>
+        <button onClick={onRetour} className="text-sm text-blue-600 hover:underline">
+          ← Retour aux sessions actives
+        </button>
       </div>
     )
   }
@@ -260,6 +311,9 @@ function VueSessionActive() {
       {/* En-tête */}
       <div className="bg-white rounded-lg shadow p-5 flex justify-between items-start">
         <div>
+          <button onClick={onRetour} className="text-xs text-blue-600 hover:underline mb-2 block">
+            ← Changer la session de vente
+          </button>
           <h2 className="font-semibold text-gray-800 text-lg">{session.pointDeVente?.nom}</h2>
           <p className="text-sm text-gray-500 mt-0.5">Ouverte le {DATE(session.debut)}</p>
           <p className="text-sm font-medium text-green-700 mt-1">
@@ -328,7 +382,7 @@ function VueSessionActive() {
       <VueFraisSession
         sessionId={session.id}
         fraisList={session.frais}
-        onRefresh={rechargerSession}
+        onRefresh={charger}
       />
 
       {/* Liste ventes */}
@@ -381,26 +435,84 @@ function VueSessionActive() {
   )
 }
 
-// ─── Composant récap financier réutilisable ───────────────────────────────────
+// ─── Vue : liste des sessions actives ────────────────────────────────────────
 
-function RecapFinancier({ recap }) {
-  const lignes = [
-    { label: 'CA total', value: recap.ca },
-    { label: 'Commission PDV', value: recap.commissionPDV, negatif: true },
-    { label: 'Droits auteur', value: recap.droitsAuteur, negatif: true },
-    { label: 'Frais', value: recap.totalFrais, negatif: true },
-    { label: 'Bénéfice net', value: recap.beneficeNet, highlight: true },
-  ]
+function VueListeSessionsActives({ onSelectionner }) {
+  const [sessionsList, setSessionsList] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [ouvrirForm, setOuvrirForm] = useState(false)
+
+  async function charger() {
+    try {
+      setLoading(true)
+      const liste = await sessions.getAll({ limit: 100 })
+      setSessionsList(liste.filter(s => s.statut === 'ouverte'))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { charger() }, [])
+
+  if (loading) return <Spinner />
+  if (error) return <ErrorMessage message={error} />
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-      {lignes.map(({ label, value, highlight, negatif }) => (
-        <div key={label} className={`rounded p-3 ${highlight ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
-          <p className="text-xs text-gray-500 mb-1">{label}</p>
-          <p className={`font-semibold ${highlight ? 'text-blue-700' : negatif ? 'text-red-600' : 'text-gray-800'}`}>
-            {value != null ? EUR(value) : '—'}
-          </p>
-        </div>
-      ))}
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-gray-700">
+          Sessions en cours ({sessionsList?.length ?? 0})
+        </h2>
+        <button
+          onClick={() => setOuvrirForm(v => !v)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm"
+        >
+          {ouvrirForm ? 'Annuler' : '+ Ouvrir une session'}
+        </button>
+      </div>
+
+      {ouvrirForm && (
+        <VueOuvrirSession onSessionOuverte={(id) => {
+          setOuvrirForm(false)
+          onSelectionner(id)
+        }} />
+      )}
+
+      {sessionsList?.length === 0 && !ouvrirForm && (
+        <p className="text-gray-400 text-sm">Aucune session ouverte. Créez-en une pour commencer.</p>
+      )}
+
+      <div className="space-y-2">
+        {sessionsList?.map(s => {
+          const ventesActives = s.ventes?.filter(v => !v.annulee) ?? []
+          const ca = ventesActives.reduce((acc, v) =>
+            acc + v.lignes.reduce((a, l) => a + l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100), 0), 0
+          )
+          return (
+            <button
+              key={s.id}
+              onClick={() => onSelectionner(s.id)}
+              className="w-full bg-white rounded-lg shadow px-5 py-4 flex items-center justify-between text-left hover:bg-blue-50 hover:shadow-md transition-all border border-transparent hover:border-blue-200"
+            >
+              <div className="flex items-center gap-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse flex-shrink-0"></span>
+                <div>
+                  <p className="font-semibold text-gray-800">{s.pointDeVente?.nom}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Ouverte le {DATE(s.debut)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6 text-sm">
+                <span className="text-gray-500">{ventesActives.length} vente(s)</span>
+                <span className="font-semibold text-gray-800">{EUR(ca)}</span>
+                <span className="text-blue-600 text-xs font-medium">Ouvrir →</span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -413,6 +525,7 @@ function VueHistorique() {
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [supprimant, setSupprimant] = useState(null)
+  const [rouvrant, setRouvrant] = useState(null)
 
   async function charger() {
     try {
@@ -438,6 +551,19 @@ function VueHistorique() {
       alert(err.message)
     } finally {
       setSupprimant(null)
+    }
+  }
+
+  async function handleRouvrir(id) {
+    if (!window.confirm('Rouvrir cette session pour la modifier ?')) return
+    setRouvrant(id)
+    try {
+      await sessions.rouvrir(id)
+      await charger()
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setRouvrant(null)
     }
   }
 
@@ -487,7 +613,16 @@ function VueHistorique() {
 
               {isOpen && (
                 <div className="border-t border-gray-100 p-5 space-y-4">
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    {s.statut === 'cloturee' && (
+                      <button
+                        onClick={() => handleRouvrir(s.id)}
+                        disabled={rouvrant === s.id}
+                        className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 px-3 py-1.5 rounded disabled:opacity-50"
+                      >
+                        {rouvrant === s.id ? 'Réouverture…' : 'Rouvrir cette session'}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleSupprimer(s.id)}
                       disabled={supprimant === s.id}
@@ -555,11 +690,12 @@ function VueHistorique() {
 
 // ─── Page principale ───────────────────────────────────────────────────────────
 
-const VUES = ['Session active', 'Historique']
+const VUES = ['Sessions actives', 'Historique']
 
 export default function Ventes() {
-  const { session, loadingSession } = useSession()
+  const { loadingSession } = useSession()
   const [vue, setVue] = useState(0)
+  const [sessionSelectionnee, setSessionSelectionnee] = useState(null)
 
   if (loadingSession) return <Spinner />
 
@@ -569,19 +705,20 @@ export default function Ventes() {
 
       <div className="flex gap-1 mb-6 border-b border-gray-200">
         {VUES.map((v, i) => (
-          <button key={v} onClick={() => setVue(i)}
+          <button key={v} onClick={() => { setVue(i); setSessionSelectionnee(null) }}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               vue === i ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}>
             {v}
-            {v === 'Session active' && session && (
-              <span className="ml-2 w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse"></span>
-            )}
           </button>
         ))}
       </div>
 
-      {vue === 0 && (session ? <VueSessionActive /> : <VueOuvrirSession />)}
+      {vue === 0 && (
+        sessionSelectionnee
+          ? <VueDetailSession sessionId={sessionSelectionnee} onRetour={() => setSessionSelectionnee(null)} />
+          : <VueListeSessionsActives onSelectionner={setSessionSelectionnee} />
+      )}
       {vue === 1 && <VueHistorique />}
     </div>
   )

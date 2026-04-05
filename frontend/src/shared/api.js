@@ -155,7 +155,8 @@ export const sessions = {
   open: (pointDeVenteId, debut) => request('POST', '/ventes/sessions', { pointDeVenteId, debut }),
   getById: (id) => request('GET', `/ventes/sessions/${id}`),
   cloturer: (id) => request('POST', `/ventes/sessions/${id}/cloturer`),
-  supprimer: (id) => request('DELETE', `/ventes/sessions/${id}`)
+  supprimer: (id) => request('DELETE', `/ventes/sessions/${id}`),
+  rouvrir: (id) => request('POST', `/ventes/sessions/${id}/rouvrir`)
 }
 
 // --- Référentiels ---

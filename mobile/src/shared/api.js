@@ -102,8 +102,8 @@ export const auth = {
 
 export function getImageUrl(imageUrl) {
   if (!imageUrl) return null
-  const base = localStorage.getItem('api_url') || 'https://eva.echodeplumes.com'
-  return base + imageUrl
+  // getApiBase() retourne "http://IP:PORT/api" — on retire /api pour avoir la racine
+  return getApiBase().replace(/\/api$/, '') + imageUrl
 }
 
 async function requestMultipart(method, path, formData) {
@@ -153,9 +153,16 @@ export const ventes = {
   annuler: (id) => request('POST', `/ventes/ventes/${id}/annuler`),
 }
 
-// ─── Frais de session ─────────────────────────────────────────────────────────
+// ─── Frais ────────────────────────────────────────────────────────────────────
 
 export const frais = {
+  getAll: ({ debut, fin } = {}) => {
+    const params = new URLSearchParams()
+    if (debut) params.append('debut', debut)
+    if (fin)   params.append('fin',   fin)
+    const qs = params.toString()
+    return request('GET', `/ventes/frais${qs ? '?' + qs : ''}`)
+  },
   ajouterSession: (sessionId, data) => request('POST', `/ventes/sessions/${sessionId}/frais`, data),
 }
 
@@ -164,4 +171,28 @@ export const frais = {
 export const ref = {
   getAll:  (table)      => request('GET', `/ref/${table}`),
   create:  (table, nom) => request('POST', `/ref/${table}`, { nom }),
+}
+
+// ─── Comptabilité ─────────────────────────────────────────────────────────────
+
+export const compta = {
+  getRecap: ({ debut, fin } = {}) => {
+    const params = new URLSearchParams()
+    if (debut) params.append('debut', debut)
+    if (fin)   params.append('fin',   fin)
+    const qs = params.toString()
+    return request('GET', `/ventes/compta${qs ? '?' + qs : ''}`)
+  }
+}
+
+// ─── Pertes ───────────────────────────────────────────────────────────────────
+
+export const pertes = {
+  getAll: ({ debut, fin } = {}) => {
+    const params = new URLSearchParams()
+    if (debut) params.append('debut', debut)
+    if (fin)   params.append('fin',   fin)
+    const qs = params.toString()
+    return request('GET', `/ventes/pertes${qs ? '?' + qs : ''}`)
+  }
 }

@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
-import { sessions as sessionsApi, frais as fraisApi, ref as refApi, ventes as ventesApi } from '../shared/api.js'
+import { sessions as sessionsApi, frais as fraisApi, ref as refApi, ventes as ventesApi, pdv as pdvApi } from '../shared/api.js'
 import { useSession } from '../shared/SessionContext.jsx'
 import { useToast } from '../shared/toast.jsx'
+
+const LIMITES = [10, 25, 50]
+const STORAGE_LIMIT_KEY = 'hist_sessions_limit'
 
 function eur(v) {
   const n = parseFloat(v)
@@ -30,16 +33,23 @@ export default function Sessions() {
   const [loading, setLoading] = useState(true)
   const [showCloture, setShowCloture] = useState(false)
   const [showFrais, setShowFrais] = useState(false)
+  const [showOuvrir, setShowOuvrir] = useState(false)
+  const [limite, setLimite] = useState(() => {
+    const saved = parseInt(localStorage.getItem(STORAGE_LIMIT_KEY))
+    return LIMITES.includes(saved) ? saved : 10
+  })
 
-  useEffect(() => { charger() }, [session?.id])
+  useEffect(() => { charger() }, [session?.id, limite])
 
   async function charger() {
     setLoading(true)
     try {
-      const liste = await sessionsApi.getAll({ limit: 50 })
+      // On charge assez de sessions pour couvrir ouvertes + historique
+      const liste = await sessionsApi.getAll({ limit: limite + 20 })
       const ouvertes = liste.filter(s => s.statut === 'ouverte')
       setSessionsOuvertes(ouvertes)
-      setHistorique(liste.filter(s => s.statut !== 'ouverte'))
+      // L'historique vient déjà avec pointDeVente.nom depuis getAll
+      setHistorique(liste.filter(s => s.statut !== 'ouverte').slice(0, limite))
 
       if (session?.id) {
         const encoreOuverte = ouvertes.find(s => s.id === session.id)
@@ -83,6 +93,11 @@ export default function Sessions() {
     } catch (err) { show(`Erreur : ${err.message}`, 'error') }
   }
 
+  function changerLimite(val) {
+    setLimite(val)
+    localStorage.setItem(STORAGE_LIMIT_KEY, String(val))
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full bg-slate-50">
@@ -96,7 +111,18 @@ export default function Sessions() {
 
       {/* Header */}
       <div className="flex-shrink-0 bg-gradient-to-r from-indigo-600 to-violet-700 pt-safe px-4 pb-5">
-        <h1 className="text-2xl font-bold text-white mt-1">Sessions</h1>
+        <div className="flex items-center justify-between mt-1">
+          <h1 className="text-2xl font-bold text-white">Sessions</h1>
+          <button
+            onClick={() => setShowOuvrir(true)}
+            className="flex items-center gap-1.5 bg-white/20 text-white text-sm font-semibold px-3 py-2 rounded-xl active:scale-95 transition-transform"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Ouvrir
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -110,7 +136,7 @@ export default function Sessions() {
               </svg>
             </div>
             <p className="text-gray-500 text-sm font-medium">Aucune session en cours</p>
-            <p className="text-gray-400 text-xs mt-1">Ouvrez une session depuis l'onglet Caisse</p>
+            <p className="text-gray-400 text-xs mt-1">Appuyez sur "Ouvrir" pour démarrer</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -141,10 +167,26 @@ export default function Sessions() {
         {/* Historique */}
         {historique.length > 0 && (
           <div>
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Historique</h2>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Historique</h2>
+              {/* Sélecteur de limite */}
+              <div className="flex items-center gap-1">
+                {LIMITES.map(l => (
+                  <button
+                    key={l}
+                    onClick={() => changerLimite(l)}
+                    className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition-colors ${
+                      limite === l ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="space-y-3">
               {historique.map(s => (
-                <SessionHistoriqueCard key={s.id} sessionId={s.id} />
+                <SessionHistoriqueCard key={s.id} sessionResume={s} />
               ))}
             </div>
           </div>
@@ -169,11 +211,23 @@ export default function Sessions() {
           onClose={() => setShowFrais(false)}
         />
       )}
+
+      {showOuvrir && (
+        <OuvrirSessionSheet
+          onOuverte={(s) => {
+            ouvrirSession(s)
+            setShowOuvrir(false)
+            show(`Session "${s.pointDeVente?.nom}" ouverte !`, 'success')
+            charger()
+          }}
+          onClose={() => setShowOuvrir(false)}
+        />
+      )}
     </div>
   )
 }
 
-// ─── Card session active (celle sélectionnée dans l'app) ─────────────────────
+// ─── Card session active ──────────────────────────────────────────────────────
 
 function SessionActiveCard({ session, onAnnulerVente, onCloture, onAjouterFrais }) {
   const [expanded, setExpanded] = useState(false)
@@ -229,7 +283,7 @@ function SessionActiveCard({ session, onAnnulerVente, onCloture, onAjouterFrais 
   )
 }
 
-// ─── Card session ouverte non sélectionnée ───────────────────────────────────
+// ─── Card session ouverte non sélectionnée ────────────────────────────────────
 
 function SessionAutreCard({ session, onSelectionner }) {
   const caTotal = session.ventes?.filter(v => !v.annulee).reduce((s, v) => s + calcMontantVente(v), 0) || 0
@@ -300,65 +354,85 @@ function VenteLigne({ vente, onAnnuler }) {
   )
 }
 
-function SessionHistoriqueCard({ sessionId }) {
-  const [session, setSession] = useState(null)
+// ─── Card historique — affiche le résumé sans clic requis ─────────────────────
+
+function SessionHistoriqueCard({ sessionResume }) {
+  const [detail, setDetail] = useState(null)
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  async function charger() {
-    if (session) { setExpanded(!expanded); return }
-    setLoading(true)
-    try { const s = await sessionsApi.getById(sessionId); setSession(s); setExpanded(true) }
-    finally { setLoading(false) }
+  // Calculs depuis le résumé (getAll renvoie les ventes de base)
+  const caTotal = sessionResume.ventes?.filter(v => !v.annulee).reduce((s, v) => s + calcMontantVente(v), 0) || 0
+  const nbVentes = sessionResume.ventes?.filter(v => !v.annulee).length || 0
+
+  // Nom + date déjà disponibles depuis getAll
+  const nom = sessionResume.pointDeVente?.nom || `Session #${sessionResume.id}`
+  const dateStr = sessionResume.debut ? dateHeure(sessionResume.debut) : ''
+
+  async function toggle() {
+    if (expanded) { setExpanded(false); return }
+    if (!detail) {
+      setLoading(true)
+      try {
+        const s = await sessionsApi.getById(sessionResume.id)
+        setDetail(s)
+      } finally { setLoading(false) }
+    }
+    setExpanded(true)
   }
 
-  const caTotal = session?.ventes?.filter(v => !v.annulee).reduce((s, v) => s + calcMontantVente(v), 0) || 0
-  const nbVentes = session?.ventes?.filter(v => !v.annulee).length || 0
+  const sessionData = detail || sessionResume
+  const caDetail = detail?.ventes?.filter(v => !v.annulee).reduce((s, v) => s + calcMontantVente(v), 0) ?? caTotal
 
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <button onClick={charger} className="w-full flex items-center justify-between px-5 py-4 text-left active:bg-gray-50 transition-colors">
+      <button onClick={toggle} className="w-full flex items-center justify-between px-5 py-4 text-left active:bg-gray-50 transition-colors">
         <div>
-          <p className="font-semibold text-gray-800 text-sm">{session?.pointDeVente?.nom || `Session #${sessionId}`}</p>
-          {session && <p className="text-xs text-gray-400 mt-0.5">{dateHeure(session.debut)}</p>}
+          <p className="font-semibold text-gray-800 text-sm">{nom}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{dateStr}</p>
         </div>
-        <div className="text-right">
-          {session ? (
-            <>
-              <p className="font-bold text-indigo-600 text-sm">{eur(caTotal)}</p>
-              <p className="text-xs text-gray-400">{nbVentes} vente{nbVentes > 1 ? 's' : ''}</p>
-            </>
-          ) : (
-            <span className="text-xs text-gray-400 font-medium">{loading ? '…' : 'Voir'}</span>
-          )}
+        <div className="text-right flex items-center gap-3">
+          <div>
+            <p className="font-bold text-indigo-600 text-sm">{eur(caTotal)}</p>
+            <p className="text-xs text-gray-400">{nbVentes} vente{nbVentes !== 1 ? 's' : ''}</p>
+          </div>
+          <span className="text-gray-300 text-sm">{loading ? '…' : expanded ? '▲' : '▼'}</span>
         </div>
       </button>
 
-      {expanded && session?.ventes?.filter(v => !v.annulee).length > 0 && (
+      {expanded && (
         <div className="border-t border-gray-100">
-          {session.ventes.filter(v => !v.annulee).map(v => {
-            const montant = calcMontantVente(v)
-            return (
-              <div key={v.id} className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
-                <div>
-                  <p className="text-xs font-medium text-gray-700 truncate max-w-[200px]">
-                    {v.lignes?.map(l => `${l.produit?.nom} ×${l.quantite}`).join(', ') || '—'}
-                  </p>
-                  <p className="text-xs text-gray-400">{v.methodePaiement?.nom}</p>
-                </div>
-                <span className="text-sm font-bold text-gray-800">{eur(montant)}</span>
+          {sessionData.ventes?.filter(v => !v.annulee).length > 0 ? (
+            <>
+              {sessionData.ventes.filter(v => !v.annulee).map(v => {
+                const montant = calcMontantVente(v)
+                return (
+                  <div key={v.id} className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 truncate max-w-[200px]">
+                        {v.lignes?.map(l => `${l.produit?.nom} ×${l.quantite}`).join(', ') || '—'}
+                      </p>
+                      <p className="text-xs text-gray-400">{v.methodePaiement?.nom}</p>
+                    </div>
+                    <span className="text-sm font-bold text-gray-800">{eur(montant)}</span>
+                  </div>
+                )
+              })}
+              <div className="flex justify-between items-center px-5 py-3 bg-indigo-50">
+                <span className="text-sm font-bold text-indigo-600">Total session</span>
+                <span className="text-base font-extrabold text-indigo-700">{eur(caDetail)}</span>
               </div>
-            )
-          })}
-          <div className="flex justify-between items-center px-5 py-3 bg-indigo-50">
-            <span className="text-sm font-bold text-indigo-600">Total session</span>
-            <span className="text-base font-extrabold text-indigo-700">{eur(caTotal)}</span>
-          </div>
+            </>
+          ) : (
+            <p className="px-5 py-4 text-xs text-gray-400 text-center">Aucune vente</p>
+          )}
         </div>
       )}
     </div>
   )
 }
+
+// ─── Modale clôture ───────────────────────────────────────────────────────────
 
 function CloturModal({ session, onConfirmer, onAnnuler }) {
   const caTotal = session.ventes?.filter(v => !v.annulee).reduce((s, v) => s + calcMontantVente(v), 0) || 0
@@ -402,6 +476,8 @@ function CloturModal({ session, onConfirmer, onAnnuler }) {
     </div>
   )
 }
+
+// ─── Sheet ajouter frais ──────────────────────────────────────────────────────
 
 function AjouterFraisSheet({ sessionId, onSave, onClose }) {
   const [typesFrais, setTypesFrais] = useState([])
@@ -459,6 +535,183 @@ function AjouterFraisSheet({ sessionId, onSave, onClose }) {
           className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl font-bold text-base active:scale-95 transition-transform disabled:opacity-40 shadow-lg shadow-indigo-200">
           {saving ? 'Ajout…' : 'Ajouter le frais'}
         </button>
+      </div>
+    </>
+  )
+}
+
+// ─── Sheet ouvrir une nouvelle session ────────────────────────────────────────
+
+function OuvrirSessionSheet({ onOuverte, onClose }) {
+  const { show } = useToast()
+  const [listePdv, setListePdv] = useState([])
+  const [typesPdv, setTypesPdv] = useState([])
+  const [pdvId, setPdvId] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [loadingPdv, setLoadingPdv] = useState(true)
+  const [showNouveauPdv, setShowNouveauPdv] = useState(false)
+
+  useEffect(() => {
+    Promise.all([pdvApi.getAll(), refApi.getAll('types-pdv')])
+      .then(([pdvs, types]) => {
+        setListePdv(pdvs)
+        setTypesPdv(types)
+        if (pdvs.length === 1) setPdvId(String(pdvs[0].id))
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPdv(false))
+  }, [])
+
+  async function ouvrir() {
+    if (!pdvId) return
+    setLoading(true)
+    try {
+      const s = await sessionsApi.open(parseInt(pdvId))
+      onOuverte(s)
+    } catch (err) {
+      show(err.message, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const pdvSelectionne = listePdv.find(p => String(p.id) === pdvId)
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-30" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-40 shadow-2xl px-5 pt-5 pb-safe max-h-[85vh] flex flex-col">
+        <div className="flex justify-center mb-4 flex-shrink-0">
+          <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-800 mb-4 flex-shrink-0">Nouvelle session</h3>
+
+        <div className="flex-1 overflow-y-auto">
+          {loadingPdv ? (
+            <div className="py-8 text-center text-gray-400 text-sm">Chargement…</div>
+          ) : listePdv.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-6">Aucun point de vente configuré</p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {listePdv.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setPdvId(String(p.id))}
+                  className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all active:scale-98 text-left ${
+                    pdvId === String(p.id) ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    pdvId === String(p.id) ? 'bg-indigo-600' : 'bg-gray-200'
+                  }`}>
+                    <svg className={`w-5 h-5 ${pdvId === String(p.id) ? 'text-white' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-semibold text-sm ${pdvId === String(p.id) ? 'text-indigo-700' : 'text-gray-800'}`}>{p.nom}</p>
+                    {p.ville && <p className="text-xs text-gray-400 truncate">{p.ville}</p>}
+                  </div>
+                  {pdvId === String(p.id) && (
+                    <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowNouveauPdv(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 text-sm active:scale-95 transition-colors mb-4"
+          >
+            <span className="text-xl leading-none font-light">+</span>
+            Nouveau point de vente
+          </button>
+        </div>
+
+        <div className="flex gap-3 flex-shrink-0 pt-3">
+          <button onClick={onClose} className="flex-1 py-3.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-500">
+            Annuler
+          </button>
+          <button
+            onClick={ouvrir}
+            disabled={!pdvId || loading}
+            className="flex-1 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-sm font-bold disabled:opacity-40 active:scale-95 transition-transform"
+          >
+            {loading ? 'Ouverture…' : pdvSelectionne ? `Ouvrir — ${pdvSelectionne.nom}` : 'Ouvrir'}
+          </button>
+        </div>
+      </div>
+
+      {showNouveauPdv && (
+        <NouveauPdvSheet
+          typesPdv={typesPdv}
+          onSave={async (data) => {
+            try {
+              const nvPdv = await pdvApi.create(data)
+              setListePdv(prev => [...prev, nvPdv])
+              setPdvId(String(nvPdv.id))
+              setShowNouveauPdv(false)
+              show('Point de vente créé !', 'success')
+            } catch (err) {
+              show(err.message, 'error')
+            }
+          }}
+          onClose={() => setShowNouveauPdv(false)}
+        />
+      )}
+    </>
+  )
+}
+
+function NouveauPdvSheet({ typesPdv, onSave, onClose }) {
+  const [nom, setNom] = useState('')
+  const [typePDVId, setTypePDVId] = useState(typesPdv[0] ? String(typesPdv[0].id) : '')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    if (!nom.trim() || !typePDVId) return
+    setSaving(true)
+    await onSave({ nom: nom.trim(), typePDVId: parseInt(typePDVId) })
+    setSaving(false)
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 shadow-2xl px-6 pt-5 pb-safe">
+        <div className="flex justify-center mb-4">
+          <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-800 mb-5">Nouveau point de vente</h3>
+        <div className="space-y-4 mb-5">
+          <div>
+            <label className="block text-sm font-semibold text-gray-600 mb-1.5">Nom *</label>
+            <input type="text" value={nom} onChange={e => setNom(e.target.value)}
+              placeholder="Ex : Salon du livre de Lyon"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50"
+              autoFocus />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-600 mb-1.5">Type *</label>
+            <select value={typePDVId} onChange={e => setTypePDVId(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-base bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">-- Sélectionner --</option>
+              {typesPdv.map(t => <option key={t.id} value={t.id}>{t.nom}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-500">Annuler</button>
+          <button onClick={handleSave} disabled={saving || !nom.trim() || !typePDVId}
+            className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl text-sm font-bold disabled:opacity-40">
+            {saving ? 'Création…' : 'Créer'}
+          </button>
+        </div>
       </div>
     </>
   )

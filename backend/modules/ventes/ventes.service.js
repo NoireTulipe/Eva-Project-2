@@ -140,6 +140,16 @@ export async function cloturerSession(sessionId) {
   return recap
 }
 
+export async function rouvrirSession(sessionId) {
+  const session = await prisma.session.findUnique({ where: { id: sessionId } })
+  if (!session) throw new Error('Session introuvable')
+  if (session.statut === 'ouverte') throw new Error('Session déjà ouverte')
+  return prisma.session.update({
+    where: { id: sessionId },
+    data: { statut: 'ouverte', fin: null },
+  })
+}
+
 export async function supprimerSession(id) {
   const session = await prisma.session.findUnique({
     where: { id },

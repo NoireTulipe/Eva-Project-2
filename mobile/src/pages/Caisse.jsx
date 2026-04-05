@@ -308,6 +308,7 @@ function CaisseActive({ session }) {
           onSauvegarderApi={sauvegarderApi}
           onCouleur={setCouleurCategorie}
           onClose={() => setShowSettings(false)}
+          produits={produits}
         />
       )}
     </div>
@@ -373,8 +374,8 @@ function ProduitTile({ produit, quantiteCart, catStyle, onPress }) {
 
 // ─── Sheet paramètres ──────────────────────────────────────────────────────────
 
-function SettingsSheet({ categories, catStyleMap, catColors, apiUrlInput, setApiUrlInput, onSauvegarderApi, onCouleur, onClose }) {
-  const [onglet, setOnglet] = useState('serveur') // 'serveur' | 'couleurs'
+function SettingsSheet({ categories, catStyleMap, catColors, apiUrlInput, setApiUrlInput, onSauvegarderApi, onCouleur, onClose, produits }) {
+  const [onglet, setOnglet] = useState('serveur') // 'serveur' | 'couleurs' | 'debug'
 
   return (
     <>
@@ -386,18 +387,9 @@ function SettingsSheet({ categories, catStyleMap, catColors, apiUrlInput, setApi
           </div>
           {/* Onglets */}
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
-            <button
-              onClick={() => setOnglet('serveur')}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${onglet === 'serveur' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}
-            >
-              Serveur
-            </button>
-            <button
-              onClick={() => setOnglet('couleurs')}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${onglet === 'couleurs' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}
-            >
-              Couleurs
-            </button>
+            <button onClick={() => setOnglet('serveur')} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${onglet === 'serveur' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>Serveur</button>
+            <button onClick={() => setOnglet('couleurs')} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${onglet === 'couleurs' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>Couleurs</button>
+            <button onClick={() => setOnglet('debug')} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${onglet === 'debug' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>Debug</button>
           </div>
         </div>
 
@@ -424,6 +416,34 @@ function SettingsSheet({ categories, catStyleMap, catColors, apiUrlInput, setApi
                   Enregistrer
                 </button>
               </div>
+            </div>
+          )}
+
+          {onglet === 'debug' && (
+            <div className="py-2 pb-6 space-y-3">
+              <p className="text-xs font-bold text-gray-500 uppercase">Diagnostic images</p>
+              <div className="bg-gray-900 rounded-xl p-3 space-y-1">
+                <p className="text-green-400 text-xs font-mono">apiBase: {getApiBase()}</p>
+                <p className="text-green-400 text-xs font-mono">origin: {getApiBase().replace(/\/api$/, '')}</p>
+              </div>
+              <p className="text-xs font-bold text-gray-500 uppercase mt-3">Produits avec image</p>
+              {produits?.filter(p => p.imageUrl).length === 0
+                ? <p className="text-xs text-gray-400">Aucun produit avec image</p>
+                : produits?.filter(p => p.imageUrl).map(p => {
+                    const url = getImageUrl(p.imageUrl)
+                    return (
+                      <div key={p.id} className="bg-gray-900 rounded-xl p-3 space-y-1">
+                        <p className="text-white text-xs font-semibold truncate">{p.nom}</p>
+                        <p className="text-yellow-400 text-xs font-mono break-all">imageUrl: {p.imageUrl}</p>
+                        <p className="text-green-400 text-xs font-mono break-all">→ {url}</p>
+                        <img src={url} className="w-12 h-16 object-cover rounded mt-1 border border-gray-600" alt=""
+                          onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='block' }}
+                        />
+                        <p className="text-red-400 text-xs hidden">Image non chargée</p>
+                      </div>
+                    )
+                  })
+              }
             </div>
           )}
 
