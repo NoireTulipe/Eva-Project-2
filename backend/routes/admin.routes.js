@@ -13,6 +13,14 @@ import { logAction, logError } from '../logs/logger.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const LOGS_DIR = resolve(__dirname, '../logs')
 
+// Résout le chemin réel de la base SQLite depuis DATABASE_URL
+// Ex: "file:./prisma/eva.db" → <backend>/prisma/eva.db
+function getDbPath() {
+  const url = process.env.DATABASE_URL || 'file:./prisma/dev.db'
+  const rel = url.startsWith('file:') ? url.slice(5) : './prisma/dev.db'
+  return resolve(process.cwd(), rel)
+}
+
 const router = Router()
 
 // Middleware : authentification + rôle admin requis
@@ -308,7 +316,7 @@ router.post('/crons/:id/run', async (req, res) => {
 
 // GET /admin/sauvegardes/info — infos sur la base SQLite
 router.get('/sauvegardes/info', async (req, res) => {
-  const dbPath = resolve(__dirname, '../prisma/dev.db')
+  const dbPath = getDbPath()
   if (!existsSync(dbPath)) return res.status(404).json({ error: 'Base introuvable' })
 
   const stats = statSync(dbPath)
@@ -321,7 +329,7 @@ router.get('/sauvegardes/info', async (req, res) => {
 
 // POST /admin/sauvegardes/backup — sauvegarde manuelle
 router.post('/sauvegardes/backup', async (req, res) => {
-  const dbPath = resolve(__dirname, '../prisma/dev.db')
+  const dbPath = getDbPath()
   if (!existsSync(dbPath)) return res.status(404).json({ error: 'Base introuvable' })
 
   // Chemin de destination depuis ConfigParam
@@ -369,7 +377,7 @@ router.post('/sauvegardes/restore/:fichier', async (req, res) => {
   const pathParam = await prisma.configParam.findUnique({ where: { cle: 'backup.path' } })
   const destDir = resolve(__dirname, '..', pathParam?.valeur || './prisma/')
   const backupPath = resolve(destDir, fichier)
-  const dbPath = resolve(__dirname, '../prisma/dev.db')
+  const dbPath = getDbPath()
 
   if (!existsSync(backupPath)) return res.status(404).json({ error: 'Fichier backup introuvable' })
 
