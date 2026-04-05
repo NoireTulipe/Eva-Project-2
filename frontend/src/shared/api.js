@@ -116,6 +116,14 @@ export const auth = {
   }
 }
 
+// --- Images ---
+
+export function getThumbUrl(imageUrl) {
+  if (!imageUrl) return null
+  const filename = imageUrl.split('/').pop().replace(/\.[^.]+$/, '.jpg')
+  return `/uploads/thumb/${filename}`
+}
+
 // --- Produits ---
 
 export const produits = {

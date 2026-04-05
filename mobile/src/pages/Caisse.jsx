@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { produits as produitsApi, ref as refApi, ventes as ventesApi, getImageUrl } from '../shared/api.js'
+import { produits as produitsApi, ref as refApi, ventes as ventesApi, getImageUrl, getThumbUrl } from '../shared/api.js'
 import { getApiUrl, setApiUrl, getApiBase } from '../shared/api.js'
 import { useSession } from '../shared/SessionContext.jsx'
 import { useToast } from '../shared/toast.jsx'
@@ -34,6 +34,23 @@ function loadCatColors() {
 
 function saveCatColors(colors) {
   localStorage.setItem('cat_colors', JSON.stringify(colors))
+}
+
+// ─── Rayons ────────────────────────────────────────────────────────────────────
+
+const RAYONS = ['librairie', 'goodies']
+const RAYON_LABELS = { librairie: 'Librairie', goodies: 'Goodies' }
+const RAYON_COLORS = {
+  librairie: { header: 'from-indigo-600 to-violet-700', badge: 'bg-indigo-600' },
+  goodies:   { header: 'from-amber-500 to-orange-600',  badge: 'bg-amber-500'  },
+}
+
+function loadCatRayons() {
+  try { return JSON.parse(localStorage.getItem('cat_rayons') || '{}') } catch { return {} }
+}
+
+function saveCatRayons(rayons) {
+  localStorage.setItem('cat_rayons', JSON.stringify(rayons))
 }
 
 function buildCatStyleMap(categories, catColors) {
@@ -76,6 +93,10 @@ function CaisseActive({ session }) {
   const [showSettings, setShowSettings] = useState(false)
   const [apiUrlInput, setApiUrlInput] = useState(getApiUrl())
   const [catColors, setCatColors] = useState(loadCatColors)
+  const [catRayons, setCatRayons] = useState(loadCatRayons)
+  const [rayonActif, setRayonActif] = useState('librairie')
+  const [imageModal, setImageModal] = useState(null)
+  const touchStartX = useRef(null)
 
   const chargerProduits = useCallback(() => {
     produitsApi.getAll().then(prods => setProduits(prods.filter(p => p.actif !== false)))
@@ -108,9 +129,44 @@ function CaisseActive({ session }) {
     saveCatColors(updated)
   }
 
+  function setRayonCategorie(catId, rayon) {
+    const updated = { ...catRayons, [String(catId)]: rayon }
+    setCatRayons(updated)
+    saveCatRayons(updated)
+  }
+
+  function changerRayon(direction) {
+    const idx = RAYONS.indexOf(rayonActif)
+    const newIdx = (idx + direction + RAYONS.length) % RAYONS.length
+    setRayonActif(RAYONS[newIdx])
+    setCategorieActive('__tous__')
+  }
+
+  function onSwipeTouchStart(e) {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  function onSwipeTouchEnd(e) {
+    if (touchStartX.current === null) return
+    const delta = e.changedTouches[0].clientX - touchStartX.current
+    touchStartX.current = null
+    if (Math.abs(delta) < 60) return
+    changerRayon(delta > 0 ? 1 : -1)
+  }
+
+  const categoriesDuRayon = categories.filter(c => {
+    const r = catRayons[String(c.id)]
+    return !r || r === rayonActif
+  })
+
+  const produitsDuRayon = produits.filter(p => {
+    const r = catRayons[String(p.categorieId)]
+    return !r || r === rayonActif
+  })
+
   const produitsFiltres = categorieActive === '__tous__'
-    ? produits
-    : produits.filter(p => p.categorieId === parseInt(categorieActive))
+    ? produitsDuRayon
+    : produitsDuRayon.filter(p => p.categorieId === parseInt(categorieActive))
 
   const totalPanier = panier.reduce((s, l) => s + l.prixFinal * l.quantite, 0)
   const nbArticles = panier.reduce((s, l) => s + l.quantite, 0)
@@ -179,17 +235,21 @@ function CaisseActive({ session }) {
     <div className="flex flex-col h-full overflow-hidden bg-slate-50">
 
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-indigo-600 to-violet-700 pt-safe px-4 pb-4">
+      <div className={`flex-shrink-0 bg-gradient-to-r ${RAYON_COLORS[rayonActif].header} pt-safe px-4 pb-4 transition-colors duration-300`}>
         <div className="flex items-center justify-between mt-1">
           <div className="flex-1 min-w-0">
-            <p className="text-indigo-200 text-xs font-semibold uppercase tracking-widest">En vente</p>
-            <p className="text-white font-bold text-lg leading-tight truncate">{session.pdvNom}</p>
+            <p className="text-white/60 text-xs font-semibold uppercase tracking-widest">{session.pdvNom}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <button onClick={() => changerRayon(-1)} className="text-white/50 text-lg leading-none active:text-white transition-colors">‹</button>
+              <p className="text-white font-bold text-xl leading-tight">{RAYON_LABELS[rayonActif]}</p>
+              <button onClick={() => changerRayon(1)} className="text-white/50 text-lg leading-none active:text-white transition-colors">›</button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {nbArticles > 0 && (
               <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-3 py-2 text-right">
                 <p className="text-white font-bold text-lg leading-none">{eur(totalPanier)}</p>
-                <p className="text-indigo-200 text-xs">{nbArticles} art.</p>
+                <p className="text-white/60 text-xs">{nbArticles} art.</p>
               </div>
             )}
             <button
@@ -213,10 +273,10 @@ function CaisseActive({ session }) {
             categorieActive === '__tous__' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'
           }`}
         >
-          Tous <span className="ml-1 text-xs opacity-60">{produits.length}</span>
+          Tous <span className="ml-1 text-xs opacity-60">{produitsDuRayon.length}</span>
         </button>
-        {categories.map(cat => {
-          const nb = produits.filter(p => p.categorieId === cat.id).length
+        {categoriesDuRayon.map(cat => {
+          const nb = produitsDuRayon.filter(p => p.categorieId === cat.id).length
           if (nb === 0) return null
           const style = catStyleMap[cat.id]
           return (
@@ -233,7 +293,11 @@ function CaisseActive({ session }) {
       </div>
 
       {/* Grille produits */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div
+        className="flex-1 overflow-y-auto px-3 py-3"
+        onTouchStart={onSwipeTouchStart}
+        onTouchEnd={onSwipeTouchEnd}
+      >
         {produitsFiltres.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Aucun produit</div>
         ) : (
@@ -247,6 +311,7 @@ function CaisseActive({ session }) {
                   quantiteCart={ligneCart?.quantite || 0}
                   catStyle={catStyleMap[p.categorieId]}
                   onPress={() => ajouterAuPanier(p)}
+                  onImagePress={p.imageUrl ? () => setImageModal(getImageUrl(p.imageUrl)) : null}
                 />
               )
             })}
@@ -298,15 +363,34 @@ function CaisseActive({ session }) {
       )}
 
       {/* Sheet paramètres : serveur + couleurs catégories */}
+      {imageModal && (
+        <div
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
+          onClick={() => setImageModal(null)}
+        >
+          <img
+            src={imageModal}
+            alt=""
+            className="max-w-full max-h-full object-contain"
+          />
+          <button
+            onClick={() => setImageModal(null)}
+            className="absolute top-safe right-4 mt-4 text-white bg-black/40 rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold"
+          >×</button>
+        </div>
+      )}
+
       {showSettings && (
         <SettingsSheet
           categories={categories}
           catStyleMap={catStyleMap}
           catColors={catColors}
+          catRayons={catRayons}
           apiUrlInput={apiUrlInput}
           setApiUrlInput={setApiUrlInput}
           onSauvegarderApi={sauvegarderApi}
           onCouleur={setCouleurCategorie}
+          onRayon={setRayonCategorie}
           onClose={() => setShowSettings(false)}
           produits={produits}
         />
@@ -317,11 +401,11 @@ function CaisseActive({ session }) {
 
 // ─── Tuile produit ─────────────────────────────────────────────────────────────
 
-function ProduitTile({ produit, quantiteCart, catStyle, onPress }) {
+function ProduitTile({ produit, quantiteCart, catStyle, onPress, onImagePress }) {
   const prix = parseFloat(produit.prixVenteTTC) || 0
   const stockNul = produit.stock !== null && produit.stock === 0
   const stockFaible = produit.stock !== null && produit.stockAlerte != null && produit.stock > 0 && produit.stock <= produit.stockAlerte
-  const imgUrl = getImageUrl(produit.imageUrl)
+  const imgUrl = getThumbUrl(produit.imageUrl)
 
   return (
     <button
@@ -359,11 +443,14 @@ function ProduitTile({ produit, quantiteCart, catStyle, onPress }) {
 
         {/* Image à droite */}
         {imgUrl && (
-          <div className="flex-shrink-0 w-16 self-stretch">
+          <div
+            className="flex-shrink-0 w-16 self-stretch"
+            onClick={onImagePress ? e => { e.stopPropagation(); onImagePress() } : undefined}
+          >
             <img
               src={imgUrl}
               alt=""
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover ${onImagePress ? 'active:opacity-70' : ''}`}
             />
           </div>
         )}
@@ -374,8 +461,8 @@ function ProduitTile({ produit, quantiteCart, catStyle, onPress }) {
 
 // ─── Sheet paramètres ──────────────────────────────────────────────────────────
 
-function SettingsSheet({ categories, catStyleMap, catColors, apiUrlInput, setApiUrlInput, onSauvegarderApi, onCouleur, onClose, produits }) {
-  const [onglet, setOnglet] = useState('serveur') // 'serveur' | 'couleurs' | 'debug'
+function SettingsSheet({ categories, catStyleMap, catColors, catRayons, apiUrlInput, setApiUrlInput, onSauvegarderApi, onCouleur, onRayon, onClose, produits }) {
+  const [onglet, setOnglet] = useState('rayons') // 'rayons' | 'serveur' | 'couleurs' | 'debug'
 
   return (
     <>
@@ -387,13 +474,83 @@ function SettingsSheet({ categories, catStyleMap, catColors, apiUrlInput, setApi
           </div>
           {/* Onglets */}
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
-            <button onClick={() => setOnglet('serveur')} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${onglet === 'serveur' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>Serveur</button>
+            <button onClick={() => setOnglet('rayons')} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${onglet === 'rayons' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>Rayons</button>
             <button onClick={() => setOnglet('couleurs')} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${onglet === 'couleurs' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>Couleurs</button>
+            <button onClick={() => setOnglet('serveur')} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${onglet === 'serveur' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>Serveur</button>
             <button onClick={() => setOnglet('debug')} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${onglet === 'debug' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>Debug</button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 pb-safe">
+          {onglet === 'rayons' && (
+            <div className="py-2 space-y-1 pb-6">
+              <p className="text-xs text-gray-400 mb-4">Assignez chaque catégorie à un rayon. Sans assignation, la catégorie apparaît dans les deux rayons.</p>
+
+              {/* Librairie */}
+              <div className="mb-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Librairie</p>
+                </div>
+                {categories.filter(c => catRayons[String(c.id)] === 'librairie').length === 0
+                  ? <p className="text-xs text-gray-300 ml-4 mb-2">Aucune catégorie assignée</p>
+                  : categories.filter(c => catRayons[String(c.id)] === 'librairie').map(cat => (
+                    <div key={cat.id} className="flex items-center gap-3 py-2.5 border-b border-gray-50">
+                      <span className="flex-1 text-sm font-semibold text-gray-700 truncate">{cat.nom}</span>
+                      <button
+                        onClick={() => onRayon(cat.id, null)}
+                        className="text-xs text-gray-400 bg-gray-100 px-3 py-1.5 rounded-lg font-semibold active:bg-gray-200"
+                      >Retirer</button>
+                    </div>
+                  ))
+                }
+              </div>
+
+              {/* Goodies */}
+              <div className="mb-2">
+                <div className="flex items-center gap-2 mb-2 mt-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Goodies</p>
+                </div>
+                {categories.filter(c => catRayons[String(c.id)] === 'goodies').length === 0
+                  ? <p className="text-xs text-gray-300 ml-4 mb-2">Aucune catégorie assignée</p>
+                  : categories.filter(c => catRayons[String(c.id)] === 'goodies').map(cat => (
+                    <div key={cat.id} className="flex items-center gap-3 py-2.5 border-b border-gray-50">
+                      <span className="flex-1 text-sm font-semibold text-gray-700 truncate">{cat.nom}</span>
+                      <button
+                        onClick={() => onRayon(cat.id, null)}
+                        className="text-xs text-gray-400 bg-gray-100 px-3 py-1.5 rounded-lg font-semibold active:bg-gray-200"
+                      >Retirer</button>
+                    </div>
+                  ))
+                }
+              </div>
+
+              {/* Non assignées */}
+              {categories.filter(c => !catRayons[String(c.id)]).length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Non assignées</p>
+                  </div>
+                  {categories.filter(c => !catRayons[String(c.id)]).map(cat => (
+                    <div key={cat.id} className="flex items-center gap-2 py-2.5 border-b border-gray-50">
+                      <span className="flex-1 text-sm font-semibold text-gray-500 truncate">{cat.nom}</span>
+                      <button
+                        onClick={() => onRayon(cat.id, 'librairie')}
+                        className="text-xs text-white bg-indigo-600 px-3 py-1.5 rounded-lg font-semibold active:bg-indigo-700"
+                      >Librairie</button>
+                      <button
+                        onClick={() => onRayon(cat.id, 'goodies')}
+                        className="text-xs text-white bg-amber-500 px-3 py-1.5 rounded-lg font-semibold active:bg-amber-600"
+                      >Goodies</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {onglet === 'serveur' && (
             <div className="py-2">
               <h3 className="text-base font-bold text-gray-800 mb-1">Serveur EVA</h3>

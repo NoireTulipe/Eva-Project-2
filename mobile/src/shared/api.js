@@ -106,6 +106,14 @@ export function getImageUrl(imageUrl) {
   return getApiBase().replace(/\/api$/, '') + imageUrl
 }
 
+// Retourne l'URL du thumbnail (300px, jpeg, lazy-généré par le backend)
+export function getThumbUrl(imageUrl) {
+  if (!imageUrl) return null
+  const base = getApiBase().replace(/\/api$/, '')
+  const filename = imageUrl.split('/').pop().replace(/\.[^.]+$/, '.jpg')
+  return `${base}/uploads/thumb/${filename}`
+}
+
 async function requestMultipart(method, path, formData) {
   const token = getToken()
   const headers = {}

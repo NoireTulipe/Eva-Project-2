@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApi } from '../../../shared/hooks/useApi.js'
-import { produits, auteurs } from '../../../shared/api.js'
+import { produits, auteurs, getThumbUrl } from '../../../shared/api.js'
 import Spinner from '../../../components/web/Spinner.jsx'
 import ErrorMessage from '../../../components/web/ErrorMessage.jsx'
 import SelectRef from '../../../components/web/SelectRef.jsx'
@@ -178,6 +178,7 @@ function GestionProduits() {
   const [saving, setSaving] = useState(false)
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  const [imageModal, setImageModal] = useState(null)
 
   function ouvrirNouveauForm() {
     setForm({ nom: '', categorieId: '', prixVenteTTC: '', tva: '5.5', cout: '', droitAuteur: false, droitAuteurPourcent: '', stock: '', stockAlerte: '' })
@@ -382,7 +383,12 @@ function GestionProduits() {
               <tr key={p.id} className={`border-b border-gray-100 ${p.stock <= p.stockAlerte ? 'bg-yellow-50' : ''}`}>
                 <td className="px-2 py-2">
                   {p.imageUrl
-                    ? <img src={p.imageUrl} alt="" className="w-8 h-10 object-cover rounded border border-gray-100" />
+                    ? <img
+                        src={getThumbUrl(p.imageUrl)}
+                        alt=""
+                        className="w-8 h-10 object-cover rounded border border-gray-100 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => setImageModal(p.imageUrl)}
+                      />
                     : <div className="w-8 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-300 text-xs">—</div>
                   }
                 </td>
@@ -405,6 +411,24 @@ function GestionProduits() {
           </tbody>
         </table>
       </div>
+
+      {imageModal && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 cursor-zoom-out"
+          onClick={() => setImageModal(null)}
+        >
+          <img
+            src={imageModal}
+            alt=""
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setImageModal(null)}
+            className="absolute top-4 right-4 text-white bg-black/40 hover:bg-black/60 rounded-full w-9 h-9 flex items-center justify-center text-lg font-bold transition-colors"
+          >×</button>
+        </div>
+      )}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { resolve, extname, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { mkdirSync, unlinkSync, existsSync } from 'fs'
 import { authMiddleware } from '../middleware/auth.js'
+import { generateThumb, deleteThumb } from '../modules/ventes/thumb.js'
 import {
   getProduits,
   getProduitById,
@@ -136,12 +137,16 @@ router.post('/produits/:id/image', upload.single('image'), async (req, res) => {
     const id = Number(req.params.id)
     const produit = await getProduitById(id)
     if (!produit) return res.status(404).json({ error: 'Produit introuvable' })
-    // Supprimer l'ancienne image si elle existe
+    // Supprimer l'ancienne image + thumb si elle existe
     if (produit.imageUrl) {
+      const oldFilename = produit.imageUrl.split('/').pop()
       const oldPath = resolve(__dirname, '../', produit.imageUrl.replace(/^\//, ''))
       if (existsSync(oldPath)) unlinkSync(oldPath)
+      deleteThumb(oldFilename)
     }
     const imageUrl = `/uploads/produits/${req.file.filename}`
+    // Générer le thumb en arrière-plan (sans bloquer la réponse)
+    generateThumb(req.file.filename).catch(() => {})
     const updated = await updateImageProduit(id, imageUrl)
     res.json(updated)
   } catch (err) {
@@ -156,8 +161,10 @@ router.delete('/produits/:id/image', async (req, res) => {
     const produit = await getProduitById(id)
     if (!produit) return res.status(404).json({ error: 'Produit introuvable' })
     if (produit.imageUrl) {
+      const oldFilename = produit.imageUrl.split('/').pop()
       const filePath = resolve(__dirname, '../', produit.imageUrl.replace(/^\//, ''))
       if (existsSync(filePath)) unlinkSync(filePath)
+      deleteThumb(oldFilename)
     }
     const updated = await updateImageProduit(id, null)
     res.json(updated)

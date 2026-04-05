@@ -4,6 +4,7 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
 import { logError, logAction } from './logs/logger.js'
+import { thumbMiddleware } from './modules/ventes/thumb.js'
 import { loggerMiddleware } from './middleware/logger.js'
 import authRoutes from './routes/auth.routes.js'
 import ventesRoutes from './routes/ventes.routes.js'
@@ -41,8 +42,14 @@ app.use((req, res, next) => {
 app.use(express.json())
 app.use(loggerMiddleware)
 
-// Servir les uploads produits (images) — sans auth, accessible depuis l'APK
-app.use('/uploads', express.static(resolve(__dirname, 'uploads')))
+// Thumbnails — lazy-resize via sharp, cachés 30 jours
+app.get('/uploads/thumb/:filename', thumbMiddleware)
+
+// Servir les uploads produits (images) — sans auth, cachés 30 jours
+app.use('/uploads', express.static(resolve(__dirname, 'uploads'), {
+  maxAge: '30d',
+  immutable: true,
+}))
 
 // Servir le frontend buildé (production)
 if (existsSync(FRONTEND_DIST)) {
