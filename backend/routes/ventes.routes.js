@@ -39,6 +39,7 @@ import {
   creerDepot,
   retourDepot,
   getRecapCompta,
+  getDroitsAuteur,
 } from '../modules/ventes/ventes.service.js'
 import { logError } from '../logs/logger.js'
 
@@ -456,6 +457,15 @@ router.post('/depots/:id/retour', async (req, res) => {
 router.get('/compta', async (req, res) => {
   try {
     res.json(await getRecapCompta({ debut: req.query.debut, fin: req.query.fin }))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/droits-auteur', async (req, res) => {
+  try {
+    res.json(await getDroitsAuteur({ debut: req.query.debut, fin: req.query.fin }))
   } catch (err) {
     logError(err.message)
     res.status(500).json({ error: err.message })

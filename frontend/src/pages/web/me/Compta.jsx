@@ -40,6 +40,7 @@ function OngletBilan({ debut, fin }) {
     () => compta.getRecap({ debut: debut || undefined, fin: fin || undefined }),
     [debut, fin]
   )
+  const [coutExpanded, setCoutExpanded] = useState(false)
 
   if (loading) return <Spinner />
   if (error) return <ErrorMessage message={error} />
@@ -47,29 +48,127 @@ function OngletBilan({ debut, fin }) {
 
   const { recap } = data
 
-  const lignesBilan = [
-    { label: 'Chiffre d\'affaires', value: recap.totalCA, couleur: 'text-green-700', bg: 'bg-green-50 border-green-100' },
-    { label: 'Commissions PDV', value: recap.totalCommissionPDV, couleur: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-    { label: 'Droits auteur', value: recap.totalDroitsAuteur, couleur: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-    { label: 'Frais', value: recap.totalFrais, couleur: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-    { label: 'Pertes', value: recap.totalPertes, couleur: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-    { label: 'Résultat net', value: recap.beneficeNet, couleur: recap.beneficeNet >= 0 ? 'text-blue-700' : 'text-red-700', bg: 'bg-blue-50 border-blue-200', highlight: true },
-  ]
+  // Calcul du coût de réapprovisionnement par produit
+  const coutParProduit = {}
+  for (const session of data.sessions ?? []) {
+    for (const vente of session.ventes ?? []) {
+      if (vente.annulee) continue
+      for (const ligne of vente.lignes ?? []) {
+        const p = ligne.produit
+        if (!p || !p.cout) continue
+        if (!coutParProduit[p.id]) {
+          coutParProduit[p.id] = { nom: p.nom, quantite: 0, cout: p.cout, total: 0 }
+        }
+        coutParProduit[p.id].quantite += ligne.quantite
+        coutParProduit[p.id].total += ligne.quantite * p.cout
+      }
+    }
+  }
+  const lignesCout = Object.values(coutParProduit).sort((a, b) => b.total - a.total)
+  const totalCout = lignesCout.reduce((a, l) => a + l.total, 0)
+
+  const totalCharges = recap.totalCommissionPDV + recap.totalDroitsAuteur + recap.totalFrais + recap.totalPertes + totalCout
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {lignesBilan.map(({ label, value, couleur, bg, highlight }) => (
-          <div key={label} className={`rounded-lg border p-4 ${bg} ${highlight ? 'md:col-span-1' : ''}`}>
-            <p className="text-xs text-gray-500 mb-1">{label}</p>
-            <p className={`text-lg font-bold ${couleur}`}>{EUR(value)}</p>
-          </div>
-        ))}
-      </div>
 
-      <div className="bg-white rounded-lg shadow p-5">
-        <p className="text-sm text-gray-500 mb-1">Sessions clôturées sur la période</p>
-        <p className="text-2xl font-bold text-gray-800">{recap.nbSessions}</p>
+      {/* Tableau récapitulatif comptable */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="font-semibold text-gray-700">Récapitulatif financier</h3>
+          <span className="text-xs text-gray-400">{recap.nbSessions} session(s) clôturée(s)</span>
+        </div>
+        <table className="w-full text-sm">
+          <tbody>
+            {/* CA */}
+            <tr className="border-b border-gray-100 bg-green-50">
+              <td className="px-5 py-3 font-semibold text-gray-800">Chiffre d'affaires</td>
+              <td className="px-5 py-3 text-right font-bold text-green-700 text-base">{EUR(recap.totalCA)}</td>
+            </tr>
+
+            {/* Séparateur charges */}
+            <tr className="bg-gray-100">
+              <td colSpan={2} className="px-5 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Charges</td>
+            </tr>
+
+            {/* Coût de réappro */}
+            <tr className="border-b border-gray-100">
+              <td className="px-5 py-3">
+                <button
+                  onClick={() => setCoutExpanded(v => !v)}
+                  className="flex items-center gap-2 text-gray-700 hover:text-blue-600 transition-colors"
+                >
+                  <span className="font-medium">Coût de réapprovisionnement</span>
+                  {lignesCout.length > 0 && (
+                    <span className="text-xs text-gray-400">{coutExpanded ? '▲ masquer' : '▼ détail'}</span>
+                  )}
+                  {lignesCout.length === 0 && (
+                    <span className="text-xs text-gray-400 italic">(aucun coût renseigné)</span>
+                  )}
+                </button>
+                {coutExpanded && lignesCout.length > 0 && (
+                  <div className="mt-2 ml-3 space-y-1">
+                    {lignesCout.map(l => (
+                      <div key={l.nom} className="flex justify-between text-xs text-gray-500 border-l-2 border-gray-200 pl-3">
+                        <span>{l.quantite} × {l.nom} à {EUR(l.cout)}</span>
+                        <span className="font-medium text-red-500 ml-8">{EUR(l.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </td>
+              <td className="px-5 py-3 text-right font-medium text-red-600">
+                {totalCout > 0 ? EUR(totalCout) : '—'}
+              </td>
+            </tr>
+
+            {/* Droits auteur */}
+            <tr className="border-b border-gray-100">
+              <td className="px-5 py-3 text-gray-700">Droits d'auteur</td>
+              <td className="px-5 py-3 text-right font-medium text-red-600">
+                {recap.totalDroitsAuteur > 0 ? EUR(recap.totalDroitsAuteur) : '—'}
+              </td>
+            </tr>
+
+            {/* Commissions PDV */}
+            <tr className="border-b border-gray-100">
+              <td className="px-5 py-3 text-gray-700">Commissions lieu de vente</td>
+              <td className="px-5 py-3 text-right font-medium text-red-600">
+                {recap.totalCommissionPDV > 0 ? EUR(recap.totalCommissionPDV) : '—'}
+              </td>
+            </tr>
+
+            {/* Frais */}
+            <tr className="border-b border-gray-100">
+              <td className="px-5 py-3 text-gray-700">Frais (déplacements, matériel…)</td>
+              <td className="px-5 py-3 text-right font-medium text-red-600">
+                {recap.totalFrais > 0 ? EUR(recap.totalFrais) : '—'}
+              </td>
+            </tr>
+
+            {/* Pertes */}
+            <tr className="border-b border-gray-200">
+              <td className="px-5 py-3 text-gray-700">Pertes</td>
+              <td className="px-5 py-3 text-right font-medium text-red-600">
+                {recap.totalPertes > 0 ? EUR(recap.totalPertes) : '—'}
+              </td>
+            </tr>
+
+            {/* Total charges */}
+            <tr className="border-b-2 border-gray-300 bg-red-50">
+              <td className="px-5 py-3 font-semibold text-gray-700">Total des charges</td>
+              <td className="px-5 py-3 text-right font-bold text-red-600">{EUR(totalCharges)}</td>
+            </tr>
+
+            {/* Résultat net */}
+            <tr className={recap.beneficeNet >= 0 ? 'bg-blue-50' : 'bg-red-50'}>
+              <td className="px-5 py-4 font-bold text-gray-800 text-base">Résultat net</td>
+              <td className={`px-5 py-4 text-right font-bold text-lg ${recap.beneficeNet >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                {EUR(recap.beneficeNet)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* Tableau récap sessions */}
@@ -400,9 +499,116 @@ function OngletPertes({ debut, fin }) {
   )
 }
 
+// ─── Onglet Droits d'auteur ───────────────────────────────────────────────────
+
+function OngletDroitsAuteur({ debut, fin }) {
+  const { data, loading, error } = useApi(
+    () => compta.getDroitsAuteur({ debut: debut || undefined, fin: fin || undefined }),
+    [debut, fin]
+  )
+  const [expanded, setExpanded] = useState(null)
+
+  if (loading) return <Spinner />
+  if (error) return <ErrorMessage message={error} />
+
+  const totalGlobal = data?.reduce((a, e) => a + e.totalDroits, 0) ?? 0
+
+  return (
+    <div className="space-y-4">
+      {/* Bandeau total */}
+      <div className="bg-white rounded-lg shadow px-5 py-4 flex justify-between items-center">
+        <div>
+          <p className="text-xs text-gray-500 mb-0.5">Total à reverser sur la période</p>
+          <p className={`text-2xl font-bold ${totalGlobal > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+            {EUR(totalGlobal)}
+          </p>
+        </div>
+        <span className="text-sm text-gray-400">{data?.length ?? 0} auteur(s) concerné(s)</span>
+      </div>
+
+      {data?.length === 0 && (
+        <p className="text-sm text-gray-400 px-1">
+          Aucun droit d'auteur à reverser sur cette période.<br />
+          <span className="text-xs">Vérifiez que les produits ont un coût d'auteur configuré (% droits auteur dans le catalogue).</span>
+        </p>
+      )}
+
+      {/* Un bloc dépliable par auteur */}
+      <div className="space-y-2">
+        {data?.map(({ auteur, totalDroits, produits }) => {
+          const isOpen = expanded === auteur.id
+          const nomComplet = auteur.prenom ? `${auteur.prenom} ${auteur.nom}` : auteur.nom
+
+          return (
+            <div key={auteur.id} className="bg-white rounded-lg shadow overflow-hidden">
+              {/* En-tête auteur */}
+              <button
+                onClick={() => setExpanded(isOpen ? null : auteur.id)}
+                className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                    {auteur.nom.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800">{nomComplet}</p>
+                    {auteur.email && <p className="text-xs text-gray-400">{auteur.email}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400 mb-0.5">{produits.length} titre(s)</p>
+                    <p className="font-bold text-red-600 text-base">{EUR(totalDroits)}</p>
+                  </div>
+                  <span className="text-gray-400 text-sm">{isOpen ? '▲' : '▼'}</span>
+                </div>
+              </button>
+
+              {/* Détail des livres */}
+              {isOpen && (
+                <div className="border-t border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-5 py-2.5 text-left font-medium text-gray-500">Titre</th>
+                        <th className="px-5 py-2.5 text-right font-medium text-gray-500">Taux</th>
+                        <th className="px-5 py-2.5 text-right font-medium text-gray-500">Qté vendue</th>
+                        <th className="px-5 py-2.5 text-right font-medium text-gray-500">CA généré</th>
+                        <th className="px-5 py-2.5 text-right font-medium text-gray-500">Droits à reverser</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {produits.map(({ produit, quantite, ca, droits }) => (
+                        <tr key={produit.id} className="border-t border-gray-100">
+                          <td className="px-5 py-3 font-medium text-gray-800">{produit.nom}</td>
+                          <td className="px-5 py-3 text-right text-gray-500">{produit.droitAuteurPourcent} %</td>
+                          <td className="px-5 py-3 text-right text-gray-600">{quantite}</td>
+                          <td className="px-5 py-3 text-right text-gray-600">{EUR(ca)}</td>
+                          <td className="px-5 py-3 text-right font-semibold text-red-600">{EUR(droits)}</td>
+                        </tr>
+                      ))}
+                      {/* Sous-total auteur */}
+                      <tr className="border-t-2 border-gray-200 bg-indigo-50">
+                        <td colSpan={4} className="px-5 py-2.5 font-semibold text-gray-700 text-right">
+                          Total {nomComplet}
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-bold text-red-600">{EUR(totalDroits)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page principale ───────────────────────────────────────────────────────────
 
-const ONGLETS = ['Bilan', 'Frais', 'Pertes']
+const ONGLETS = ['Bilan', 'Frais', 'Pertes', "Droits d'auteur"]
 
 export default function Compta() {
   const [onglet, setOnglet] = useState(0)
@@ -437,6 +643,7 @@ export default function Compta() {
       {onglet === 0 && <OngletBilan debut={debut} fin={fin} />}
       {onglet === 1 && <OngletFrais debut={debut} fin={fin} />}
       {onglet === 2 && <OngletPertes debut={debut} fin={fin} />}
+      {onglet === 3 && <OngletDroitsAuteur debut={debut} fin={fin} />}
     </div>
   )
 }

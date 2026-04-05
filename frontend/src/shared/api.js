@@ -336,6 +336,13 @@ export const compta = {
     if (fin) params.set('fin', fin)
     const qs = params.toString()
     return request('GET', `/ventes/compta${qs ? `?${qs}` : ''}`)
+  },
+  getDroitsAuteur: ({ debut, fin } = {}) => {
+    const params = new URLSearchParams()
+    if (debut) params.set('debut', debut)
+    if (fin) params.set('fin', fin)
+    const qs = params.toString()
+    return request('GET', `/ventes/droits-auteur${qs ? `?${qs}` : ''}`)
   }
 }
 

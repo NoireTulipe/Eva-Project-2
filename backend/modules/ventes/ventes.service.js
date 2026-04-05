@@ -1,5 +1,5 @@
 import prisma from '../../config/db.js'
-import { calcRecapSession, calcRecapCompta } from './ventes.calculs.js'
+import { calcRecapSession, calcRecapCompta, round } from './ventes.calculs.js'
 
 // ─── PRODUITS ─────────────────────────────────────────────────────────────────
 
@@ -486,4 +486,76 @@ export async function getRecapCompta({ debut, fin } = {}) {
     fraisHorsSessions,
     pertes,
   }
+}
+
+export async function getDroitsAuteur({ debut, fin } = {}) {
+  const filtreDates = {}
+  if (debut || fin) {
+    filtreDates.debut = {}
+    if (debut) filtreDates.debut.gte = new Date(debut)
+    if (fin) filtreDates.debut.lte = new Date(fin)
+  }
+
+  const sessionsCloturees = await prisma.session.findMany({
+    where: { statut: 'cloturee', ...filtreDates },
+    include: {
+      ventes: {
+        include: {
+          lignes: {
+            include: {
+              produit: {
+                include: { auteurs: { include: { auteur: true } } },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  const parAuteur = {}
+
+  for (const session of sessionsCloturees) {
+    for (const vente of session.ventes) {
+      if (vente.annulee) continue
+      for (const ligne of vente.lignes) {
+        const produit = ligne.produit
+        if (!produit?.droitAuteur || !produit.droitAuteurPourcent || !produit.auteurs?.length) continue
+
+        const caLigne = ligne.prixUnitaire * ligne.quantite * (1 - (ligne.remise || 0) / 100)
+        const droitsLigne = caLigne * (produit.droitAuteurPourcent / 100)
+
+        for (const liaison of produit.auteurs) {
+          const auteur = liaison.auteur
+          if (!parAuteur[auteur.id]) {
+            parAuteur[auteur.id] = { auteur, produits: {} }
+          }
+          if (!parAuteur[auteur.id].produits[produit.id]) {
+            parAuteur[auteur.id].produits[produit.id] = {
+              produit: { id: produit.id, nom: produit.nom, droitAuteurPourcent: produit.droitAuteurPourcent },
+              quantite: 0,
+              ca: 0,
+              droits: 0,
+            }
+          }
+          parAuteur[auteur.id].produits[produit.id].quantite += ligne.quantite
+          parAuteur[auteur.id].produits[produit.id].ca += caLigne
+          parAuteur[auteur.id].produits[produit.id].droits += droitsLigne
+        }
+      }
+    }
+  }
+
+  return Object.values(parAuteur).map(({ auteur, produits }) => {
+    const lignesProduits = Object.values(produits).map(p => ({
+      ...p,
+      ca: round(p.ca),
+      droits: round(p.droits),
+    }))
+    return {
+      auteur,
+      totalDroits: round(lignesProduits.reduce((a, p) => a + p.droits, 0)),
+      produits: lignesProduits,
+    }
+  }).sort((a, b) => b.totalDroits - a.totalDroits)
 }
