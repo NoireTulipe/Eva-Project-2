@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { admin } from '../../../shared/api.js'
 
+function formatDate(d) {
+  return new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
 export default function Sauvegardes() {
   const [info, setInfo] = useState(null)
   const [status, setStatus] = useState(null)
@@ -10,19 +14,43 @@ export default function Sauvegardes() {
   const [lastBackup, setLastBackup] = useState(null)
   const [restarting, setRestarting] = useState(false)
   const [error, setError] = useState('')
+  const [liste, setListe] = useState(null)   // { fichiers, destDir }
+  const [restoring, setRestoring] = useState(null) // nom du fichier en cours
 
   useEffect(() => {
     Promise.all([
       admin.getSauvegardeInfo().catch(() => null),
       admin.getSystemeStatus().catch(() => null),
-      admin.getConfig().catch(() => [])
-    ]).then(([dbInfo, sys, config]) => {
+      admin.getConfig().catch(() => []),
+      admin.getSauvegardeListe().catch(() => null)
+    ]).then(([dbInfo, sys, config, lst]) => {
       setInfo(dbInfo)
       setStatus(sys)
       const param = config.find(p => p.cle === 'backup.path')
       if (param) { setBackupPath(param); setEditPath(param.valeur) }
+      if (lst) setListe(lst)
     })
   }, [])
+
+  async function rafraichirListe() {
+    const lst = await admin.getSauvegardeListe().catch(() => null)
+    if (lst) setListe(lst)
+  }
+
+  async function handleRestore(fichier) {
+    if (!confirm(`Restaurer la base depuis "${fichier}" ?\n\nUne sauvegarde de sécurité sera créée automatiquement avant la restauration.\nLe backend devra être redémarré pour prendre en compte les changements.`)) return
+    setRestoring(fichier)
+    setError('')
+    try {
+      const res = await admin.restoreSauvegarde(fichier)
+      alert(`Restauration effectuée.\nSauvegarde de sécurité : ${res.sauvegardeAvant}\n\nRedémarrez le backend pour appliquer les changements.`)
+      await rafraichirListe()
+    } catch (e) {
+      setError(e.message || 'Erreur lors de la restauration')
+    } finally {
+      setRestoring(null)
+    }
+  }
 
   async function handleSavePath() {
     if (!backupPath) return
@@ -43,6 +71,7 @@ export default function Sauvegardes() {
     try {
       const res = await admin.createSauvegarde()
       setLastBackup(res)
+      await rafraichirListe()
     } catch (e) {
       setError(e.message || 'Erreur lors de la sauvegarde')
     } finally {
@@ -141,6 +170,43 @@ export default function Sauvegardes() {
             <div>✓ Fichier : <code className="font-mono">{lastBackup.fichier}</code></div>
             <div className="text-xs text-green-600 mt-0.5">{lastBackup.chemin}</div>
           </div>
+        )}
+      </div>
+
+      {/* Liste des sauvegardes */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-gray-700">Sauvegardes disponibles</h2>
+          <button onClick={rafraichirListe} className="text-xs text-indigo-600 hover:underline">Rafraîchir</button>
+        </div>
+
+        {liste === null && <p className="text-sm text-gray-400">Chargement…</p>}
+
+        {liste !== null && liste.fichiers.length === 0 && (
+          <p className="text-sm text-gray-400">Aucune sauvegarde trouvée dans <code className="bg-gray-100 px-1 rounded">{liste.destDir}</code></p>
+        )}
+
+        {liste?.fichiers.length > 0 && (
+          <>
+            <p className="text-xs text-gray-400 mb-3">Dossier : <code className="bg-gray-100 px-1 rounded">{liste.destDir}</code></p>
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {liste.fichiers.map(f => (
+                <div key={f.nom} className="flex items-center justify-between gap-3 px-3 py-2.5 bg-gray-50 rounded-lg">
+                  <div className="min-w-0">
+                    <p className="text-sm font-mono font-medium text-gray-800 truncate">{f.nom}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{formatDate(f.date)} · {f.tailleMo} Mo</p>
+                  </div>
+                  <button
+                    onClick={() => handleRestore(f.nom)}
+                    disabled={!!restoring}
+                    className="flex-shrink-0 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 disabled:opacity-40 transition-colors"
+                  >
+                    {restoring === f.nom ? 'Restauration…' : 'Restaurer'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

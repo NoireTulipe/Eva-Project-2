@@ -28,19 +28,13 @@ export async function processConversation(message, context) {
 
   const memoireContext = await buildMemoireContext(message, context.userId)
 
-  const historyText = context.history?.length
-    ? '\nHISTORIQUE :\n' + context.history.slice(-6).map(m =>
-        `${m.role === 'user' ? context.userName : 'EVA'}: ${m.content}`
-      ).join('\n')
-    : ''
+  const conversationMessages = buildMessages(
+    systemPrompt,
+    context.history,
+    `${memoireContext ? memoireContext.trim() + '\n\n' : ''}${context.userName} : ${message}`
+  )
 
-  const prompt = `${systemPrompt}${memoireContext}${historyText}
-
-${context.userName} : ${message}`
-
-  const response = await callAI(config.proProvider, config.proModel, [
-    { role: 'user', content: prompt }
-  ])
+  const response = await callAI(config.proProvider, config.proModel, conversationMessages)
 
   logAction(`EVA: réponse générée via ${config.proProvider}/${config.proModel} (${response.length} chars)`)
   pushToBuffer(message, response, context).catch(err => logError(`pushToBuffer: ${err.message}`))
@@ -82,23 +76,15 @@ export async function processMessage(message, context, options = {}) {
     MODELE_LLM: `${config.proProvider} / ${config.proModel}`
   })
 
-  // 4. Construire le message utilisateur (mémoire + historique + message)
-  const historyText = context.history?.length
-    ? '\nHISTORIQUE RÉCENT :\n' + context.history
-        .slice(-8)
-        .map(m => `${m.role === 'user' ? context.userName : 'EVA'}: ${m.content}`)
-        .join('\n')
-    : ''
-
-  const userPrompt = `${dateHeure}${memoireContext}${historyText}
-
-Message de ${context.userName} : ${message}`
+  // 4. Construire le tableau de messages (system + historique structuré + message actuel)
+  const orchestratorMessages = buildMessages(
+    orchestratorPrompt,
+    context.history,
+    `${dateHeure}${memoireContext}\n\nMessage de ${context.userName} : ${message}`
+  )
 
   // 5. Appel orchestrateur (Flash)
-  const rawResponse = await callAI(config.provider, config.flashModel, [
-    { role: 'system', content: orchestratorPrompt },
-    { role: 'user', content: userPrompt }
-  ])
+  const rawResponse = await callAI(config.provider, config.flashModel, orchestratorMessages)
 
   // 6. Parser le plan JSON
   let plan
@@ -135,18 +121,17 @@ Message de ${context.userName} : ${message}`
   const toolResults = results.map(r => r.value || r.reason)
 
   // 9. Appel rédacteur (Pro) pour synthèse finale
-  const writerPrompt = `${redacteurPrompt}${historyText}
-
-${context.userName} a demandé : "${message}"
+  // La synthèse est un appel one-shot : le système + le contexte outils suffisent.
+  // L'historique récent est inclus pour que la réponse soit cohérente avec le fil.
+  const writerUserPrompt = `${context.userName} a demandé : "${message}"
 
 Résultats des outils exécutés :
 ${toolResults.map((r, i) => `${i + 1}. [${r.tool}] ${JSON.stringify(r.result, null, 2)}`).join('\n\n')}
 
 Rédige une réponse naturelle et concise basée sur ces résultats.`
 
-  const finalResponse = await callAI(config.proProvider, config.proModel, [
-    { role: 'user', content: writerPrompt }
-  ])
+  const writerMessages = buildMessages(redacteurPrompt, context.history, writerUserPrompt)
+  const finalResponse = await callAI(config.proProvider, config.proModel, writerMessages)
 
   pushToBuffer(message, finalResponse, context).catch(err =>
     logError(`pushToBuffer: ${err.message}`)
@@ -157,6 +142,28 @@ Rédige une réponse naturelle et concise basée sur ces résultats.`
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Construit le tableau de messages pour callAI :
+ * system + historique structuré (alternance user/assistant) + message actuel.
+ * Garantit que l'historique commence par un message user (requis par Gemini).
+ */
+function buildMessages(systemPrompt, history, currentUserContent) {
+  const messages = [{ role: 'system', content: systemPrompt }]
+
+  if (history?.length) {
+    // S'assurer que l'historique commence par 'user' (alternance stricte Gemini)
+    let recent = history.slice(-10)
+    if (recent[0]?.role !== 'user') recent = recent.slice(1)
+
+    for (const m of recent) {
+      messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })
+    }
+  }
+
+  messages.push({ role: 'user', content: currentUserContent })
+  return messages
+}
 
 async function getLLMConfig() {
   const params = await prisma.configParam.findMany({

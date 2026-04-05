@@ -273,6 +273,8 @@ export const admin = {
   // Sauvegardes
   getSauvegardeInfo: () => request('GET', '/admin/sauvegardes/info'),
   createSauvegarde: () => request('POST', '/admin/sauvegardes/backup'),
+  getSauvegardeListe: () => request('GET', '/admin/sauvegardes/liste'),
+  restoreSauvegarde: (fichier) => request('POST', `/admin/sauvegardes/restore/${encodeURIComponent(fichier)}`),
 
   // Système
   getSystemeStatus: () => request('GET', '/admin/systeme/status'),

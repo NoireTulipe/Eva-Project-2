@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx prisma:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(node --input-type=module:*)"
     ]
   }
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { produits as produitsApi, ref as refApi, ventes as ventesApi, getImageUrl, getThumbUrl } from '../shared/api.js'
+import { produits as produitsApi, ref as refApi, ventes as ventesApi, getThumbUrl } from '../shared/api.js'
 import { getApiUrl, setApiUrl, getApiBase } from '../shared/api.js'
 import { useSession } from '../shared/SessionContext.jsx'
 import { useToast } from '../shared/toast.jsx'
@@ -95,7 +95,6 @@ function CaisseActive({ session }) {
   const [catColors, setCatColors] = useState(loadCatColors)
   const [catRayons, setCatRayons] = useState(loadCatRayons)
   const [rayonActif, setRayonActif] = useState('librairie')
-  const [imageModal, setImageModal] = useState(null)
   const touchStartX = useRef(null)
 
   const chargerProduits = useCallback(() => {
@@ -311,7 +310,6 @@ function CaisseActive({ session }) {
                   quantiteCart={ligneCart?.quantite || 0}
                   catStyle={catStyleMap[p.categorieId]}
                   onPress={() => ajouterAuPanier(p)}
-                  onImagePress={p.imageUrl ? () => setImageModal(getImageUrl(p.imageUrl)) : null}
                 />
               )
             })}
@@ -363,23 +361,6 @@ function CaisseActive({ session }) {
       )}
 
       {/* Sheet paramètres : serveur + couleurs catégories */}
-      {imageModal && (
-        <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
-          onClick={() => setImageModal(null)}
-        >
-          <img
-            src={imageModal}
-            alt=""
-            className="max-w-full max-h-full object-contain"
-          />
-          <button
-            onClick={() => setImageModal(null)}
-            className="absolute top-safe right-4 mt-4 text-white bg-black/40 rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold"
-          >×</button>
-        </div>
-      )}
-
       {showSettings && (
         <SettingsSheet
           categories={categories}
@@ -401,7 +382,7 @@ function CaisseActive({ session }) {
 
 // ─── Tuile produit ─────────────────────────────────────────────────────────────
 
-function ProduitTile({ produit, quantiteCart, catStyle, onPress, onImagePress }) {
+function ProduitTile({ produit, quantiteCart, catStyle, onPress }) {
   const prix = parseFloat(produit.prixVenteTTC) || 0
   const stockNul = produit.stock !== null && produit.stock === 0
   const stockFaible = produit.stock !== null && produit.stockAlerte != null && produit.stock > 0 && produit.stock <= produit.stockAlerte
@@ -443,15 +424,8 @@ function ProduitTile({ produit, quantiteCart, catStyle, onPress, onImagePress })
 
         {/* Image à droite */}
         {imgUrl && (
-          <div
-            className="flex-shrink-0 w-16 self-stretch"
-            onClick={onImagePress ? e => { e.stopPropagation(); onImagePress() } : undefined}
-          >
-            <img
-              src={imgUrl}
-              alt=""
-              className={`w-full h-full object-cover ${onImagePress ? 'active:opacity-70' : ''}`}
-            />
+          <div className="flex-shrink-0 w-16 self-stretch">
+            <img src={imgUrl} alt="" className="w-full h-full object-cover" />
           </div>
         )}
       </div>

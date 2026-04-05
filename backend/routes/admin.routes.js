@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { readFileSync, writeFileSync, existsSync, copyFileSync, statSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, copyFileSync, statSync, mkdirSync, readdirSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import bcrypt from 'bcrypt'
@@ -338,6 +338,49 @@ router.post('/sauvegardes/backup', async (req, res) => {
   copyFileSync(dbPath, backupPath)
   logAction(`Admin: sauvegarde créée — ${backupPath}`)
   res.json({ ok: true, fichier, chemin: backupPath })
+})
+
+// GET /admin/sauvegardes/liste — liste les fichiers de sauvegarde
+router.get('/sauvegardes/liste', async (req, res) => {
+  const pathParam = await prisma.configParam.findUnique({ where: { cle: 'backup.path' } })
+  const destDir = resolve(__dirname, '..', pathParam?.valeur || './prisma/')
+
+  if (!existsSync(destDir)) return res.json({ fichiers: [], destDir })
+
+  const fichiers = readdirSync(destDir)
+    .filter(f => f.endsWith('.db'))
+    .map(f => {
+      const stats = statSync(resolve(destDir, f))
+      return { nom: f, taille: stats.size, tailleMo: (stats.size / 1024 / 1024).toFixed(2), date: stats.mtime }
+    })
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+
+  res.json({ fichiers, destDir })
+})
+
+// POST /admin/sauvegardes/restore/:fichier — restaure depuis un backup
+router.post('/sauvegardes/restore/:fichier', async (req, res) => {
+  const { fichier } = req.params
+
+  if (fichier.includes('/') || fichier.includes('..') || !fichier.endsWith('.db')) {
+    return res.status(400).json({ error: 'Nom de fichier invalide' })
+  }
+
+  const pathParam = await prisma.configParam.findUnique({ where: { cle: 'backup.path' } })
+  const destDir = resolve(__dirname, '..', pathParam?.valeur || './prisma/')
+  const backupPath = resolve(destDir, fichier)
+  const dbPath = resolve(__dirname, '../prisma/dev.db')
+
+  if (!existsSync(backupPath)) return res.status(404).json({ error: 'Fichier backup introuvable' })
+
+  // Sauvegarde de sécurité automatique avant restauration
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const safetyName = `avant-restore-${ts}.db`
+  copyFileSync(dbPath, resolve(destDir, safetyName))
+
+  copyFileSync(backupPath, dbPath)
+  logAction(`Admin: restauration depuis ${fichier} (sauvegarde avant: ${safetyName})`)
+  res.json({ ok: true, fichier, sauvegardeAvant: safetyName })
 })
 
 // ─── SYSTÈME ──────────────────────────────────────────────────────────────────

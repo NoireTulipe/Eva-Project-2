@@ -23,6 +23,7 @@ export default function Stock() {
   const [produitEdite, setProduitEdite] = useState(null)
   const [produitImage, setProduitImage] = useState(null)
   const [showAjouter, setShowAjouter] = useState(false)
+  const [alertSheet, setAlertSheet] = useState(null) // 'ruptures' | 'alertes' | null
 
   useEffect(() => {
     charger()
@@ -63,16 +64,22 @@ export default function Stock() {
         {(ruptures.length > 0 || alertes.length > 0) && (
           <div className="flex gap-2">
             {ruptures.length > 0 && (
-              <div className="flex-1 bg-red-500/20 border border-red-400/30 rounded-2xl px-3 py-2.5 text-center">
+              <button
+                onClick={() => setAlertSheet('ruptures')}
+                className="flex-1 bg-red-500/20 border border-red-400/30 rounded-2xl px-3 py-2.5 text-center active:bg-red-500/30 transition-colors"
+              >
                 <p className="text-white font-extrabold text-xl leading-none">{ruptures.length}</p>
                 <p className="text-red-200 text-xs mt-0.5">Rupture{ruptures.length > 1 ? 's' : ''}</p>
-              </div>
+              </button>
             )}
             {alertes.length > 0 && (
-              <div className="flex-1 bg-amber-500/20 border border-amber-400/30 rounded-2xl px-3 py-2.5 text-center">
+              <button
+                onClick={() => setAlertSheet('alertes')}
+                className="flex-1 bg-amber-500/20 border border-amber-400/30 rounded-2xl px-3 py-2.5 text-center active:bg-amber-500/30 transition-colors"
+              >
                 <p className="text-white font-extrabold text-xl leading-none">{alertes.length}</p>
                 <p className="text-amber-200 text-xs mt-0.5">Alerte{alertes.length > 1 ? 's' : ''}</p>
-              </div>
+              </button>
             )}
           </div>
         )}
@@ -146,6 +153,16 @@ export default function Stock() {
             setProduitImage(prev => ({ ...prev, imageUrl: updated.imageUrl }))
           }}
           onClose={() => setProduitImage(null)}
+        />
+      )}
+
+      {alertSheet && (
+        <AlertSheet
+          type={alertSheet}
+          produits={alertSheet === 'ruptures' ? ruptures : alertes}
+          categories={categories}
+          onEdit={p => { setAlertSheet(null); setProduitEdite(p) }}
+          onClose={() => setAlertSheet(null)}
         />
       )}
 
@@ -368,6 +385,59 @@ function ImageProduitSheet({ produit, onUpdate, onClose }) {
             {deleting ? 'Suppression…' : 'Supprimer l\'image'}
           </button>
         )}
+      </div>
+    </>
+  )
+}
+
+function AlertSheet({ type, produits, categories, onEdit, onClose }) {
+  const isRupture = type === 'ruptures'
+  const titre = isRupture ? 'Ruptures de stock' : 'Alertes stock'
+  const couleurBadge = isRupture ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
+  const couleurBarre = isRupture ? 'bg-red-400' : 'bg-amber-400'
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-30" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-40 shadow-2xl flex flex-col max-h-[70vh]">
+        <div className="flex-shrink-0 px-6 pt-5 pb-3">
+          <div className="flex justify-center mb-3">
+            <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+          </div>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-800">{titre}</h3>
+            <span className={`text-sm font-bold px-3 py-1 rounded-full ${couleurBadge}`}>{produits.length}</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Appuyez sur un produit pour mettre à jour son stock.</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-safe space-y-2 py-2">
+          {produits.map(p => {
+            const cat = categories.find(c => c.id === p.categorieId)
+            return (
+              <button
+                key={p.id}
+                onClick={() => onEdit(p)}
+                className="w-full bg-gray-50 rounded-2xl flex items-center gap-3 px-4 py-3.5 active:bg-gray-100 transition-colors text-left"
+              >
+                <div className={`w-1.5 self-stretch rounded-full flex-shrink-0 ${couleurBarre}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-800 text-sm truncate">{p.nom}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{cat?.nom || '—'} · {eur(p.prixVenteTTC)}</p>
+                </div>
+                <div className={`flex-shrink-0 rounded-xl px-3 py-1.5 text-center ${couleurBadge}`}>
+                  {isRupture
+                    ? <p className="text-xs font-bold">Rupture</p>
+                    : <><p className="font-extrabold text-base leading-none">{p.stock}</p><p className="text-xs mt-0.5">ex.</p></>
+                  }
+                </div>
+                <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )
+          })}
+        </div>
       </div>
     </>
   )
