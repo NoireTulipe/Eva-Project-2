@@ -3,6 +3,7 @@ import prisma from '../config/db.js'
 import { logAction, logError } from '../logs/logger.js'
 import { consolidateAll } from '../modules/memoire/consolidation.js'
 import { scannerTousLesMails } from './mail.cron.js'
+import { backupDatabase } from './backup.cron.js'
 
 // Registre des tâches actives { nom → task }
 const activeTasks = new Map()
@@ -10,7 +11,8 @@ const activeTasks = new Map()
 // Catalogue des handlers disponibles
 const HANDLERS = {
   'memoire.consolidation': consolidateAll,
-  'mail.scan': scannerTousLesMails
+  'mail.scan': scannerTousLesMails,
+  'db.backup': backupDatabase,
 }
 
 /**

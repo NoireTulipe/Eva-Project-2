@@ -94,6 +94,7 @@ async function main() {
     { cle: 'llm.pro_provider', valeur: 'gemini',           description: 'Provider du rédacteur (gemini | mistral)' },
     { cle: 'discord.enabled',  valeur: 'false',            description: 'Activer le bot Discord (true | false)' },
     { cle: 'backup.path',      valeur: './prisma/',        description: 'Dossier de destination des sauvegardes SQLite (chemin relatif à backend/)' },
+    { cle: 'backup.keep',      valeur: '10',               description: 'Nombre de sauvegardes à conserver (rotation automatique)' },
   ]
 
   for (const { cle, valeur, description } of configParams) {
@@ -222,6 +223,17 @@ RÈGLE ABSOLUE : Réponds UNIQUEMENT en JSON valide, sans markdown.`,
       expression: '0 3 * * *',
       actif: true,
       description: 'Consolidation nocturne du buffer mémoire vers la mémoire long terme'
+    }
+  })
+
+  await prisma.cronConfig.upsert({
+    where: { nom: 'db.backup' },
+    update: {},
+    create: {
+      nom: 'db.backup',
+      expression: '0 2 * * *',   // Tous les jours à 2h du matin
+      actif: true,
+      description: 'Sauvegarde automatique de la base SQLite avec rotation (backup.keep dernières)'
     }
   })
 

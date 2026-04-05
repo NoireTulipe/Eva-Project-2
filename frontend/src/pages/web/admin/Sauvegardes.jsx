@@ -10,6 +10,8 @@ export default function Sauvegardes() {
   const [status, setStatus] = useState(null)
   const [backupPath, setBackupPath] = useState(null)  // ConfigParam complet
   const [editPath, setEditPath] = useState('')
+  const [backupKeep, setBackupKeep] = useState(null)  // ConfigParam complet
+  const [editKeep, setEditKeep] = useState('10')
   const [saving, setSaving] = useState(false)
   const [lastBackup, setLastBackup] = useState(null)
   const [restarting, setRestarting] = useState(false)
@@ -28,6 +30,8 @@ export default function Sauvegardes() {
       setStatus(sys)
       const param = config.find(p => p.cle === 'backup.path')
       if (param) { setBackupPath(param); setEditPath(param.valeur) }
+      const keepParam = config.find(p => p.cle === 'backup.keep')
+      if (keepParam) { setBackupKeep(keepParam); setEditKeep(keepParam.valeur) }
       if (lst) setListe(lst)
     })
   }, [])
@@ -58,6 +62,21 @@ export default function Sauvegardes() {
     try {
       await admin.updateConfig(backupPath.id, editPath)
       setBackupPath(prev => ({ ...prev, valeur: editPath }))
+    } catch (e) {
+      setError(e.message || 'Erreur sauvegarde')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSaveKeep() {
+    if (!backupKeep) return
+    const n = parseInt(editKeep, 10)
+    if (isNaN(n) || n < 1) return
+    setSaving(true)
+    try {
+      await admin.updateConfig(backupKeep.id, String(n))
+      setBackupKeep(prev => ({ ...prev, valeur: String(n) }))
     } catch (e) {
       setError(e.message || 'Erreur sauvegarde')
     } finally {
@@ -144,6 +163,32 @@ export default function Sauvegardes() {
             onClick={handleSavePath}
             disabled={saving || editPath === backupPath?.valeur}
             className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+          >
+            {saving ? '…' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+
+      {/* Rotation */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <h2 className="text-sm font-medium text-gray-700 mb-3">Rotation des sauvegardes</h2>
+        <p className="text-xs text-gray-500 mb-3">
+          Les sauvegardes les plus anciennes sont supprimées automatiquement pour ne conserver que les N dernières.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min="1"
+            max="100"
+            className="w-24 border border-gray-300 rounded px-3 py-2 text-sm text-center font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            value={editKeep}
+            onChange={e => setEditKeep(e.target.value)}
+          />
+          <span className="text-sm text-gray-500">sauvegardes conservées</span>
+          <button
+            onClick={handleSaveKeep}
+            disabled={saving || editKeep === backupKeep?.valeur}
+            className="ml-auto px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40"
           >
             {saving ? '…' : 'Enregistrer'}
           </button>
