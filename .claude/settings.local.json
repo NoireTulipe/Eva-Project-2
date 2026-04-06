@@ -4,7 +4,11 @@
       "Bash(npx prisma:*)",
       "Bash(npm install:*)",
       "Bash(npm run:*)",
-      "Bash(node --input-type=module:*)"
+      "Bash(node --input-type=module:*)",
+      "Bash(/dev/null echo:*)",
+      "Bash(npx @capacitor/assets --help)",
+      "Bash(find c:/Users/DCFM/Documents/Bobo/Eva_Project/Eva2/mobile/node_modules/@capacitor/assets -name *.js)",
+      "Bash(npx @capacitor/assets generate --android)"
     ]
   }
 }

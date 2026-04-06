@@ -139,8 +139,19 @@ Format de réponse :
 {
   "souvenirs": ["fait important sur l'utilisateur ou un événement notable"],
   "preferences": [{"cle": "clé_courte", "contenu": "description de la préférence"}],
-  "contacts": [{"nom": "Prénom Nom", "contenu": "ce qu'on sait de cette personne"}]
+  "contacts": [
+    {
+      "nom": "Prénom Nom",
+      "contenu": "ce qu'on sait de cette personne",
+      "relations": ["type_de_relation"]
+    }
+  ]
 }
+
+Pour le champ "relations" d'un contact : indique le ou les types de relation avec l'utilisateur.
+Utilise des termes simples et génériques : "famille", "ami", "collègue", "travail", "médecin", "voisin", etc.
+Si le contexte implique la maison d'édition ou une activité professionnelle éditoriale, ajoute le nom pertinent (ex: "Echo de Plumes").
+Si la relation est inconnue, laisse le tableau vide [].
 
 Si rien de mémorisable → {"souvenirs": [], "preferences": [], "contacts": []}
 

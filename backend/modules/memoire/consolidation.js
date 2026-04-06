@@ -102,13 +102,17 @@ export async function consolidateUser(userId, provider, model) {
     nbPrefs++
   }
 
-  // ─── CONTACTS : upsert par nom (insensible à la casse) ───────────────────────
+  // ─── CONTACTS : upsert par nom + liaison des relations extraites ─────────────
   const existantsContacts = await prisma.memContact.findMany({
     where: { userId },
     select: { id: true, nom: true, contenu: true }
   })
 
-  for (const { nom, contenu } of (extraction.contacts || [])) {
+  for (const contactData of (extraction.contacts || [])) {
+    const { nom, contenu, relations: relationsExtraites } = typeof contactData === 'string'
+      ? { nom: contactData, contenu: contactData, relations: [] }
+      : contactData
+
     if (!nom?.trim() || !contenu?.trim()) continue
     const embedding = serializeVector(await embed(contenu))
 
@@ -120,23 +124,47 @@ export async function consolidateUser(userId, provider, model) {
       nomNormalisé.includes(c.nom.toLowerCase())
     )
 
+    let contactId
     if (existant) {
-      // Fusionner : ajouter les nouvelles infos si elles ne sont pas déjà présentes
       const contenuFusionné = fusionnerContenu(existant.contenu, contenu.trim())
-      ops.push(prisma.memContact.update({
+      await prisma.memContact.update({
         where: { id: existant.id },
         data: {
-          nom: nom.trim(), // Mettre à jour avec le nom le plus récent (plus complet)
+          nom: nom.trim(),
           contenu: contenuFusionné,
           embedding: serializeVector(await embed(contenuFusionné))
         }
-      }))
+      })
+      contactId = existant.id
       logAction(`Consolidation: contact fusionné "${nom}"`)
     } else {
-      ops.push(prisma.memContact.create({
+      const created = await prisma.memContact.create({
         data: { userId, nom: nom.trim(), contenu: contenu.trim(), embedding }
-      }))
+      })
+      contactId = created.id
       nbContacts++
+    }
+
+    // Lier les relations extraites (find-or-create par nom, insensible à la casse)
+    if (Array.isArray(relationsExtraites) && relationsExtraites.length > 0) {
+      for (const nomRel of relationsExtraites) {
+        if (!nomRel?.trim()) continue
+        try {
+          // Upsert la relation (unique par userId + nom)
+          const relation = await prisma.memRelation.upsert({
+            where: { userId_nom: { userId, nom: nomRel.trim() } },
+            update: {},
+            create: { userId, nom: nomRel.trim() }
+          })
+          // Lier au contact (ignorer si déjà lié)
+          await prisma.memContact.update({
+            where: { id: contactId },
+            data: { relations: { connect: { id: relation.id } } }
+          })
+        } catch {
+          // Doublon de liaison — ignoré silencieusement
+        }
+      }
     }
   }
 

@@ -162,7 +162,7 @@ export const sessions = {
   getAll: ({ limit = 20, offset = 0 } = {}) => request('GET', `/ventes/sessions?limit=${limit}&offset=${offset}`),
   open: (pointDeVenteId, debut) => request('POST', '/ventes/sessions', { pointDeVenteId, debut }),
   getById: (id) => request('GET', `/ventes/sessions/${id}`),
-  cloturer: (id) => request('POST', `/ventes/sessions/${id}/cloturer`),
+  cloturer: (id, fin = null) => request('POST', `/ventes/sessions/${id}/cloturer`, fin ? { fin } : {}),
   supprimer: (id) => request('DELETE', `/ventes/sessions/${id}`),
   rouvrir: (id) => request('POST', `/ventes/sessions/${id}/rouvrir`)
 }
@@ -320,6 +320,16 @@ export const memoire = {
   createContact: (nom, contenu) => request('POST', '/memoire/contacts', { nom, contenu }),
   updateContact: (id, data) => request('PUT', `/memoire/contacts/${id}`, data),
   deleteContact: (id) => request('DELETE', `/memoire/contacts/${id}`),
+  addContactRelation: (contactId, relationId) => request('POST', `/memoire/contacts/${contactId}/relations`, { relationId }),
+  removeContactRelation: (contactId, relId) => request('DELETE', `/memoire/contacts/${contactId}/relations/${relId}`),
+  addContactSouvenir: (contactId, souvenirId) => request('POST', `/memoire/contacts/${contactId}/souvenirs`, { souvenirId }),
+  removeContactSouvenir: (contactId, souvenirId) => request('DELETE', `/memoire/contacts/${contactId}/souvenirs/${souvenirId}`),
+
+  // Relations
+  getRelations: () => request('GET', '/memoire/relations'),
+  createRelation: (nom, description) => request('POST', '/memoire/relations', { nom, description }),
+  updateRelation: (id, data) => request('PUT', `/memoire/relations/${id}`, data),
+  deleteRelation: (id) => request('DELETE', `/memoire/relations/${id}`),
 
   // Buffer
   getBuffer: (traite) => {

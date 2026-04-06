@@ -11,13 +11,24 @@ router.use(authMiddleware)
 
 const uid = (req) => req.user.id
 
+// ─── INCLUSIONS POUR LES REQUÊTES ENRICHIES ───────────────────────────────────
+
+const CONTACT_INCLUDE = {
+  relations: { select: { id: true, nom: true, description: true } },
+  souvenirs: { select: { id: true, contenu: true } }
+}
+
+const SOUVENIR_INCLUDE = {
+  contacts: { select: { id: true, nom: true } }
+}
+
 // ─── SOUVENIRS ────────────────────────────────────────────────────────────────
 
 router.get('/souvenirs', async (req, res) => {
   const items = await prisma.memSouvenir.findMany({
     where: { userId: uid(req) },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, contenu: true, createdAt: true, updatedAt: true }
+    select: { id: true, contenu: true, createdAt: true, updatedAt: true, contacts: { select: { id: true, nom: true } } }
   })
   res.json(items)
 })
@@ -27,9 +38,10 @@ router.post('/souvenirs', async (req, res) => {
   if (!contenu?.trim()) return res.status(400).json({ error: 'Contenu requis' })
   const embedding = serializeVector(await embed(contenu.trim()))
   const item = await prisma.memSouvenir.create({
-    data: { userId: uid(req), contenu: contenu.trim(), embedding }
+    data: { userId: uid(req), contenu: contenu.trim(), embedding },
+    include: SOUVENIR_INCLUDE
   })
-  res.status(201).json({ id: item.id, contenu: item.contenu, createdAt: item.createdAt })
+  res.status(201).json(item)
 })
 
 router.put('/souvenirs/:id', async (req, res) => {
@@ -41,7 +53,7 @@ router.put('/souvenirs/:id', async (req, res) => {
   const updated = await prisma.memSouvenir.update({
     where: { id: item.id },
     data: { contenu: contenu.trim(), embedding },
-    select: { id: true, contenu: true, createdAt: true, updatedAt: true }
+    select: { id: true, contenu: true, createdAt: true, updatedAt: true, contacts: { select: { id: true, nom: true } } }
   })
   res.json(updated)
 })
@@ -82,11 +94,7 @@ router.put('/preferences/:id', async (req, res) => {
   const embedding = serializeVector(await embed(contenu.trim()))
   const updated = await prisma.memPreference.update({
     where: { id: item.id },
-    data: {
-      cle: cle?.trim() || item.cle,
-      contenu: contenu.trim(),
-      embedding
-    },
+    data: { cle: cle?.trim() || item.cle, contenu: contenu.trim(), embedding },
     select: { id: true, cle: true, contenu: true, createdAt: true, updatedAt: true }
   })
   res.json(updated)
@@ -105,7 +113,11 @@ router.get('/contacts', async (req, res) => {
   const items = await prisma.memContact.findMany({
     where: { userId: uid(req) },
     orderBy: { nom: 'asc' },
-    select: { id: true, nom: true, contenu: true, createdAt: true, updatedAt: true }
+    select: {
+      id: true, nom: true, contenu: true, createdAt: true, updatedAt: true,
+      relations: { select: { id: true, nom: true, description: true } },
+      souvenirs: { select: { id: true, contenu: true } }
+    }
   })
   res.json(items)
 })
@@ -115,9 +127,10 @@ router.post('/contacts', async (req, res) => {
   if (!nom?.trim() || !contenu?.trim()) return res.status(400).json({ error: 'Nom et contenu requis' })
   const embedding = serializeVector(await embed(contenu.trim()))
   const item = await prisma.memContact.create({
-    data: { userId: uid(req), nom: nom.trim(), contenu: contenu.trim(), embedding }
+    data: { userId: uid(req), nom: nom.trim(), contenu: contenu.trim(), embedding },
+    include: CONTACT_INCLUDE
   })
-  res.status(201).json({ id: item.id, nom: item.nom, contenu: item.contenu, createdAt: item.createdAt })
+  res.status(201).json(item)
 })
 
 router.put('/contacts/:id', async (req, res) => {
@@ -128,12 +141,12 @@ router.put('/contacts/:id', async (req, res) => {
   const embedding = serializeVector(await embed(contenu.trim()))
   const updated = await prisma.memContact.update({
     where: { id: item.id },
-    data: {
-      nom: nom?.trim() || item.nom,
-      contenu: contenu.trim(),
-      embedding
-    },
-    select: { id: true, nom: true, contenu: true, createdAt: true, updatedAt: true }
+    data: { nom: nom?.trim() || item.nom, contenu: contenu.trim(), embedding },
+    select: {
+      id: true, nom: true, contenu: true, createdAt: true, updatedAt: true,
+      relations: { select: { id: true, nom: true, description: true } },
+      souvenirs: { select: { id: true, contenu: true } }
+    }
   })
   res.json(updated)
 })
@@ -142,6 +155,128 @@ router.delete('/contacts/:id', async (req, res) => {
   const item = await prisma.memContact.findFirst({ where: { id: Number(req.params.id), userId: uid(req) } })
   if (!item) return res.status(404).json({ error: 'Introuvable' })
   await prisma.memContact.delete({ where: { id: item.id } })
+  res.status(204).end()
+})
+
+// ─── CONTACTS : gestion des relations liées ──────────────────────────────────
+
+// Lier une relation à un contact
+router.post('/contacts/:id/relations', async (req, res) => {
+  const contactId = Number(req.params.id)
+  const { relationId } = req.body
+  if (!relationId) return res.status(400).json({ error: 'relationId requis' })
+
+  const [contact, relation] = await Promise.all([
+    prisma.memContact.findFirst({ where: { id: contactId, userId: uid(req) } }),
+    prisma.memRelation.findFirst({ where: { id: Number(relationId), userId: uid(req) } })
+  ])
+  if (!contact) return res.status(404).json({ error: 'Contact introuvable' })
+  if (!relation) return res.status(404).json({ error: 'Relation introuvable' })
+
+  await prisma.memContact.update({
+    where: { id: contactId },
+    data: { relations: { connect: { id: relation.id } } }
+  })
+  res.status(204).end()
+})
+
+// Délier une relation d'un contact
+router.delete('/contacts/:id/relations/:relId', async (req, res) => {
+  const contactId = Number(req.params.id)
+  const relId = Number(req.params.relId)
+
+  const contact = await prisma.memContact.findFirst({ where: { id: contactId, userId: uid(req) } })
+  if (!contact) return res.status(404).json({ error: 'Contact introuvable' })
+
+  await prisma.memContact.update({
+    where: { id: contactId },
+    data: { relations: { disconnect: { id: relId } } }
+  })
+  res.status(204).end()
+})
+
+// Lier un souvenir à un contact
+router.post('/contacts/:id/souvenirs', async (req, res) => {
+  const contactId = Number(req.params.id)
+  const { souvenirId } = req.body
+  if (!souvenirId) return res.status(400).json({ error: 'souvenirId requis' })
+
+  const [contact, souvenir] = await Promise.all([
+    prisma.memContact.findFirst({ where: { id: contactId, userId: uid(req) } }),
+    prisma.memSouvenir.findFirst({ where: { id: Number(souvenirId), userId: uid(req) } })
+  ])
+  if (!contact) return res.status(404).json({ error: 'Contact introuvable' })
+  if (!souvenir) return res.status(404).json({ error: 'Souvenir introuvable' })
+
+  await prisma.memContact.update({
+    where: { id: contactId },
+    data: { souvenirs: { connect: { id: souvenir.id } } }
+  })
+  res.status(204).end()
+})
+
+// Délier un souvenir d'un contact
+router.delete('/contacts/:id/souvenirs/:souvenirId', async (req, res) => {
+  const contactId = Number(req.params.id)
+  const souvenirId = Number(req.params.souvenirId)
+
+  const contact = await prisma.memContact.findFirst({ where: { id: contactId, userId: uid(req) } })
+  if (!contact) return res.status(404).json({ error: 'Contact introuvable' })
+
+  await prisma.memContact.update({
+    where: { id: contactId },
+    data: { souvenirs: { disconnect: { id: souvenirId } } }
+  })
+  res.status(204).end()
+})
+
+// ─── RELATIONS ────────────────────────────────────────────────────────────────
+
+router.get('/relations', async (req, res) => {
+  const items = await prisma.memRelation.findMany({
+    where: { userId: uid(req) },
+    orderBy: { nom: 'asc' },
+    select: {
+      id: true, nom: true, description: true, createdAt: true,
+      contacts: { select: { id: true, nom: true } }
+    }
+  })
+  res.json(items)
+})
+
+router.post('/relations', async (req, res) => {
+  const { nom, description } = req.body
+  if (!nom?.trim()) return res.status(400).json({ error: 'Nom requis' })
+  try {
+    const item = await prisma.memRelation.create({
+      data: { userId: uid(req), nom: nom.trim(), description: description?.trim() || null },
+      select: { id: true, nom: true, description: true, createdAt: true, contacts: { select: { id: true, nom: true } } }
+    })
+    res.status(201).json(item)
+  } catch {
+    res.status(409).json({ error: 'Une relation avec ce nom existe déjà' })
+  }
+})
+
+router.put('/relations/:id', async (req, res) => {
+  const { nom, description } = req.body
+  const item = await prisma.memRelation.findFirst({ where: { id: Number(req.params.id), userId: uid(req) } })
+  if (!item) return res.status(404).json({ error: 'Introuvable' })
+  const updated = await prisma.memRelation.update({
+    where: { id: item.id },
+    data: {
+      nom: nom?.trim() || item.nom,
+      description: description !== undefined ? (description?.trim() || null) : item.description
+    },
+    select: { id: true, nom: true, description: true, createdAt: true, contacts: { select: { id: true, nom: true } } }
+  })
+  res.json(updated)
+})
+
+router.delete('/relations/:id', async (req, res) => {
+  const item = await prisma.memRelation.findFirst({ where: { id: Number(req.params.id), userId: uid(req) } })
+  if (!item) return res.status(404).json({ error: 'Introuvable' })
+  await prisma.memRelation.delete({ where: { id: item.id } })
   res.status(204).end()
 })
 
@@ -211,14 +346,15 @@ router.post('/consolider', async (req, res) => {
 // ─── STATS ────────────────────────────────────────────────────────────────────
 
 router.get('/stats', async (req, res) => {
-  const [souvenirs, preferences, contacts, bufferTotal, bufferNonTraite] = await Promise.all([
+  const [souvenirs, preferences, contacts, relations, bufferTotal, bufferNonTraite] = await Promise.all([
     prisma.memSouvenir.count({ where: { userId: uid(req) } }),
     prisma.memPreference.count({ where: { userId: uid(req) } }),
     prisma.memContact.count({ where: { userId: uid(req) } }),
+    prisma.memRelation.count({ where: { userId: uid(req) } }),
     prisma.memBuffer.count({ where: { source: { contains: String(uid(req)) } } }),
     prisma.memBuffer.count({ where: { source: { contains: String(uid(req)) }, traite: false } })
   ])
-  res.json({ souvenirs, preferences, contacts, bufferTotal, bufferNonTraite })
+  res.json({ souvenirs, preferences, contacts, relations, bufferTotal, bufferNonTraite })
 })
 
 export default router

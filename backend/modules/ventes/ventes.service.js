@@ -113,7 +113,7 @@ export async function ouvrirSession(pointDeVenteId, debut) {
   })
 }
 
-export async function cloturerSession(sessionId) {
+export async function cloturerSession(sessionId, finDate = null) {
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
     include: {
@@ -134,7 +134,7 @@ export async function cloturerSession(sessionId) {
 
   await prisma.session.update({
     where: { id: sessionId },
-    data: { statut: 'cloturee', fin: new Date() },
+    data: { statut: 'cloturee', fin: finDate ? new Date(finDate) : new Date() },
   })
 
   return recap

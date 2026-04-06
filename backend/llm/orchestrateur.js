@@ -1,7 +1,7 @@
 import { callAI } from './providers.js'
 import { getPrompt, resolvePromptTags, PROMPTS_DEFAUT, VALEURS_TAGS_DEVELOPPEUR } from './prompts.js'
 import { getToolsDescription, executeTool } from '../tools/registry.js'
-import { rechercheMemoire } from '../modules/memoire/recherche.js'
+import { rechercheMemoire, rechercheContactParNom, rechercheContactsParRelation } from '../modules/memoire/recherche.js'
 import prisma from '../config/db.js'
 import { logAction, logError } from '../logs/logger.js'
 
@@ -188,13 +188,38 @@ async function pushToBuffer(message, response, context) {
 }
 
 /**
+ * Formate un contact enrichi (avec relations + souvenirs liés) pour le contexte.
+ */
+function formatContact(r) {
+  const lines = [`  • [contact] ${r.nom} : ${r.contenu}`]
+
+  if (r.relations?.length > 0) {
+    const rels = r.relations.map(rel =>
+      rel.description ? `${rel.nom} (${rel.description})` : rel.nom
+    ).join(', ')
+    lines.push(`    Relations : ${rels}`)
+  }
+
+  if (r.souvenirs?.length > 0) {
+    for (const s of r.souvenirs.slice(0, 3)) {
+      lines.push(`    Souvenir lié : ${s.contenu}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+/**
  * Construit le bloc mémoire injecté dans le message utilisateur.
- * Recherche sémantique sur le message + préférences récentes.
+ * Stratégie hybride : sémantique + détection de nom + détection de relation.
+ * Contacts enrichis avec leurs relations et souvenirs liés.
  */
 async function buildMemoireContext(message, userId) {
   try {
-    const [semantique, preferences] = await Promise.all([
+    const [semantique, parNom, parRelation, preferences] = await Promise.all([
       rechercheMemoire(message, userId),
+      rechercheContactParNom(message, userId),
+      rechercheContactsParRelation(message, userId),
       prisma.memPreference.findMany({
         where: { userId },
         orderBy: { updatedAt: 'desc' },
@@ -202,6 +227,19 @@ async function buildMemoireContext(message, userId) {
         select: { cle: true, contenu: true }
       })
     ])
+
+    // Fusionner les résultats contacts — priorité : relation > nom > sémantique
+    // Déduplique par id de contact
+    const contactsMap = new Map()
+    for (const r of [...semantique, ...parNom, ...parRelation]) {
+      if (r.type !== 'contact') continue
+      if (!contactsMap.has(r.id) || r.score > contactsMap.get(r.id).score) {
+        contactsMap.set(r.id, r)
+      }
+    }
+
+    // Résultats non-contacts de la recherche sémantique
+    const autresResultats = semantique.filter(r => r.type !== 'contact')
 
     const lines = []
 
@@ -212,12 +250,19 @@ async function buildMemoireContext(message, userId) {
       }
     }
 
-    if (semantique.length > 0) {
+    const tousContacts = [...contactsMap.values()]
+    if (tousContacts.length > 0) {
+      lines.push('CONTACTS CONNUS PERTINENTS :')
+      for (const r of tousContacts) {
+        lines.push(formatContact(r))
+      }
+    }
+
+    if (autresResultats.length > 0) {
       lines.push('MÉMOIRE PERTINENTE :')
-      for (const r of semantique) {
+      for (const r of autresResultats) {
         if (r.type === 'souvenir') lines.push(`  • [souvenir] ${r.contenu}`)
         else if (r.type === 'preference') lines.push(`  • [préférence] ${r.cle} : ${r.contenu}`)
-        else if (r.type === 'contact') lines.push(`  • [contact] ${r.nom} : ${r.contenu}`)
       }
     }
 

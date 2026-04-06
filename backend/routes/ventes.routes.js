@@ -240,7 +240,7 @@ router.get('/sessions/:id', async (req, res) => {
 
 router.post('/sessions/:id/cloturer', async (req, res) => {
   try {
-    res.json(await cloturerSession(Number(req.params.id)))
+    res.json(await cloturerSession(Number(req.params.id), req.body?.fin ?? null))
   } catch (err) {
     logError(err.message)
     res.status(500).json({ error: err.message })

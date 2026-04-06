@@ -211,6 +211,8 @@ function VueDetailSession({ sessionId, onRetour }) {
   const [venteLoading, setVenteLoading] = useState(false)
   const [recap, setRecap] = useState(null)
   const [cloturing, setCloturing] = useState(false)
+  const [showModaleCloture, setShowModaleCloture] = useState(false)
+  const [dateCloture, setDateCloture] = useState('')
 
   const charger = useCallback(async () => {
     try {
@@ -266,11 +268,17 @@ function VueDetailSession({ sessionId, onRetour }) {
     }
   }
 
+  function ouvrirModaleCloture() {
+    // Pré-remplir avec la date d'ouverture de la session
+    setDateCloture(new Date(session.debut).toISOString().slice(0, 16))
+    setShowModaleCloture(true)
+  }
+
   async function handleCloturer() {
+    setShowModaleCloture(false)
     setCloturing(true)
     try {
-      const r = await sessions.cloturer(session.id)
-      // Mettre à jour le contexte global si c'était la session active
+      const r = await sessions.cloturer(session.id, dateCloture)
       if (contextSession?.id === session.id) changerSession(null)
       setRecap(r)
     } catch (err) {
@@ -321,7 +329,7 @@ function VueDetailSession({ sessionId, onRetour }) {
           </p>
         </div>
         <button
-          onClick={handleCloturer}
+          onClick={ouvrirModaleCloture}
           disabled={cloturing}
           className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-4 py-2 rounded text-sm"
         >
@@ -384,6 +392,39 @@ function VueDetailSession({ sessionId, onRetour }) {
         fraisList={session.frais}
         onRefresh={charger}
       />
+
+      {/* Modale clôture */}
+      {showModaleCloture && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">Clôturer la session</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Vous pouvez modifier la date de clôture pour enregistrer une session antérieure.
+            </p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date et heure de clôture</label>
+            <input
+              type="datetime-local"
+              value={dateCloture}
+              onChange={e => setDateCloture(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-6 focus:outline-none focus:ring-1 focus:ring-red-400"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowModaleCloture(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleCloturer}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium"
+              >
+                Confirmer la clôture
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Liste ventes */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
