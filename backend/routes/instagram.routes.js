@@ -7,11 +7,64 @@ import * as svc  from '../modules/instagram/instagram.service.js'
 import * as meta from '../modules/instagram/instagram.meta.js'
 import { callAI } from '../llm/providers.js'
 import prisma from '../config/db.js'
-import { logAction } from '../logs/logger.js'
+import { logAction, logError } from '../logs/logger.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const UPLOADS_BASE = resolve(__dirname, '../uploads/instagram')
 
+// Router PUBLIC — webhook Meta uniquement (sans auth)
+export const webhookRouter = Router()
+
+webhookRouter.get('/webhook', (req, res) => {
+  const mode      = req.query['hub.mode']
+  const token     = req.query['hub.verify_token']
+  const challenge = req.query['hub.challenge']
+
+  if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
+    logAction('Instagram: webhook Meta vérifié')
+    return res.status(200).send(challenge)
+  }
+  res.sendStatus(403)
+})
+
+webhookRouter.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['x-hub-signature-256']
+  if (sig && !meta.verifyWebhookSignature(req.body, sig)) return res.sendStatus(401)
+
+  res.sendStatus(200) // Répondre immédiatement à Meta
+
+  try {
+    const body = JSON.parse(req.body.toString())
+    if (body.object !== 'instagram') return
+
+    const autoParam = await prisma.configParam.findUnique({ where: { cle: 'instagram.auto_reply' } })
+    const autoReply = autoParam?.valeur === 'true'
+
+    for (const entry of body.entry ?? []) {
+      for (const change of entry.changes ?? []) {
+        const val = change.value
+        if (change.field === 'comments') {
+          await meta.traiterCommentaire({
+            igAuteurId: val.from?.id ?? '', igAuteurNom: val.from?.username ?? null,
+            commentaireId: val.id, texte: val.text ?? '', autoReply,
+          }).catch(e => logError(`Instagram webhook commentaire: ${e.message}`))
+        }
+        if (change.field === 'messages') {
+          const msg = val.messages?.[0]
+          if (!msg) continue
+          await meta.traiterMessage({
+            igAuteurId: val.sender?.id ?? '', igAuteurNom: val.sender?.username ?? null,
+            texte: msg.text ?? '', autoReply,
+          }).catch(e => logError(`Instagram webhook message: ${e.message}`))
+        }
+      }
+    }
+  } catch (e) {
+    logError(`Instagram webhook: ${e.message}`)
+  }
+})
+
+// Router PRIVÉ — toutes les autres routes (avec auth)
 const router = Router()
 router.use(authMiddleware)
 
@@ -439,74 +492,6 @@ router.get('/activite', async (req, res) => {
     res.json({ profil, medias: mediasAvecCommentaires, conversations })
   } catch (e) {
     res.status(500).json({ error: e.message })
-  }
-})
-
-// ─── WEBHOOK META ─────────────────────────────────────────────────────────────
-// Ces routes sont SANS authMiddleware — elles sont appelées par Meta directement
-
-// GET — vérification du webhook (Meta envoie un challenge)
-router.get('/webhook', (req, res) => {
-  const mode      = req.query['hub.mode']
-  const token     = req.query['hub.verify_token']
-  const challenge = req.query['hub.challenge']
-
-  if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
-    logAction('Instagram: webhook Meta vérifié')
-    res.status(200).send(challenge)
-  } else {
-    res.sendStatus(403)
-  }
-})
-
-// POST — réception des événements (commentaires, messages)
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  // Valider la signature X-Hub-Signature-256
-  const sig = req.headers['x-hub-signature-256']
-  if (sig && !meta.verifyWebhookSignature(req.body, sig)) {
-    return res.sendStatus(401)
-  }
-
-  res.sendStatus(200) // Répondre immédiatement à Meta (< 20s)
-
-  try {
-    const body = JSON.parse(req.body.toString())
-    if (body.object !== 'instagram') return
-
-    // Lire le mode (auto ou brouillon) depuis ConfigParam
-    const autoParam = await prisma.configParam.findUnique({ where: { cle: 'instagram.auto_reply' } })
-    const autoReply = autoParam?.valeur === 'true'
-
-    for (const entry of body.entry ?? []) {
-      for (const change of entry.changes ?? []) {
-        const val = change.value
-
-        // ── Commentaire ──────────────────────────────────────────────────────
-        if (change.field === 'comments') {
-          await meta.traiterCommentaire({
-            igAuteurId:  val.from?.id ?? '',
-            igAuteurNom: val.from?.username ?? null,
-            commentaireId: val.id,
-            texte: val.text ?? '',
-            autoReply,
-          }).catch(e => logError(`Instagram webhook commentaire: ${e.message}`))
-        }
-
-        // ── Message ──────────────────────────────────────────────────────────
-        if (change.field === 'messages') {
-          const msg = val.messages?.[0]
-          if (!msg) continue
-          await meta.traiterMessage({
-            igAuteurId:  val.sender?.id ?? '',
-            igAuteurNom: val.sender?.username ?? null,
-            texte: msg.text ?? '',
-            autoReply,
-          }).catch(e => logError(`Instagram webhook message: ${e.message}`))
-        }
-      }
-    }
-  } catch (e) {
-    logError(`Instagram webhook: ${e.message}`)
   }
 })
 

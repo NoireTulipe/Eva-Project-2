@@ -14,7 +14,7 @@ import conversationsRoutes from './routes/conversations.routes.js'
 import memoireRoutes from './routes/memoire.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import mailRoutes from './routes/mail.routes.js'
-import instagramRoutes from './routes/instagram.routes.js'
+import instagramRoutes, { webhookRouter as instagramWebhookRouter } from './routes/instagram.routes.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
 import prisma from './config/db.js'
@@ -39,6 +39,9 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204)
   next()
 })
+
+// Webhook Instagram — AVANT express.json() pour que express.raw() fonctionne
+app.use('/api/instagram', instagramWebhookRouter)
 
 app.use(express.json())
 app.use(loggerMiddleware)
