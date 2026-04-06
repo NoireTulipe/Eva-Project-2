@@ -146,6 +146,40 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
             </Row>
           </Section>
         )}
+
+        {/* Flèche */}
+        {element.type === 'arrow' && (
+          <Section label="Flèche">
+            <Row label="Couleur">
+              <input type="color" value={element.stroke ?? '#000000'}
+                onChange={e => onChange({ stroke: e.target.value })}
+                className="w-10 h-7 border rounded cursor-pointer" />
+            </Row>
+            <Row label="Épaisseur">
+              <NumInput value={element.strokeWidth ?? 3} onChange={v => onChange({ strokeWidth: v })} min={1} max={30} />
+            </Row>
+            <Row label="Pointe">
+              <select value={element.arrowHead ?? 'end'} onChange={e => onChange({ arrowHead: e.target.value })}
+                className="w-full border rounded px-1 py-0.5 text-xs">
+                <option value="end">Fin seulement</option>
+                <option value="start">Début seulement</option>
+                <option value="both">Les deux</option>
+                <option value="none">Aucune</option>
+              </select>
+            </Row>
+            <Row label="Taille ↗">
+              <NumInput value={element.arrowSize ?? 18} onChange={v => onChange({ arrowSize: v })} min={8} max={50} />
+            </Row>
+            <Row label="Tirets">
+              <Toggle value={element.dash ?? false} onChange={v => onChange({ dash: v })} />
+            </Row>
+            <div className="pt-1">
+              <p className="text-xs text-gray-400 italic">
+                Déplacez les points roses (extrémités) et indigo (courbure) sur le canvas.
+              </p>
+            </div>
+          </Section>
+        )}
       </div>
     </div>
   )

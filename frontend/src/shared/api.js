@@ -462,5 +462,8 @@ export const instagram = {
   // Config
   getConfig: () => request('GET', '/instagram/config'),
   setConfig: (cle, valeur) => request('PUT', `/instagram/config/${cle}`, { valeur }),
+
+  // Activité
+  getActivite: (limite = 10) => request('GET', `/instagram/activite?limite=${limite}`),
 }
 

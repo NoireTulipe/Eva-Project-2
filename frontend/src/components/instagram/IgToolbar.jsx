@@ -5,7 +5,7 @@ import IgElementPicker    from './IgElementPicker.jsx'
 
 export default function IgToolbar({
   format, onFormatChange,
-  onAddText, onAddImage, onSetBackground, background,
+  onAddText, onAddArrow, onAddImage, onSetBackground, background,
   onExport, onSave, saving, onShowIA, onShowProg, onPublierMaintenant,
   titre, onTitreChange,
 }) {
@@ -65,6 +65,11 @@ export default function IgToolbar({
       {/* Texte */}
       <button onClick={onAddText} className="px-2 py-1 text-sm rounded hover:bg-gray-100 font-bold" title="Ajouter texte">
         T
+      </button>
+
+      {/* Flèche */}
+      <button onClick={onAddArrow} className="px-2 py-1 text-sm rounded hover:bg-gray-100" title="Ajouter une flèche courbe">
+        ↗
       </button>
 
       {/* Fond */}

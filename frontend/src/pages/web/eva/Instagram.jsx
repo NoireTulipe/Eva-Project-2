@@ -3,10 +3,12 @@ import IgEditeur        from '../../../components/instagram/IgEditeur.jsx'
 import IgBibliotheques  from '../../../components/instagram/IgBibliotheques.jsx'
 import IgParametres     from '../../../components/instagram/IgParametres.jsx'
 import IgMessages       from '../../../components/instagram/IgMessages.jsx'
+import IgActivite       from '../../../components/instagram/IgActivite.jsx'
 
 const ONGLETS = [
   { id: 'editeur',       label: 'Éditeur' },
   { id: 'bibliotheques', label: 'Bibliothèques' },
+  { id: 'activite',      label: 'Activité' },
   { id: 'messages',      label: 'Messages & Commentaires' },
   { id: 'parametres',    label: 'Paramètres' },
 ]
@@ -37,6 +39,7 @@ export default function Instagram() {
       <div className="flex-1 overflow-hidden">
         {onglet === 'editeur'       && <IgEditeur />}
         {onglet === 'bibliotheques' && <IgBibliotheques />}
+        {onglet === 'activite'      && <IgActivite />}
         {onglet === 'messages'      && <IgMessages />}
         {onglet === 'parametres'    && <IgParametres />}
       </div>

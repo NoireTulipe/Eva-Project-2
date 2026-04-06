@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Stage, Layer, Rect, Text, Image as KImage, Transformer } from 'react-konva'
 import useImage from 'use-image'
+import CanvasArrow from './CanvasArrow.jsx'
 import { IG_FORMATS, FORMAT_PAR_DEFAUT } from './igFormats.js'
 import IgLayerPanel      from './IgLayerPanel.jsx'
 import IgToolbar         from './IgToolbar.jsx'
@@ -34,17 +35,18 @@ export default function IgEditeur() {
   const fmt  = IG_FORMATS[format]
   const slide = slides[slideIdx]
 
-  // ── Transformer ──────────────────────────────────────────────────────────────
+  // ── Transformer (seulement pour text & image, pas arrow) ──────────────────
   useEffect(() => {
     if (!trRef.current || !stageRef.current) return
-    if (selectedId) {
+    const selEl = slides[slideIdx]?.elements.find(e => e.id === selectedId)
+    if (selectedId && selEl?.type !== 'arrow') {
       const node = stageRef.current.findOne(`#${selectedId}`)
       if (node) { trRef.current.nodes([node]); trRef.current.getLayer().batchDraw() }
     } else {
       trRef.current.nodes([])
       trRef.current.getLayer()?.batchDraw()
     }
-  }, [selectedId, slide.elements])
+  }, [selectedId, slides, slideIdx])
 
   // ── Quand le format change : réinitialiser le canvas ─────────────────────────
   function changerFormat(f) {
@@ -78,6 +80,28 @@ export default function IgEditeur() {
         text: 'Votre texte', fontSize: 32, fontFamily: 'Arial',
         fill: '#000000', align: 'center', fontStyle: '',
         draggable: true, opacity: 1, rotation: 0, visible: true, locked: false,
+      }]
+    }))
+    setSelectedId(id)
+  }
+
+  // ── Ajouter une flèche courbe ─────────────────────────────────────────────────
+  function addArrow() {
+    const id  = `el-${Date.now()}`
+    const cx  = Math.round(fmt.displayW / 2)
+    const cy  = Math.round(fmt.displayH / 2)
+    updateSlide(s => ({
+      ...s,
+      elements: [...s.elements, {
+        id, type: 'arrow',
+        x1: cx - 120, y1: cy + 40,
+        x2: cx + 120, y2: cy + 40,
+        cpx1: cx - 70, cpy1: cy - 60,  // courbure vers le haut par défaut
+        cpx2: cx + 70, cpy2: cy - 60,
+        stroke: '#000000', strokeWidth: 3,
+        arrowHead: 'end', arrowSize: 18,
+        dash: false, opacity: 1,
+        visible: true, locked: false,
       }]
     }))
     setSelectedId(id)
@@ -189,6 +213,7 @@ export default function IgEditeur() {
         format={format}
         onFormatChange={changerFormat}
         onAddText={addText}
+        onAddArrow={addArrow}
         onAddImage={addImageFromUrl}
         onSetBackground={setBackground}
         background={slide.background}
@@ -360,6 +385,16 @@ function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDeselect,
               key={el.id}
               el={el}
               onSelect={() => onSelect(el.id)}
+              onUpdate={props => onUpdateElement(el.id, props)}
+            />
+          ) : el.type === 'arrow' ? (
+            <CanvasArrow
+              key={el.id}
+              el={el}
+              isSelected={selectedId === el.id}
+              onSelect={() => {
+                if (!el.locked) onSelect(el.id)
+              }}
               onUpdate={props => onUpdateElement(el.id, props)}
             />
           ) : null

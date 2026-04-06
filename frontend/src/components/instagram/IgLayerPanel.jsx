@@ -27,7 +27,7 @@ export default function IgLayerPanel({
             >
               {/* Icône type */}
               <span className="flex-shrink-0 text-gray-400">
-                {el.type === 'text' ? 'T' : '⬜'}
+                {el.type === 'text' ? 'T' : el.type === 'arrow' ? '↗' : '⬜'}
               </span>
 
               {/* Nom */}

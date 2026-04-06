@@ -384,6 +384,64 @@ router.post('/brouillons/:id/ignorer', async (req, res) => {
   }
 })
 
+// ─── ACTIVITÉ DU COMPTE ───────────────────────────────────────────────────────
+
+router.get('/activite', async (req, res) => {
+  try {
+    const igUserId = process.env.META_IG_USER_ID
+    const token    = process.env.META_ACCESS_TOKEN
+    if (!igUserId || !token) return res.status(503).json({ error: 'META_IG_USER_ID ou META_ACCESS_TOKEN non configuré' })
+
+    const limite = parseInt(req.query.limite) || 10
+
+    // 1. Récupérer les derniers médias publiés
+    const mediaUrl = `https://graph.facebook.com/v21.0/${igUserId}/media?fields=id,caption,media_type,timestamp,like_count,comments_count,thumbnail_url,media_url&limit=${limite}&access_token=${token}`
+    const mediaRes  = await fetch(mediaUrl)
+    const mediaData = await mediaRes.json()
+    if (mediaData.error) throw new Error(`Media: ${mediaData.error.message}`)
+
+    const medias = mediaData.data ?? []
+
+    // 2. Pour chaque média, récupérer les derniers commentaires (max 5 par post)
+    const mediasAvecCommentaires = await Promise.all(
+      medias.map(async m => {
+        try {
+          const cUrl = `https://graph.facebook.com/v21.0/${m.id}/comments?fields=id,text,username,timestamp&limit=5&access_token=${token}`
+          const cRes  = await fetch(cUrl)
+          const cData = await cRes.json()
+          return { ...m, comments: cData.data ?? [] }
+        } catch {
+          return { ...m, comments: [] }
+        }
+      })
+    )
+
+    // 3. Récupérer les dernières conversations (messages) — nécessite instagram_manage_messages
+    let conversations = []
+    try {
+      const convUrl = `https://graph.facebook.com/v21.0/${igUserId}/conversations?platform=instagram&fields=id,updated_time,participants,messages.limit(1){id,message,from,created_time}&limit=${limite}&access_token=${token}`
+      const convRes  = await fetch(convUrl)
+      const convData = await convRes.json()
+      if (!convData.error) conversations = convData.data ?? []
+    } catch {
+      // permission pas encore accordée — on ignore silencieusement
+    }
+
+    // 4. Stats profil
+    let profil = null
+    try {
+      const pUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=name,username,profile_picture_url,followers_count,follows_count,media_count&access_token=${token}`
+      const pRes  = await fetch(pUrl)
+      const pData = await pRes.json()
+      if (!pData.error) profil = pData
+    } catch {}
+
+    res.json({ profil, medias: mediasAvecCommentaires, conversations })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── WEBHOOK META ─────────────────────────────────────────────────────────────
 // Ces routes sont SANS authMiddleware — elles sont appelées par Meta directement
 
