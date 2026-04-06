@@ -4,6 +4,7 @@ import { logAction, logError } from '../logs/logger.js'
 import { consolidateAll } from '../modules/memoire/consolidation.js'
 import { scannerTousLesMails } from './mail.cron.js'
 import { backupDatabase } from './backup.cron.js'
+import { publierPostsProgrammes } from './instagram.cron.js'
 
 // Registre des tâches actives { nom → task }
 const activeTasks = new Map()
@@ -13,6 +14,7 @@ const HANDLERS = {
   'memoire.consolidation': consolidateAll,
   'mail.scan': scannerTousLesMails,
   'db.backup': backupDatabase,
+  'instagram.publication': publierPostsProgrammes,
 }
 
 /**

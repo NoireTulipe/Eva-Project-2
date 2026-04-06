@@ -233,6 +233,62 @@ router.delete('/exclusions/:id', async (req, res) => {
   }
 })
 
+// ─── PUBLICATION ──────────────────────────────────────────────────────────────
+
+// Publier maintenant (images base64 envoyées par le frontend)
+router.post('/posts/:id/publier', async (req, res) => {
+  try {
+    const { images } = req.body // string[] — data URLs PNG
+    if (!images?.length) return res.status(400).json({ error: 'Images requises' })
+    const result = await meta.publierPost(Number(req.params.id), images)
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Programmer une publication
+router.post('/posts/:id/programmer', async (req, res) => {
+  try {
+    const { scheduledAt, images } = req.body
+    if (!scheduledAt) return res.status(400).json({ error: 'scheduledAt requis' })
+    if (!images?.length) return res.status(400).json({ error: 'Images requises' })
+
+    // Stocker les exports dans les vignettes (clé _export)
+    const post = await prisma.igPost.findUnique({ where: { id: Number(req.params.id) } })
+    if (!post) return res.status(404).json({ error: 'Post introuvable' })
+
+    const vignettes = JSON.parse(post.vignettes)
+    images.forEach((img, i) => { if (vignettes[i]) vignettes[i]._export = img })
+
+    const updated = await prisma.igPost.update({
+      where: { id: Number(req.params.id) },
+      data: {
+        statut: 'programme',
+        scheduledAt: new Date(scheduledAt),
+        vignettes: JSON.stringify(vignettes),
+      }
+    })
+    logAction(`Instagram: post ${updated.id} programmé pour ${scheduledAt}`)
+    res.json(updated)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Déprogrammer (remettre en brouillon)
+router.post('/posts/:id/deprogrammer', async (req, res) => {
+  try {
+    const updated = await prisma.igPost.update({
+      where: { id: Number(req.params.id) },
+      data: { statut: 'brouillon', scheduledAt: null }
+    })
+    res.json(updated)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── GÉNÉRATION IA ────────────────────────────────────────────────────────────
 
 router.post('/generer-texte', async (req, res) => {

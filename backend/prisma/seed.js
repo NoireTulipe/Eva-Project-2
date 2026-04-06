@@ -248,6 +248,17 @@ RÈGLE ABSOLUE : Réponds UNIQUEMENT en JSON valide, sans markdown.`,
     }
   })
 
+  await prisma.cronConfig.upsert({
+    where: { nom: 'instagram.publication' },
+    update: {},
+    create: {
+      nom: 'instagram.publication',
+      expression: '* * * * *',   // Toutes les minutes — vérifie les posts programmés
+      actif: true,
+      description: 'Publication automatique des posts Instagram programmés'
+    }
+  })
+
   console.log('Crons seedées')
 
   // ─── Prompts Instagram ────────────────────────────────────────────────────────

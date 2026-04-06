@@ -1,17 +1,16 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Stage, Layer, Rect, Text, Image as KImage, Transformer } from 'react-konva'
 import useImage from 'use-image'
-import IgLayerPanel     from './IgLayerPanel.jsx'
-import IgToolbar        from './IgToolbar.jsx'
+import { IG_FORMATS, FORMAT_PAR_DEFAUT } from './igFormats.js'
+import IgLayerPanel      from './IgLayerPanel.jsx'
+import IgToolbar         from './IgToolbar.jsx'
 import IgPropertiesPanel from './IgPropertiesPanel.jsx'
-import IgSlideManager   from './IgSlideManager.jsx'
-import IgGenerateurIA   from './IgGenerateurIA.jsx'
-import { instagram }    from '../../shared/api.js'
+import IgSlideManager    from './IgSlideManager.jsx'
+import IgGenerateurIA    from './IgGenerateurIA.jsx'
+import IgProgrammation   from './IgProgrammation.jsx'
+import { instagram }     from '../../shared/api.js'
 
-// Format carré Instagram : 1080×1080 → affiché à 540×540
-const CANVAS_W = 540
-const CANVAS_H = 540
-const EXPORT_SCALE = 2  // export à 1080×1080
+const EXPORT_SCALE = 2  // 540px × 2 = 1080px
 
 function newSlide() {
   return { id: Date.now(), elements: [], background: { type: 'color', value: '#ffffff' } }
@@ -21,124 +20,112 @@ export default function IgEditeur() {
   const stageRef = useRef(null)
   const trRef    = useRef(null)
 
+  const [format, setFormat]         = useState(FORMAT_PAR_DEFAUT)
   const [slides, setSlides]         = useState([newSlide()])
   const [slideIdx, setSlideIdx]     = useState(0)
   const [selectedId, setSelectedId] = useState(null)
   const [legende, setLegende]       = useState('')
-  const [showIA, setShowIA]         = useState(false)
-  const [saving, setSaving]         = useState(false)
   const [titre, setTitre]           = useState('')
+  const [showIA, setShowIA]         = useState(false)
+  const [showProg, setShowProg]     = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [postId, setPostId]         = useState(null)
 
+  const fmt  = IG_FORMATS[format]
   const slide = slides[slideIdx]
 
-  // ── Attacher le Transformer à l'élément sélectionné ─────────────────────────
+  // ── Transformer ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!trRef.current || !stageRef.current) return
     if (selectedId) {
       const node = stageRef.current.findOne(`#${selectedId}`)
-      if (node) {
-        trRef.current.nodes([node])
-        trRef.current.getLayer().batchDraw()
-      }
+      if (node) { trRef.current.nodes([node]); trRef.current.getLayer().batchDraw() }
     } else {
       trRef.current.nodes([])
       trRef.current.getLayer()?.batchDraw()
     }
   }, [selectedId, slide.elements])
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Quand le format change : réinitialiser le canvas ─────────────────────────
+  function changerFormat(f) {
+    if (f === format) return
+    if (slide.elements.length > 0) {
+      if (!window.confirm('Changer de format efface les éléments du canvas. Continuer ?')) return
+    }
+    setFormat(f)
+    setSlides([newSlide()])
+    setSlideIdx(0)
+    setSelectedId(null)
+  }
 
+  // ── Helpers slide ─────────────────────────────────────────────────────────────
   function updateSlide(updater) {
     setSlides(prev => prev.map((s, i) => i === slideIdx ? updater(s) : s))
   }
-
   function updateElement(id, props) {
-    updateSlide(s => ({
-      ...s,
-      elements: s.elements.map(el => el.id === id ? { ...el, ...props } : el)
-    }))
+    updateSlide(s => ({ ...s, elements: s.elements.map(el => el.id === id ? { ...el, ...props } : el) }))
   }
-
   const selectedEl = slide.elements.find(el => el.id === selectedId) ?? null
 
-  // ── Ajouter un texte ─────────────────────────────────────────────────────────
-
+  // ── Ajouter texte ─────────────────────────────────────────────────────────────
   function addText() {
     const id = `el-${Date.now()}`
     updateSlide(s => ({
       ...s,
       elements: [...s.elements, {
         id, type: 'text',
-        x: 60, y: 60, width: 420,
-        text: 'Votre texte',
-        fontSize: 32, fontFamily: 'Arial',
-        fill: '#000000', align: 'center',
-        fontStyle: '', draggable: true,
-        opacity: 1, rotation: 0, visible: true, locked: false,
+        x: 40, y: Math.round(fmt.displayH / 2) - 40, width: fmt.displayW - 80,
+        text: 'Votre texte', fontSize: 32, fontFamily: 'Arial',
+        fill: '#000000', align: 'center', fontStyle: '',
+        draggable: true, opacity: 1, rotation: 0, visible: true, locked: false,
       }]
     }))
     setSelectedId(id)
   }
 
-  // ── Ajouter une image depuis URL ─────────────────────────────────────────────
-
+  // ── Ajouter image depuis URL ──────────────────────────────────────────────────
   function addImageFromUrl(url, nom) {
     const id = `el-${Date.now()}`
     updateSlide(s => ({
       ...s,
       elements: [...s.elements, {
-        id, type: 'image',
-        src: url, nom: nom ?? 'image',
+        id, type: 'image', src: url, nom: nom ?? 'image',
         x: 100, y: 100, width: 200, height: 200,
         draggable: true, opacity: 1, rotation: 0,
-        flipX: false, flipY: false,
-        visible: true, locked: false,
+        flipX: false, flipY: false, visible: true, locked: false,
       }]
     }))
     setSelectedId(id)
   }
 
-  // ── Définir le background ────────────────────────────────────────────────────
+  // ── Background ────────────────────────────────────────────────────────────────
+  function setBackground(bg) { updateSlide(s => ({ ...s, background: bg })) }
 
-  function setBackground(bg) {
-    updateSlide(s => ({ ...s, background: bg }))
-  }
-
-  // ── Gestion des calques ──────────────────────────────────────────────────────
-
+  // ── Calques ───────────────────────────────────────────────────────────────────
   function moveLayer(id, dir) {
     updateSlide(s => {
       const els = [...s.elements]
       const idx = els.findIndex(e => e.id === id)
-      const target = idx + dir
-      if (target < 0 || target >= els.length) return s
-      ;[els[idx], els[target]] = [els[target], els[idx]]
+      const t = idx + dir
+      if (t < 0 || t >= els.length) return s
+      ;[els[idx], els[t]] = [els[t], els[idx]]
       return { ...s, elements: els }
     })
   }
-
   function deleteElement(id) {
     updateSlide(s => ({ ...s, elements: s.elements.filter(e => e.id !== id) }))
     setSelectedId(null)
   }
-
   function duplicateElement(id) {
     updateSlide(s => {
       const el = s.elements.find(e => e.id === id)
       if (!el) return s
-      const copy = { ...el, id: `el-${Date.now()}`, x: el.x + 20, y: el.y + 20 }
-      return { ...s, elements: [...s.elements, copy] }
+      return { ...s, elements: [...s.elements, { ...el, id: `el-${Date.now()}`, x: el.x + 20, y: el.y + 20 }] }
     })
   }
 
-  // ── Slides ───────────────────────────────────────────────────────────────────
-
-  function addSlide() {
-    setSlides(prev => [...prev, newSlide()])
-    setSlideIdx(slides.length)
-    setSelectedId(null)
-  }
-
+  // ── Slides ────────────────────────────────────────────────────────────────────
+  function addSlide() { setSlides(prev => [...prev, newSlide()]); setSlideIdx(slides.length); setSelectedId(null) }
   function deleteSlide(idx) {
     if (slides.length === 1) return
     setSlides(prev => prev.filter((_, i) => i !== idx))
@@ -146,42 +133,61 @@ export default function IgEditeur() {
     setSelectedId(null)
   }
 
-  // ── Export PNG ───────────────────────────────────────────────────────────────
-
-  function exportPNG() {
-    if (!stageRef.current) return
+  // ── Export PNG (toutes les vignettes) ─────────────────────────────────────────
+  async function exportAllPNG() {
+    if (!stageRef.current) return []
     setSelectedId(null)
-    setTimeout(() => {
-      const uri = stageRef.current.toDataURL({ pixelRatio: EXPORT_SCALE })
-      const a = document.createElement('a')
-      a.download = `post-instagram-${slideIdx + 1}.png`
-      a.href = uri
-      a.click()
-    }, 100)
+    await new Promise(r => setTimeout(r, 150))
+    // On ne peut exporter que la vignette courante depuis le stage
+    // Pour les autres vignettes, l'export se fera à la volée lors de la publication
+    const dataUrl = stageRef.current.toDataURL({ pixelRatio: EXPORT_SCALE })
+    return slides.map((s, i) => (i === slideIdx ? dataUrl : null))
   }
 
-  // ── Sauvegarde ───────────────────────────────────────────────────────────────
+  function exportPNG() {
+    exportAllPNG().then(urls => {
+      const url = urls[slideIdx]
+      if (!url) return
+      const a = document.createElement('a')
+      a.download = `post-instagram-${slideIdx + 1}.png`
+      a.href = url
+      a.click()
+    })
+  }
 
+  // ── Sauvegarder en DB ─────────────────────────────────────────────────────────
   async function savePost() {
     setSaving(true)
     try {
-      await instagram.createPost({
-        titre,
-        vignettes: JSON.stringify(slides),
-        legende,
-      })
+      const data = { titre, format, vignettes: JSON.stringify(slides), legende }
+      let saved
+      if (postId) {
+        saved = await instagram.updatePost(postId, data)
+      } else {
+        saved = await instagram.createPost(data)
+        setPostId(saved.id)
+      }
+      return saved
     } finally {
       setSaving(false)
     }
   }
 
-  // ── Rendu canvas d'un slide ──────────────────────────────────────────────────
+  // ── Publier maintenant ────────────────────────────────────────────────────────
+  async function publierMaintenant() {
+    setSelectedId(null)
+    await new Promise(r => setTimeout(r, 150))
+    const images = [stageRef.current?.toDataURL({ pixelRatio: EXPORT_SCALE })].filter(Boolean)
+    const saved = await savePost()
+    await instagram.publierPost(saved?.id ?? postId, images)
+    alert('Post publié sur Instagram !')
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-gray-100">
-
-      {/* Toolbar */}
       <IgToolbar
+        format={format}
+        onFormatChange={changerFormat}
         onAddText={addText}
         onAddImage={addImageFromUrl}
         onSetBackground={setBackground}
@@ -190,13 +196,13 @@ export default function IgEditeur() {
         onSave={savePost}
         saving={saving}
         onShowIA={() => setShowIA(true)}
+        onShowProg={() => setShowProg(true)}
+        onPublierMaintenant={publierMaintenant}
         titre={titre}
         onTitreChange={setTitre}
       />
 
       <div className="flex flex-1 overflow-hidden">
-
-        {/* Panneau calques */}
         <IgLayerPanel
           elements={slide.elements}
           selectedId={selectedId}
@@ -211,9 +217,10 @@ export default function IgEditeur() {
 
         {/* Canvas */}
         <div className="flex-1 flex flex-col items-center justify-center overflow-auto p-4">
+          <p className="text-xs text-gray-400 mb-2">{fmt.label} — {fmt.exportW}×{fmt.exportH}px ({fmt.subtitle})</p>
           <div
             className="shadow-xl border border-gray-300"
-            style={{ width: CANVAS_W, height: CANVAS_H }}
+            style={{ width: fmt.displayW, height: fmt.displayH }}
             onClick={e => { if (e.target === e.currentTarget) setSelectedId(null) }}
           >
             <CanvasSlide
@@ -228,13 +235,12 @@ export default function IgEditeur() {
               }}
               onDeselect={() => setSelectedId(null)}
               onUpdateElement={updateElement}
-              width={CANVAS_W}
-              height={CANVAS_H}
+              width={fmt.displayW}
+              height={fmt.displayH}
             />
           </div>
         </div>
 
-        {/* Panneau propriétés */}
         <IgPropertiesPanel
           element={selectedEl}
           onChange={props => selectedId && updateElement(selectedId, props)}
@@ -242,7 +248,7 @@ export default function IgEditeur() {
         />
       </div>
 
-      {/* Gestion slides + légende */}
+      {/* Bas : slides + légende */}
       <div className="border-t border-gray-200 bg-white px-4 py-2">
         <IgSlideManager
           slides={slides}
@@ -255,14 +261,13 @@ export default function IgEditeur() {
           <textarea
             value={legende}
             onChange={e => setLegende(e.target.value)}
-            placeholder="Légende d'accompagnement…"
+            placeholder="Légende d'accompagnement (avec #hashtags et @mentions)…"
             className="w-full border rounded px-3 py-1.5 text-sm resize-none"
             rows={2}
           />
         </div>
       </div>
 
-      {/* Modale générateur IA */}
       {showIA && (
         <IgGenerateurIA
           nbSlides={slides.length}
@@ -277,11 +282,10 @@ export default function IgEditeur() {
                   ...s,
                   elements: [...s.elements, {
                     id, type: 'text',
-                    x: 40, y: 200, width: 460,
+                    x: 40, y: Math.round(fmt.displayH / 2) - 50, width: fmt.displayW - 80,
                     text: txt, fontSize: 28, fontFamily: 'Arial',
-                    fill: '#000000', align: 'center',
-                    fontStyle: '', draggable: true,
-                    opacity: 1, rotation: 0, visible: true, locked: false,
+                    fill: '#000000', align: 'center', fontStyle: '',
+                    draggable: true, opacity: 1, rotation: 0, visible: true, locked: false,
                   }]
                 }
               }))
@@ -291,11 +295,26 @@ export default function IgEditeur() {
           }}
         />
       )}
+
+      {showProg && (
+        <IgProgrammation
+          onClose={() => setShowProg(false)}
+          onProgrammer={async (scheduledAt) => {
+            setSelectedId(null)
+            await new Promise(r => setTimeout(r, 150))
+            const images = [stageRef.current?.toDataURL({ pixelRatio: EXPORT_SCALE })].filter(Boolean)
+            const saved = await savePost()
+            await instagram.programmerPost(saved?.id ?? postId, scheduledAt, images)
+            setShowProg(false)
+            alert(`Post programmé pour le ${new Date(scheduledAt).toLocaleString('fr-FR')}`)
+          }}
+        />
+      )}
     </div>
   )
 }
 
-// ── Rendu Konva d'un slide ────────────────────────────────────────────────────
+// ── Canvas Konva ──────────────────────────────────────────────────────────────
 
 function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDeselect, onUpdateElement, width, height }) {
   return (
@@ -306,10 +325,7 @@ function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDeselect,
       onMouseDown={e => { if (e.target === e.target.getStage()) onDeselect() }}
     >
       <Layer>
-        {/* Background */}
         <SlideBackground background={slide.background} width={width} height={height} />
-
-        {/* Éléments */}
         {slide.elements.filter(el => el.visible !== false).map(el =>
           el.type === 'text' ? (
             <Text
@@ -343,58 +359,31 @@ function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDeselect,
             <CanvasImage
               key={el.id}
               el={el}
-              selected={selectedId === el.id}
               onSelect={() => onSelect(el.id)}
               onUpdate={props => onUpdateElement(el.id, props)}
             />
           ) : null
         )}
-
-        {/* Transformer */}
         <Transformer
           ref={trRef}
-          boundBoxFunc={(oldBox, newBox) =>
-            newBox.width < 20 || newBox.height < 20 ? oldBox : newBox
-          }
+          boundBoxFunc={(oldBox, newBox) => newBox.width < 20 || newBox.height < 20 ? oldBox : newBox}
         />
       </Layer>
     </Stage>
   )
 }
 
-// ── Background ────────────────────────────────────────────────────────────────
-
 function SlideBackground({ background, width, height }) {
   const src = background?.type === 'image' ? background.value : null
   const [img] = useImage(src ?? '', 'anonymous')
-
   if (background?.type === 'image' && img) {
-    return (
-      <KImage
-        image={img}
-        x={0} y={0}
-        width={width} height={height}
-        listening={false}
-      />
-    )
+    return <KImage image={img} x={0} y={0} width={width} height={height} listening={false} />
   }
-  return (
-    <Rect
-      x={0} y={0}
-      width={width} height={height}
-      fill={background?.value ?? '#ffffff'}
-      listening={false}
-    />
-  )
+  return <Rect x={0} y={0} width={width} height={height} fill={background?.value ?? '#ffffff'} listening={false} />
 }
-
-// ── Image element ─────────────────────────────────────────────────────────────
 
 function CanvasImage({ el, onSelect, onUpdate }) {
   const [img] = useImage(el.src, 'anonymous')
-  const scaleX = el.flipX ? -1 : 1
-  const scaleY = el.flipY ? -1 : 1
-
   return (
     <KImage
       id={el.id}
@@ -403,7 +392,8 @@ function CanvasImage({ el, onSelect, onUpdate }) {
       width={el.width} height={el.height}
       opacity={el.opacity ?? 1}
       rotation={el.rotation ?? 0}
-      scaleX={scaleX} scaleY={scaleY}
+      scaleX={el.flipX ? -1 : 1}
+      scaleY={el.flipY ? -1 : 1}
       offsetX={el.flipX ? el.width : 0}
       offsetY={el.flipY ? el.height : 0}
       draggable={!el.locked}
@@ -418,7 +408,8 @@ function CanvasImage({ el, onSelect, onUpdate }) {
           height: Math.abs(node.height() * node.scaleY()),
           rotation: node.rotation(),
         })
-        node.scaleX(scaleX); node.scaleY(scaleY)
+        node.scaleX(el.flipX ? -1 : 1)
+        node.scaleY(el.flipY ? -1 : 1)
       }}
     />
   )

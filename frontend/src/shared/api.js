@@ -444,6 +444,9 @@ export const instagram = {
   createPost: (data) => request('POST', '/instagram/posts', data),
   updatePost: (id, data) => request('PUT', `/instagram/posts/${id}`, data),
   deletePost: (id) => request('DELETE', `/instagram/posts/${id}`),
+  publierPost: (id, images) => request('POST', `/instagram/posts/${id}/publier`, { images }),
+  programmerPost: (id, scheduledAt, images) => request('POST', `/instagram/posts/${id}/programmer`, { scheduledAt, images }),
+  deprogrammerPost: (id) => request('POST', `/instagram/posts/${id}/deprogrammer`, {}),
 
   // Exclusions
   getExclusions: () => request('GET', '/instagram/exclusions'),

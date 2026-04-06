@@ -475,14 +475,18 @@ model IgCouleur {
 }
 
 model IgPost {
-  id          Int       @id @default(autoincrement())
-  titre       String?
-  vignettes   String    // JSON : tableau d'états canvas Konva (une entrée par slide)
-  legende     String?   // texte d'accompagnement généré ou saisi
-  statut      String    @default("brouillon") // "brouillon" | "publie"
-  publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            Int       @id @default(autoincrement())
+  titre         String?
+  format        String    @default("portrait") // "portrait" | "carre" | "paysage" | "story"
+  vignettes     String    // JSON : tableau d'états canvas Konva (une entrée par slide)
+  legende       String?   // texte d'accompagnement généré ou saisi
+  statut        String    @default("brouillon") // "brouillon" | "programme" | "publie" | "erreur"
+  scheduledAt   DateTime? // date/heure de publication programmée
+  publishedAt   DateTime?
+  metaMediaId   String?   // ID retourné par Meta après publication
+  erreurPubli   String?   // message d'erreur si statut = "erreur"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model IgExclusion {

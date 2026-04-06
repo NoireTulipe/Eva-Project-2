@@ -9,9 +9,15 @@
  */
 
 import crypto from 'crypto'
+import { writeFile } from 'fs/promises'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import prisma  from '../../config/db.js'
 import { callAI }   from '../../llm/providers.js'
 import { logError, logAction } from '../../logs/logger.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const POSTS_DIR = resolve(__dirname, '../../uploads/instagram/posts')
 
 const GRAPH_URL = 'https://graph.facebook.com/v21.0'
 
@@ -66,6 +72,83 @@ export async function fetchConversations() {
     platform: 'instagram',
     fields: 'id,participants,messages{id,message,from,created_time}',
   })
+}
+
+// ── Publier un post (image unique ou carrousel) ───────────────────────────────
+
+/**
+ * Publie un IgPost sur Instagram via Meta Graph API.
+ * Flow : base64 PNG → fichier local → URL publique → Media Container → Publish
+ *
+ * @param {number} postId  - id de l'IgPost
+ * @param {string[]} imagesBase64 - tableau de data URLs PNG (une par vignette)
+ */
+export async function publierPost(postId, imagesBase64) {
+  const igUserId = process.env.META_IG_USER_ID
+  const baseUrl  = process.env.APP_BASE_URL || `https://eva.echodeplumes.com`
+  if (!igUserId) throw new Error('META_IG_USER_ID non défini')
+
+  const post = await prisma.igPost.findUnique({ where: { id: postId } })
+  if (!post) throw new Error('Post introuvable')
+
+  // 1. Sauvegarder les images sur le disque
+  const filenames = []
+  for (let i = 0; i < imagesBase64.length; i++) {
+    const b64 = imagesBase64[i].replace(/^data:image\/\w+;base64,/, '')
+    const filename = `post-${postId}-${i}-${Date.now()}.png`
+    await writeFile(resolve(POSTS_DIR, filename), Buffer.from(b64, 'base64'))
+    filenames.push(filename)
+  }
+
+  try {
+    let creationId
+
+    if (imagesBase64.length === 1) {
+      // ── Post simple ──────────────────────────────────────────────────────────
+      const imageUrl = `${baseUrl}/uploads/instagram/posts/${filenames[0]}`
+      const container = await graphPost(`/${igUserId}/media`, {
+        image_url: imageUrl,
+        caption: post.legende ?? '',
+      })
+      creationId = container.id
+    } else {
+      // ── Carrousel ────────────────────────────────────────────────────────────
+      const itemIds = []
+      for (const filename of filenames) {
+        const imageUrl = `${baseUrl}/uploads/instagram/posts/${filename}`
+        const item = await graphPost(`/${igUserId}/media`, {
+          image_url: imageUrl,
+          is_carousel_item: true,
+        })
+        itemIds.push(item.id)
+      }
+      const carousel = await graphPost(`/${igUserId}/media`, {
+        media_type: 'CAROUSEL',
+        caption: post.legende ?? '',
+        children: itemIds.join(','),
+      })
+      creationId = carousel.id
+    }
+
+    // 2. Publier le container
+    const result = await graphPost(`/${igUserId}/media_publish`, { creation_id: creationId })
+
+    // 3. Mettre à jour le post en DB
+    await prisma.igPost.update({
+      where: { id: postId },
+      data: { statut: 'publie', publishedAt: new Date(), metaMediaId: result.id, erreurPubli: null }
+    })
+
+    logAction(`Instagram: post ${postId} publié (mediaId=${result.id})`)
+    return result
+  } catch (e) {
+    await prisma.igPost.update({
+      where: { id: postId },
+      data: { statut: 'erreur', erreurPubli: e.message }
+    })
+    logError(`Instagram: échec publication post ${postId} — ${e.message}`)
+    throw e
+  }
 }
 
 // ── Répondre à un commentaire ─────────────────────────────────────────────────
