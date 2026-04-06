@@ -16,14 +16,17 @@ const UPLOADS_BASE = resolve(__dirname, '../uploads/instagram')
 export const webhookRouter = Router()
 
 webhookRouter.get('/webhook', (req, res) => {
-  const mode      = req.query['hub.mode']
-  const token     = req.query['hub.verify_token']
-  const challenge = req.query['hub.challenge']
+  // Express (via qs) parse hub.mode=subscribe en { hub: { mode: 'subscribe' } }
+  const hub = req.query.hub ?? {}
+  const mode      = hub.mode
+  const token     = hub.verify_token
+  const challenge = hub.challenge
 
   if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
     logAction('Instagram: webhook Meta vérifié')
     return res.status(200).send(challenge)
   }
+  logError(`Instagram webhook: token reçu="${token}" attendu="${process.env.META_WEBHOOK_VERIFY_TOKEN}"`)
   res.sendStatus(403)
 })
 
