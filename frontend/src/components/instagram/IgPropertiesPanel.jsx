@@ -1,0 +1,193 @@
+import { useEffect, useState } from 'react'
+import { instagram } from '../../shared/api.js'
+
+export default function IgPropertiesPanel({ element, onChange, onDelete }) {
+  const [fonts, setFonts] = useState([])
+
+  useEffect(() => {
+    instagram.getFonts().then(setFonts).catch(() => {})
+  }, [])
+
+  if (!element) {
+    return (
+      <div className="w-52 flex-shrink-0 bg-white border-l border-gray-200 p-3 flex items-start">
+        <p className="text-xs text-gray-400">Sélectionnez un élément</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-52 flex-shrink-0 bg-white border-l border-gray-200 overflow-y-auto flex flex-col">
+      <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b flex justify-between items-center">
+        Propriétés
+        <button onClick={onDelete} className="text-red-400 hover:text-red-600 text-base">✕</button>
+      </div>
+
+      <div className="p-3 space-y-3">
+
+        {/* Position */}
+        <Section label="Position">
+          <Row label="X">
+            <NumInput value={element.x} onChange={v => onChange({ x: v })} />
+          </Row>
+          <Row label="Y">
+            <NumInput value={element.y} onChange={v => onChange({ y: v })} />
+          </Row>
+          <Row label="Rotation">
+            <NumInput value={element.rotation ?? 0} onChange={v => onChange({ rotation: v })} />
+          </Row>
+          <Row label="Opacité">
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={element.opacity ?? 1}
+              onChange={e => onChange({ opacity: parseFloat(e.target.value) })}
+              className="w-full"
+            />
+          </Row>
+        </Section>
+
+        {/* Taille */}
+        <Section label="Taille">
+          <Row label="Largeur">
+            <NumInput value={element.width} onChange={v => onChange({ width: v })} />
+          </Row>
+          {element.type === 'image' && (
+            <Row label="Hauteur">
+              <NumInput value={element.height} onChange={v => onChange({ height: v })} />
+            </Row>
+          )}
+        </Section>
+
+        {/* Texte */}
+        {element.type === 'text' && (
+          <Section label="Texte">
+            <textarea
+              value={element.text}
+              onChange={e => onChange({ text: e.target.value })}
+              className="w-full border rounded px-2 py-1 text-xs resize-none"
+              rows={3}
+            />
+            <Row label="Taille">
+              <NumInput value={element.fontSize} onChange={v => onChange({ fontSize: v })} min={8} max={200} />
+            </Row>
+            <Row label="Police">
+              <select
+                value={element.fontFamily}
+                onChange={e => onChange({ fontFamily: e.target.value })}
+                className="w-full border rounded px-1 py-0.5 text-xs"
+              >
+                <option value="Arial">Arial</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Times New Roman">Times New Roman</option>
+                {fonts.map(f => (
+                  <option key={f.id} value={f.nom}>{f.nom}</option>
+                ))}
+              </select>
+            </Row>
+            <Row label="Style">
+              <div className="flex gap-1">
+                {['bold', 'italic'].map(s => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      const cur = element.fontStyle ?? ''
+                      const has = cur.includes(s)
+                      const next = has
+                        ? cur.replace(s, '').trim()
+                        : (cur + ' ' + s).trim()
+                      onChange({ fontStyle: next })
+                    }}
+                    className={`px-2 py-0.5 text-xs border rounded ${
+                      (element.fontStyle ?? '').includes(s)
+                        ? 'bg-gray-800 text-white border-gray-800'
+                        : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    {s === 'bold' ? 'G' : 'I'}
+                  </button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Alignement">
+              <div className="flex gap-1">
+                {['left', 'center', 'right'].map(a => (
+                  <button
+                    key={a}
+                    onClick={() => onChange({ align: a })}
+                    className={`px-2 py-0.5 text-xs border rounded ${
+                      element.align === a ? 'bg-gray-800 text-white' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    {a === 'left' ? '⬅' : a === 'center' ? '↔' : '➡'}
+                  </button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Couleur">
+              <input
+                type="color"
+                value={element.fill}
+                onChange={e => onChange({ fill: e.target.value })}
+                className="w-10 h-7 border rounded cursor-pointer"
+              />
+            </Row>
+          </Section>
+        )}
+
+        {/* Image */}
+        {element.type === 'image' && (
+          <Section label="Image">
+            <Row label="Flip H">
+              <Toggle value={element.flipX} onChange={v => onChange({ flipX: v })} />
+            </Row>
+            <Row label="Flip V">
+              <Toggle value={element.flipY} onChange={v => onChange({ flipY: v })} />
+            </Row>
+          </Section>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Section({ label, children }) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">{label}</p>
+      <div className="space-y-1">{children}</div>
+    </div>
+  )
+}
+
+function Row({ label, children }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500 w-16 flex-shrink-0">{label}</span>
+      <div className="flex-1">{children}</div>
+    </div>
+  )
+}
+
+function NumInput({ value, onChange, min, max }) {
+  return (
+    <input
+      type="number"
+      value={Math.round(value ?? 0)}
+      min={min} max={max}
+      onChange={e => onChange(parseFloat(e.target.value))}
+      className="w-full border rounded px-2 py-0.5 text-xs"
+    />
+  )
+}
+
+function Toggle({ value, onChange }) {
+  return (
+    <button
+      onClick={() => onChange(!value)}
+      className={`px-2 py-0.5 text-xs border rounded ${value ? 'bg-gray-800 text-white' : 'hover:bg-gray-50'}`}
+    >
+      {value ? 'Oui' : 'Non'}
+    </button>
+  )
+}

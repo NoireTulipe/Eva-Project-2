@@ -22,6 +22,7 @@ import EvaMemoire     from './pages/web/eva/Memoire.jsx'
 import EvaAgenda      from './pages/web/eva/Agenda.jsx'
 import EvaNotes       from './pages/web/eva/Notes.jsx'
 import EvaSite        from './pages/web/eva/Site.jsx'
+import EvaInstagram   from './pages/web/eva/Instagram.jsx'
 
 // Admin
 import AdminParametrage   from './pages/web/admin/Parametrage.jsx'
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="agenda"      element={<EvaAgenda />} />
               <Route path="notes"       element={<EvaNotes />} />
               <Route path="site"        element={<EvaSite />} />
+              <Route path="instagram"   element={<EvaInstagram />} />
             </Route>
 
             {/* Admin — rôle admin uniquement */}

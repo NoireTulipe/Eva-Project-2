@@ -437,6 +437,74 @@ model CronConfig {
   updatedAt   DateTime @updatedAt
 }
 
+// ─── INSTAGRAM ────────────────────────────────────────────────────────────────
+
+model IgBackground {
+  id        Int      @id @default(autoincrement())
+  nom       String
+  fichier   String   // chemin relatif dans uploads/instagram/backgrounds/
+  preview   String?  // miniature générée
+  estDefaut Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model IgElement {
+  id        Int      @id @default(autoincrement())
+  nom       String
+  fichier   String   // chemin relatif dans uploads/instagram/elements/
+  preview   String?
+  tags      String   @default("") // mots-clés séparés par virgules
+  createdAt DateTime @default(now())
+}
+
+model IgFont {
+  id              Int      @id @default(autoincrement())
+  nom             String   @unique
+  fichier         String?  // chemin relatif dans uploads/instagram/fonts/ (null = Google Font)
+  googleFont      String?  // nom exact Google Fonts si pas de fichier local
+  estDefautTitre  Boolean  @default(false)
+  estDefautTexte  Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}
+
+model IgCouleur {
+  id        Int      @id @default(autoincrement())
+  nom       String   @unique
+  valeur    String   // hex ex: #FF5A5F
+  createdAt DateTime @default(now())
+}
+
+model IgPost {
+  id          Int       @id @default(autoincrement())
+  titre       String?
+  vignettes   String    // JSON : tableau d'états canvas Konva (une entrée par slide)
+  legende     String?   // texte d'accompagnement généré ou saisi
+  statut      String    @default("brouillon") // "brouillon" | "publie"
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model IgExclusion {
+  id        Int      @id @default(autoincrement())
+  igUserId  String   @unique // identifiant utilisateur Instagram
+  nom       String
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model IgBrouillon {
+  id              Int      @id @default(autoincrement())
+  type            String   // "commentaire" | "message"
+  igAuteurId      String
+  igAuteurNom     String?
+  messageOriginal String
+  textePropose    String?
+  statut          String   @default("en_attente") // "en_attente" | "envoye" | "ignore"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 // ─── DISCORD ──────────────────────────────────────────────────────────────────
 
 model CanalDiscord {

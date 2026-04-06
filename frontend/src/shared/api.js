@@ -401,3 +401,63 @@ export const mail = {
   corrigerLog: (id, action, raison, dossierCible) => request('POST', `/mail/journal/${id}/corriger`, { action, raison, dossierCible })
 }
 
+// --- Instagram ---
+
+async function uploadRequest(method, path, formData) {
+  const r = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: formData,
+  })
+  if (!r.ok) throw new Error((await r.json()).error || r.statusText)
+  return r.json()
+}
+
+export const instagram = {
+  // Backgrounds
+  getBackgrounds: () => request('GET', '/instagram/backgrounds'),
+  createBackground: (formData) => uploadRequest('POST', '/instagram/backgrounds', formData),
+  setDefaultBackground: (id) => request('PUT', `/instagram/backgrounds/${id}/defaut`, {}),
+  deleteBackground: (id) => request('DELETE', `/instagram/backgrounds/${id}`),
+
+  // Éléments
+  getElements: (tag) => request('GET', `/instagram/elements${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`),
+  createElement: (formData) => uploadRequest('POST', '/instagram/elements', formData),
+  updateElement: (id, data) => request('PUT', `/instagram/elements/${id}`, data),
+  deleteElement: (id) => request('DELETE', `/instagram/elements/${id}`),
+
+  // Fonts
+  getFonts: () => request('GET', '/instagram/fonts'),
+  createFont: (formData) => uploadRequest('POST', '/instagram/fonts', formData),
+  setDefaultFont: (id, role) => request('PUT', `/instagram/fonts/${id}/defaut`, { role }),
+  deleteFont: (id) => request('DELETE', `/instagram/fonts/${id}`),
+
+  // Couleurs
+  getCouleurs: () => request('GET', '/instagram/couleurs'),
+  createCouleur: (data) => request('POST', '/instagram/couleurs', data),
+  updateCouleur: (id, data) => request('PUT', `/instagram/couleurs/${id}`, data),
+  deleteCouleur: (id) => request('DELETE', `/instagram/couleurs/${id}`),
+
+  // Posts
+  getPosts: () => request('GET', '/instagram/posts'),
+  getPost: (id) => request('GET', `/instagram/posts/${id}`),
+  createPost: (data) => request('POST', '/instagram/posts', data),
+  updatePost: (id, data) => request('PUT', `/instagram/posts/${id}`, data),
+  deletePost: (id) => request('DELETE', `/instagram/posts/${id}`),
+
+  // Exclusions
+  getExclusions: () => request('GET', '/instagram/exclusions'),
+  createExclusion: (data) => request('POST', '/instagram/exclusions', data),
+  deleteExclusion: (id) => request('DELETE', `/instagram/exclusions/${id}`),
+
+  // Brouillons
+  getBrouillons: (statut) => request('GET', `/instagram/brouillons${statut ? `?statut=${statut}` : ''}`),
+  updateBrouillon: (id, data) => request('PUT', `/instagram/brouillons/${id}`, data),
+  envoyerBrouillon: (id) => request('POST', `/instagram/brouillons/${id}/envoyer`, {}),
+  ignorerBrouillon: (id) => request('POST', `/instagram/brouillons/${id}/ignorer`, {}),
+
+  // Config
+  getConfig: () => request('GET', '/instagram/config'),
+  setConfig: (cle, valeur) => request('PUT', `/instagram/config/${cle}`, { valeur }),
+}
+

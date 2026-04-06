@@ -8,7 +8,8 @@
       "Bash(/dev/null echo:*)",
       "Bash(npx @capacitor/assets --help)",
       "Bash(find c:/Users/DCFM/Documents/Bobo/Eva_Project/Eva2/mobile/node_modules/@capacitor/assets -name *.js)",
-      "Bash(npx @capacitor/assets generate --android)"
+      "Bash(npx @capacitor/assets generate --android)",
+      "Bash(npx vite:*)"
     ]
   }
 }
