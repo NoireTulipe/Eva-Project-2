@@ -104,7 +104,7 @@ export default function IgGenerateurIA({ nbSlides, onClose, onApply }) {
                       updated[i] = e.target.value
                       setResult({ ...result, textes: updated })
                     }}
-                    className="w-full border rounded px-3 py-2 text-sm resize-none"
+                    className="w-full border rounded px-3 py-2 text-sm resize-y"
                     rows={3}
                   />
                 </div>
@@ -116,8 +116,8 @@ export default function IgGenerateurIA({ nbSlides, onClose, onApply }) {
               <textarea
                 value={result.legende}
                 onChange={e => setResult({ ...result, legende: e.target.value })}
-                className="w-full border rounded px-3 py-2 text-sm resize-none"
-                rows={3}
+                className="w-full border rounded px-3 py-2 text-sm resize-y"
+                rows={5}
               />
             </div>
 

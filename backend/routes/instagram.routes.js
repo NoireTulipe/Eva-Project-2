@@ -26,12 +26,14 @@ webhookRouter.get('/webhook-debug', (req, res) => {
 })
 
 webhookRouter.get('/webhook', (req, res) => {
-  // Express/qs garde les points comme clés littérales : req.query['hub.mode']
-  const mode      = req.query['hub.mode']
-  const token     = req.query['hub.verify_token']
-  const challenge = req.query['hub.challenge']
+  // qs peut parser les dots en objet imbriqué (hub.mode → hub:{mode}) selon la version
+  // On supporte les deux formats pour robustesse
+  const q         = req.query
+  const mode      = q['hub.mode']         ?? q.hub?.mode
+  const token     = q['hub.verify_token'] ?? q.hub?.verify_token
+  const challenge = q['hub.challenge']    ?? q.hub?.challenge
 
-  logAction(`Instagram webhook debug: mode="${mode}" token="${token}" challenge="${challenge}" query=${JSON.stringify(req.query)}`)
+  logAction(`Instagram webhook: query=${JSON.stringify(q)} → mode="${mode}" token="${token}" challenge="${challenge}"`)
 
   if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
     logAction('Instagram: webhook Meta vérifié')
@@ -368,16 +370,19 @@ router.post('/generer-texte', async (req, res) => {
       where: { module_role: { module: 'instagram', role: 'texte_image' } }
     })
 
-    const promptTemplate = promptOverride ?? promptRecord?.contenu ?? `Tu es un expert en communication pour une maison d'édition. Génère un texte percutant pour une publication Instagram.
+    const promptTemplate = promptOverride ?? promptRecord?.contenu ?? `Tu es un expert en communication pour une maison d'édition indépendante. Génère le contenu d'une publication Instagram.
 
 Sujet : {sujet}
-Nombre de phrases maximum par vignette : {nbPhrases}
 Nombre de vignettes : {nbSlides}
+Phrases par vignette : jusqu'à {nbPhrases} (sépare chaque phrase par \\n dans la chaîne JSON)
 
 Réponds en JSON valide avec ce format exact, sans markdown ni backticks :
-{ "textes": ["texte vignette 1", "texte vignette 2"], "legende": "texte de la légende Instagram avec emojis et hashtags" }
+{"textes":["phrase 1\\nphrase 2\\nphrase 3","texte vignette 2"],"legende":"ligne 1 de la légende\\n\\n🏷️ #hashtag1 #hashtag2 @mention"}
 
-Le texte de chaque vignette doit être court, impactant, lisible en 3 secondes.`
+Règles :
+- Chaque vignette contient jusqu'à {nbPhrases} phrases courtes et percutantes, séparées par \\n
+- La légende est complète (accroche, corps, call-to-action, hashtags) avec des sauts de ligne \\n entre les parties
+- Adapte le ton à une maison d'édition : littéraire, chaleureux, passionné`
 
     const prompt = promptTemplate
       .replace('{sujet}', sujet)

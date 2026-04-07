@@ -323,8 +323,8 @@ export default function IgEditeur() {
             value={legende}
             onChange={e => setLegende(e.target.value)}
             placeholder="Légende d'accompagnement (avec #hashtags et @mentions)…"
-            className="w-full border rounded px-3 py-1.5 text-sm resize-none"
-            rows={2}
+            className="w-full border rounded px-3 py-1.5 text-sm resize-y"
+            rows={3}
           />
         </div>
       </div>
