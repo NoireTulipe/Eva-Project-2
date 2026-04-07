@@ -465,5 +465,9 @@ export const instagram = {
 
   // Activité
   getActivite: (limite = 10) => request('GET', `/instagram/activite?limite=${limite}`),
+
+  // OAuth
+  getOauthUrl:    () => request('GET', '/instagram/oauth/url'),
+  getOauthStatus: () => request('GET', '/instagram/oauth/status'),
 }
 

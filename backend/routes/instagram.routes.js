@@ -12,8 +12,66 @@ import { logAction, logError } from '../logs/logger.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const UPLOADS_BASE = resolve(__dirname, '../uploads/instagram')
 
-// Router PUBLIC — webhook Meta uniquement (sans auth)
+// Router PUBLIC — webhook Meta + OAuth callback (sans auth)
 export const webhookRouter = Router()
+
+// ── OAuth callback — Meta redirige ici après autorisation ─────────────────────
+webhookRouter.get('/oauth/callback', async (req, res) => {
+  const { code, error, error_description } = req.query
+  const redirectBase = '/eva/instagram?tab=parametres'
+
+  if (error) {
+    logError(`Instagram OAuth: ${error} — ${error_description}`)
+    return res.redirect(`${redirectBase}&oauth=error&msg=${encodeURIComponent(error_description ?? error)}`)
+  }
+  if (!code) return res.redirect(`${redirectBase}&oauth=error&msg=code_manquant`)
+
+  try {
+    const appId     = process.env.META_APP_ID
+    const appSecret = process.env.META_APP_SECRET
+    const baseUrl   = process.env.APP_URL ?? 'https://eva.echodeplumes.com'
+    const redirectUri = `${baseUrl}/api/instagram/oauth/callback`
+
+    if (!appId || !appSecret) throw new Error('META_APP_ID ou META_APP_SECRET non défini dans .env')
+
+    // 1. Code → token court (Instagram Login for Business)
+    const formData = new URLSearchParams({
+      client_id: appId, client_secret: appSecret,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri, code,
+    })
+    const shortRes  = await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: formData })
+    const shortData = await shortRes.json()
+    if (shortData.error_type) throw new Error(shortData.error_message ?? shortData.error_type)
+
+    const shortToken = shortData.access_token
+    const igUserId   = String(shortData.user_id)
+
+    // 2. Token court → token long (60 jours)
+    const llUrl  = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_id=${appId}&client_secret=${appSecret}&access_token=${shortToken}`
+    const llRes  = await fetch(llUrl)
+    const llData = await llRes.json()
+    if (llData.error) throw new Error(llData.error.message ?? JSON.stringify(llData.error))
+
+    const longToken  = llData.access_token
+    const expiresIn  = llData.expires_in  // ~5184000 secondes = 60 jours
+    const expiresAt  = new Date(Date.now() + expiresIn * 1000).toISOString()
+
+    // 3. Sauvegarder en DB
+    const upsert = (cle, valeur, description) => prisma.configParam.upsert({
+      where: { cle }, create: { cle, valeur, description }, update: { valeur },
+    })
+    await upsert('instagram.access_token',  longToken,  'Token accès Meta Instagram (60 jours)')
+    await upsert('instagram.ig_user_id',    igUserId,   'ID compte Instagram Business')
+    await upsert('instagram.token_expires_at', expiresAt, 'Expiration token Meta')
+
+    logAction(`Instagram OAuth: connexion réussie — compte IG #${igUserId}, expire le ${expiresAt}`)
+    res.redirect(`${redirectBase}&oauth=success`)
+  } catch (e) {
+    logError(`Instagram OAuth callback: ${e.message}`)
+    res.redirect(`${redirectBase}&oauth=error&msg=${encodeURIComponent(e.message)}`)
+  }
+})
 
 // Route de diagnostic temporaire — à supprimer une fois le webhook fonctionnel
 webhookRouter.get('/webhook-debug', (req, res) => {
@@ -83,6 +141,47 @@ webhookRouter.post('/webhook', express.raw({ type: 'application/json' }), async 
 // Router PRIVÉ — toutes les autres routes (avec auth)
 const router = Router()
 router.use(authMiddleware)
+
+// ─── OAuth — Générer l'URL d'autorisation Meta ────────────────────────────────
+
+router.get('/oauth/url', (req, res) => {
+  const appId = process.env.META_APP_ID
+  if (!appId) return res.status(500).json({ error: 'META_APP_ID non configuré dans .env' })
+
+  const baseUrl     = process.env.APP_URL ?? 'https://eva.echodeplumes.com'
+  const redirectUri = `${baseUrl}/api/instagram/oauth/callback`
+  const scopes      = [
+    'instagram_business_basic',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_comments',
+    'instagram_business_content_publish',
+    'instagram_business_manage_insights',
+  ].join(',')
+
+  const url = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}`
+  res.json({ url, redirectUri })
+})
+
+// ─── OAuth — Statut connexion ─────────────────────────────────────────────────
+
+router.get('/oauth/status', async (req, res) => {
+  try {
+    const rows = await prisma.configParam.findMany({
+      where: { cle: { in: ['instagram.access_token', 'instagram.ig_user_id', 'instagram.token_expires_at'] } }
+    })
+    const map = Object.fromEntries(rows.map(r => [r.cle, r.valeur]))
+    const connected = !!(
+      (process.env.META_ACCESS_TOKEN || map['instagram.access_token']) &&
+      (process.env.META_IG_USER_ID   || map['instagram.ig_user_id'])
+    )
+    const expiresAt   = map['instagram.token_expires_at'] ?? null
+    const igUserId    = process.env.META_IG_USER_ID || map['instagram.ig_user_id'] || null
+    const tokenSource = process.env.META_ACCESS_TOKEN ? 'env' : (map['instagram.access_token'] ? 'db' : null)
+    res.json({ connected, igUserId, expiresAt, tokenSource })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
 // ─── Multer — stockage par sous-dossier ───────────────────────────────────────
 

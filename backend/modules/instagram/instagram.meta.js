@@ -19,24 +19,40 @@ import { logError, logAction } from '../../logs/logger.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const POSTS_DIR = resolve(__dirname, '../../uploads/instagram/posts')
 
-const GRAPH_URL = 'https://graph.facebook.com/v21.0'
+const GRAPH_URL    = 'https://graph.facebook.com/v21.0'
+const IG_GRAPH_URL = 'https://graph.instagram.com/v21.0'
 
-// ── Appel Graph API ───────────────────────────────────────────────────────────
+// ── Token & ID : env en priorité, sinon DB ────────────────────────────────────
+
+async function getToken() {
+  if (process.env.META_ACCESS_TOKEN) return process.env.META_ACCESS_TOKEN
+  const row = await prisma.configParam.findUnique({ where: { cle: 'instagram.access_token' } })
+  if (row?.valeur) return row.valeur
+  throw new Error('Token Meta non configuré (ni .env META_ACCESS_TOKEN, ni instagram.access_token en DB)')
+}
+
+async function getIgUserId() {
+  if (process.env.META_IG_USER_ID) return process.env.META_IG_USER_ID
+  const row = await prisma.configParam.findUnique({ where: { cle: 'instagram.ig_user_id' } })
+  if (row?.valeur) return row.valeur
+  throw new Error('ID compte Instagram non configuré (ni .env META_IG_USER_ID, ni instagram.ig_user_id en DB)')
+}
+
+// ── Appel Graph API (Instagram Login for Business = graph.instagram.com) ─────
 
 async function graphGet(path, params = {}) {
-  const token = process.env.META_ACCESS_TOKEN
-  if (!token) throw new Error('META_ACCESS_TOKEN non défini')
+  const token = await getToken()
   const qs = new URLSearchParams({ access_token: token, ...params })
-  const r = await fetch(`${GRAPH_URL}${path}?${qs}`)
+  // Essaie d'abord l'API Instagram, fallback Facebook si 4xx
+  const r = await fetch(`${IG_GRAPH_URL}${path}?${qs}`)
   const data = await r.json()
   if (data.error) throw new Error(`Meta API: ${data.error.message}`)
   return data
 }
 
 async function graphPost(path, body = {}) {
-  const token = process.env.META_ACCESS_TOKEN
-  if (!token) throw new Error('META_ACCESS_TOKEN non défini')
-  const r = await fetch(`${GRAPH_URL}${path}`, {
+  const token = await getToken()
+  const r = await fetch(`${IG_GRAPH_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ access_token: token, ...body }),
@@ -58,16 +74,13 @@ export function verifyWebhookSignature(rawBody, signature) {
 // ── Récupérer les commentaires récents ────────────────────────────────────────
 
 export async function fetchCommentaires(mediaId) {
-  const igUserId = process.env.META_IG_USER_ID
-  if (!igUserId) throw new Error('META_IG_USER_ID non défini')
   return graphGet(`/${mediaId}/comments`, { fields: 'id,text,username,timestamp,replies{id,text,username}' })
 }
 
 // ── Récupérer les conversations (messages) ────────────────────────────────────
 
 export async function fetchConversations() {
-  const igUserId = process.env.META_IG_USER_ID
-  if (!igUserId) throw new Error('META_IG_USER_ID non défini')
+  const igUserId = await getIgUserId()
   return graphGet(`/${igUserId}/conversations`, {
     platform: 'instagram',
     fields: 'id,participants,messages{id,message,from,created_time}',
@@ -84,9 +97,8 @@ export async function fetchConversations() {
  * @param {string[]} imagesBase64 - tableau de data URLs PNG (une par vignette)
  */
 export async function publierPost(postId, imagesBase64) {
-  const igUserId = process.env.META_IG_USER_ID
+  const igUserId = await getIgUserId()
   const baseUrl  = process.env.APP_BASE_URL || `https://eva.echodeplumes.com`
-  if (!igUserId) throw new Error('META_IG_USER_ID non défini')
 
   const post = await prisma.igPost.findUnique({ where: { id: postId } })
   if (!post) throw new Error('Post introuvable')
@@ -160,8 +172,6 @@ export async function repondreCommentaire(commentaireId, message) {
 // ── Répondre à un message privé ───────────────────────────────────────────────
 
 export async function repondreMessage(recipientIgId, message) {
-  const igUserId = process.env.META_IG_USER_ID
-  if (!igUserId) throw new Error('META_IG_USER_ID non défini')
   return graphPost(`/me/messages`, {
     recipient: { id: recipientIgId },
     message: { text: message },

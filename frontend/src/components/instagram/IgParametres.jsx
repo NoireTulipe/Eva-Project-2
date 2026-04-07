@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { admin } from '../../shared/api.js'
+import { admin, instagram } from '../../shared/api.js'
 
 const PROMPT_ROLES = [
   {
@@ -20,11 +20,26 @@ const PROMPT_ROLES = [
 ]
 
 export default function IgParametres() {
-  const [prompts, setPrompts]   = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState(null) // id du prompt en cours de sauvegarde
-  const [saved, setSaved]       = useState(null) // id du prompt sauvegardé
-  const [edits, setEdits]       = useState({})   // { [id]: contenu }
+  const [prompts, setPrompts]       = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [saving, setSaving]         = useState(null)
+  const [saved, setSaved]           = useState(null)
+  const [edits, setEdits]           = useState({})
+  const [oauthStatus, setOauthStatus] = useState(null)
+  const [connecting, setConnecting]   = useState(false)
+
+  // Lire le statut OAuth et le résultat du callback depuis l'URL
+  useEffect(() => {
+    instagram.getOauthStatus().then(setOauthStatus).catch(() => {})
+
+    const params = new URLSearchParams(window.location.search)
+    const result = params.get('oauth')
+    if (result === 'success') {
+      instagram.getOauthStatus().then(setOauthStatus).catch(() => {})
+      // Nettoyer l'URL sans recharger la page
+      window.history.replaceState({}, '', window.location.pathname + '?tab=parametres')
+    }
+  }, [])
 
   useEffect(() => {
     admin.getPrompts().then(all => {
@@ -33,6 +48,17 @@ export default function IgParametres() {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  async function connecter() {
+    setConnecting(true)
+    try {
+      const { url } = await instagram.getOauthUrl()
+      window.location.href = url
+    } catch (e) {
+      alert(`Erreur : ${e.message}`)
+      setConnecting(false)
+    }
+  }
 
   function getContenu(prompt) {
     return edits[prompt.id] ?? prompt.contenu
@@ -59,6 +85,53 @@ export default function IgParametres() {
   return (
     <div className="max-w-2xl p-4 space-y-6">
       <h2 className="text-base font-semibold">Paramètres Instagram</h2>
+
+      {/* ── Connexion OAuth ──────────────────────────────────────────────────── */}
+      <div className="border rounded-lg p-4 space-y-3">
+        <h3 className="font-medium text-sm">Connexion au compte Instagram</h3>
+
+        {oauthStatus?.connected ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+              <span className="text-sm text-green-700 font-medium">Connecté</span>
+              {oauthStatus.tokenSource === 'env' && (
+                <span className="text-xs text-gray-400">(token .env)</span>
+              )}
+            </div>
+            {oauthStatus.igUserId && (
+              <p className="text-xs text-gray-500">ID compte : {oauthStatus.igUserId}</p>
+            )}
+            {oauthStatus.expiresAt && (
+              <p className="text-xs text-gray-500">
+                Token valide jusqu'au : {new Date(oauthStatus.expiresAt).toLocaleDateString('fr-FR', {
+                  day: 'numeric', month: 'long', year: 'numeric'
+                })}
+              </p>
+            )}
+            {oauthStatus.tokenSource !== 'env' && (
+              <button onClick={connecter} disabled={connecting}
+                className="px-3 py-1.5 text-xs border border-pink-200 text-pink-600 rounded hover:bg-pink-50 disabled:opacity-50">
+                {connecting ? 'Redirection…' : 'Reconnecter / Renouveler le token'}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Autorisez EVA à accéder à votre compte Instagram Business pour publier, répondre aux commentaires et messages.
+            </p>
+            <button onClick={connecter} disabled={connecting}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium">
+              {connecting ? 'Redirection vers Meta…' : '🔗 Connecter le compte Instagram'}
+            </button>
+            <p className="text-xs text-gray-400">
+              Nécessite META_APP_ID et META_APP_SECRET dans le fichier .env du serveur.
+            </p>
+          </div>
+        )}
+      </div>
+
       <p className="text-sm text-gray-500">
         Les prompts sont stockés en base de données et partagés entre tous les utilisateurs.
       </p>
