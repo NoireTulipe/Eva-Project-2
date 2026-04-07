@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Stage, Layer, Rect, Text, Image as KImage, Transformer } from 'react-konva'
 import useImage from 'use-image'
-import CanvasArrow  from './CanvasArrow.jsx'
-import CanvasShape  from './CanvasShape.jsx'
+import CanvasArrow    from './CanvasArrow.jsx'
+import CanvasShape    from './CanvasShape.jsx'
+import IgLibraryPanel from './IgLibraryPanel.jsx'
 import { IG_FORMATS, FORMAT_PAR_DEFAUT } from './igFormats.js'
 import IgLayerPanel      from './IgLayerPanel.jsx'
 import IgToolbar         from './IgToolbar.jsx'
@@ -30,11 +31,14 @@ export default function IgEditeur() {
   const [selectedId, setSelectedId] = useState(null)
   const [legende, setLegende]       = useState('')
   const [titre, setTitre]           = useState('')
-  const [showIA, setShowIA]         = useState(false)
-  const [showProg, setShowProg]     = useState(false)
-  const [showPosts, setShowPosts]   = useState(false)
-  const [saving, setSaving]         = useState(false)
-  const [postId, setPostId]         = useState(null)
+  const [showIA, setShowIA]             = useState(false)
+  const [showProg, setShowProg]         = useState(false)
+  const [showPosts, setShowPosts]       = useState(false)
+  const [saving, setSaving]             = useState(false)
+  const [postId, setPostId]             = useState(null)
+  const [showLibrary, setShowLibrary]   = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [dropFile, setDropFile]         = useState(null)   // fichier en attente d'import
 
   const fmt  = IG_FORMATS[format]
   const slide = slides[slideIdx]
@@ -78,13 +82,23 @@ export default function IgEditeur() {
   }
   const selectedEl = slide.elements.find(el => el.id === selectedId) ?? null
 
+  // ── Drag & drop image sur le canvas ──────────────────────────────────────────
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    setDropFile(file)
+  }, [])
+
   // ── Ajouter texte ─────────────────────────────────────────────────────────────
   function addText() {
-    const id = `el-${Date.now()}`
+    const id  = `el-${Date.now()}`
+    const idx = slides[slideIdx].elements.filter(e => e.type === 'text').length + 1
     updateSlide(s => ({
       ...s,
       elements: [...s.elements, {
         id, type: 'text',
+        nom: `Texte ${idx}`,
         x: 40, y: Math.round(fmt.displayH / 2) - 40, width: fmt.displayW - 80,
         text: 'Votre texte', fontSize: 32, fontFamily: 'Arial',
         fill: '#000000', align: 'center', fontStyle: '',
@@ -242,7 +256,7 @@ export default function IgEditeur() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-gray-100">
+    <div className={`flex flex-col overflow-hidden bg-gray-100 ${isFullscreen ? 'fixed inset-0 z-40' : 'h-full'}`}>
       <IgToolbar
         format={format}
         onFormatChange={changerFormat}
@@ -261,9 +275,22 @@ export default function IgEditeur() {
         onPublierMaintenant={publierMaintenant}
         titre={titre}
         onTitreChange={setTitre}
+        showLibrary={showLibrary}
+        onToggleLibrary={() => setShowLibrary(v => !v)}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={() => setIsFullscreen(v => !v)}
       />
 
       <div className="flex flex-1 overflow-hidden">
+
+        {/* Bibliothèque intégrée */}
+        {showLibrary && (
+          <IgLibraryPanel
+            onAddImage={addImageFromUrl}
+            onSetBackground={setBackground}
+          />
+        )}
+
         <IgLayerPanel
           elements={slide.elements}
           selectedId={selectedId}
@@ -277,7 +304,10 @@ export default function IgEditeur() {
         />
 
         {/* Canvas */}
-        <div className="flex-1 flex flex-col items-center justify-center overflow-auto p-4">
+        <div className="flex-1 flex flex-col items-center justify-center overflow-auto p-4"
+          onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
+          onDrop={handleDrop}
+        >
           <p className="text-xs text-gray-400 mb-2">{fmt.label} — {fmt.exportW}×{fmt.exportH}px ({fmt.subtitle})</p>
           <div
             className="shadow-xl border border-gray-300"
@@ -300,6 +330,7 @@ export default function IgEditeur() {
               height={fmt.displayH}
             />
           </div>
+          <p className="text-xs text-gray-300 mt-2">Glissez une image ici pour l'ajouter</p>
         </div>
 
         <IgPropertiesPanel
@@ -310,7 +341,7 @@ export default function IgEditeur() {
       </div>
 
       {/* Bas : slides + légende */}
-      <div className="border-t border-gray-200 bg-white px-4 py-2">
+      <div className="border-t border-gray-200 bg-white px-4 py-2 flex-shrink-0">
         <IgSlideManager
           slides={slides}
           currentIdx={slideIdx}
@@ -329,28 +360,42 @@ export default function IgEditeur() {
         </div>
       </div>
 
+      {/* Modale drag & drop */}
+      {dropFile && (
+        <DropImportModal
+          file={dropFile}
+          onCancel={() => setDropFile(null)}
+          onConfirm={async ({ addToLibrary, nom }) => {
+            const url = await readFileAsDataUrl(dropFile)
+            if (addToLibrary) {
+              const fd = new FormData()
+              fd.append('fichier', dropFile)
+              fd.append('nom', nom)
+              await instagram.createElement(fd).catch(() => {})
+            }
+            addImageFromUrl(url, nom)
+            setDropFile(null)
+          }}
+        />
+      )}
+
       {showIA && (
         <IgGenerateurIA
-          nbSlides={slides.length}
+          slides={slides}
+          slideIdx={slideIdx}
           onClose={() => setShowIA(false)}
-          onApply={({ textes, legende: leg }) => {
-            textes.forEach((txt, i) => {
-              if (!slides[i]) return
-              setSlides(prev => prev.map((s, si) => {
-                if (si !== i) return s
-                const id = `el-${Date.now()}-${i}`
-                return {
-                  ...s,
-                  elements: [...s.elements, {
-                    id, type: 'text',
-                    x: 40, y: Math.round(fmt.displayH / 2) - 50, width: fmt.displayW - 80,
-                    text: txt, fontSize: 28, fontFamily: 'Arial',
-                    fill: '#000000', align: 'center', fontStyle: '',
-                    draggable: true, opacity: 1, rotation: 0, visible: true, locked: false,
-                  }]
-                }
+          onApply={({ champs, legende: leg }) => {
+            // Remplir chaque élément texte par son nom
+            if (champs) {
+              updateSlide(s => ({
+                ...s,
+                elements: s.elements.map(el => {
+                  if (el.type !== 'text') return el
+                  const texte = champs[el.nom ?? el.id]
+                  return texte ? { ...el, text: texte } : el
+                })
               }))
-            })
+            }
             if (leg) setLegende(leg)
             setShowIA(false)
           }}
@@ -390,6 +435,61 @@ export default function IgEditeur() {
           }}
         />
       )}
+    </div>
+  )
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => resolve(e.target.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+// ── Modale import drag & drop ─────────────────────────────────────────────────
+
+function DropImportModal({ file, onCancel, onConfirm }) {
+  const [nom, setNom]             = useState(file.name.replace(/\.[^.]+$/, ''))
+  const [addToLibrary, setAddLib] = useState(true)
+  const [preview, setPreview]     = useState(null)
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file)
+    setPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-xl shadow-2xl w-80 p-5 space-y-4">
+        <h3 className="font-semibold text-sm">Ajouter une image</h3>
+        {preview && (
+          <img src={preview} alt="" className="w-full h-36 object-contain bg-gray-50 rounded border" />
+        )}
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Nom</label>
+          <input type="text" value={nom} onChange={e => setNom(e.target.value)}
+            className="w-full border rounded px-2 py-1.5 text-sm" />
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={addToLibrary} onChange={e => setAddLib(e.target.checked)}
+            className="rounded" />
+          <span className="text-sm">Sauvegarder dans la bibliothèque</span>
+        </label>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={onCancel} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">
+            Annuler
+          </button>
+          <button onClick={() => onConfirm({ addToLibrary, nom })}
+            className="px-3 py-1.5 text-sm bg-pink-500 text-white rounded hover:bg-pink-600">
+            Ajouter au canvas
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

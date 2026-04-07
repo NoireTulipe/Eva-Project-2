@@ -16,6 +16,8 @@ export default function IgToolbar({
   onAddText, onAddShape, onAddArrow, onAddImage, onSetBackground, background,
   onExport, onSave, saving, onShowIA, onShowProg, onShowPosts, onPublierMaintenant,
   titre, onTitreChange,
+  showLibrary, onToggleLibrary,
+  isFullscreen, onToggleFullscreen,
 }) {
   const [showBgPicker, setShowBgPicker]   = useState(false)
   const [showElPicker, setShowElPicker]   = useState(false)
@@ -83,7 +85,7 @@ export default function IgToolbar({
           className="flex items-center gap-1 px-2 py-1 text-sm rounded hover:bg-gray-100"
           title="Ajouter une forme"
         >
-          ◼ <span className="text-gray-400 text-xs">▾</span>
+          ★ <span className="text-gray-400 text-xs">▾</span>
         </button>
         {showShapes && (
           <div className="absolute top-full left-0 mt-1 z-50 bg-white border rounded shadow-lg py-1 w-36">
@@ -134,6 +136,24 @@ export default function IgToolbar({
       <button onClick={onShowIA} className="flex items-center gap-1 px-3 py-1 text-sm bg-purple-50 text-purple-700 border border-purple-200 rounded hover:bg-purple-100">
         ✦ IA
       </button>
+
+      {/* Bibliothèque + Plein écran */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={onToggleLibrary}
+          title={showLibrary ? 'Masquer la bibliothèque' : 'Afficher la bibliothèque'}
+          className={`px-2 py-1 text-sm rounded border transition-colors ${showLibrary ? 'bg-pink-50 border-pink-200 text-pink-600' : 'border-gray-200 hover:bg-gray-50 text-gray-600'}`}
+        >
+          📚
+        </button>
+        <button
+          onClick={onToggleFullscreen}
+          title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+          className="px-2 py-1 text-sm rounded border border-gray-200 hover:bg-gray-50 text-gray-600"
+        >
+          {isFullscreen ? '⊡' : '⊞'}
+        </button>
+      </div>
 
       {/* Actions publication — à droite */}
       <div className="ml-auto flex items-center gap-2">

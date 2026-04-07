@@ -476,49 +476,54 @@ router.post('/posts/:id/deprogrammer', async (req, res) => {
 
 router.post('/generer-texte', async (req, res) => {
   try {
-    const { sujet, nbPhrases = 3, nbSlides = 1, promptOverride } = req.body
+    const { sujet, champs, legendeInstruction } = req.body
     if (!sujet?.trim()) return res.status(400).json({ error: 'Sujet requis' })
+    if (!champs?.length) return res.status(400).json({ error: 'Aucun champ texte défini' })
 
-    // Récupérer le prompt depuis la DB (module: instagram, role: texte_image) ou utiliser le défaut
+    // Récupérer le prompt système depuis la DB
     const promptRecord = await prisma.prompt.findUnique({
       where: { module_role: { module: 'instagram', role: 'texte_image' } }
     })
 
-    const promptTemplate = promptOverride ?? promptRecord?.contenu ?? `Tu es un expert en communication pour une maison d'édition indépendante. Génère le contenu d'une publication Instagram.
+    // Construire la liste des champs pour le prompt
+    const champsStr = champs.map(c =>
+      `- ${c.nom} : ${c.instruction || '(libre)'}`
+    ).join('\n')
 
-Sujet : {sujet}
-Nombre de vignettes : {nbSlides}
-Phrases par vignette : jusqu'à {nbPhrases} (sépare chaque phrase par \\n dans la chaîne JSON)
+    // Construire le JSON attendu en exemple
+    const jsonExemple = '{' + champs.map(c => `"${c.nom}":"..."`).join(',') + ',"legende":"..."}'
 
-Réponds en JSON valide avec ce format exact, sans markdown ni backticks :
-{"textes":["phrase 1\\nphrase 2\\nphrase 3","texte vignette 2"],"legende":"ligne 1 de la légende\\n\\n🏷️ #hashtag1 #hashtag2 @mention"}
+    const systemPrompt = promptRecord?.contenu ??
+      `Tu es expert en communication pour une maison d'édition indépendante. Ton ton est littéraire, chaleureux et passionné.`
+
+    const userPrompt = `${systemPrompt}
+
+Sujet : ${sujet}
+
+Génère le contenu pour chaque champ texte de la publication Instagram :
+${champsStr}
+- Légende : ${legendeInstruction || 'Légende Instagram complète avec emojis, call-to-action et hashtags pertinents'}
 
 Règles :
-- Chaque vignette contient jusqu'à {nbPhrases} phrases courtes et percutantes, séparées par \\n
-- La légende est complète (accroche, corps, call-to-action, hashtags) avec des sauts de ligne \\n entre les parties
-- Adapte le ton à une maison d'édition : littéraire, chaleureux, passionné`
+- Si un champ demande plusieurs phrases, sépare-les par \\n
+- La légende comporte une accroche, un corps, un call-to-action et des hashtags, avec des \\n entre les sections
+- Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks
 
-    const prompt = promptTemplate
-      .replace('{sujet}', sujet)
-      .replace('{nbPhrases}', String(nbPhrases))
-      .replace('{nbSlides}', String(nbSlides))
+Format attendu :
+${jsonExemple}`
 
     const model = process.env.MISTRAL_FLASH_MODEL || 'mistral-small-latest'
-    const raw = await callAI('mistral', model, [{ role: 'user', content: prompt }])
+    const raw   = await callAI('mistral', model, [{ role: 'user', content: userPrompt }])
 
-    // Extraire le JSON de la réponse
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('Réponse Mistral invalide — JSON introuvable')
 
     const parsed = JSON.parse(jsonMatch[0])
 
-    // S'assurer d'avoir le bon nombre de vignettes
-    while (parsed.textes.length < nbSlides) {
-      parsed.textes.push(parsed.textes[parsed.textes.length - 1] ?? '')
-    }
-    parsed.textes = parsed.textes.slice(0, nbSlides)
-
-    res.json(parsed)
+    // Isoler les champs et la légende
+    const legende = parsed.legende ?? ''
+    delete parsed.legende
+    res.json({ champs: parsed, legende })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

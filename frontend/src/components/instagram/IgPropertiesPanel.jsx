@@ -68,6 +68,15 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
         {/* Texte */}
         {element.type === 'text' && (
           <Section label="Texte">
+            <Row label="Nom">
+              <input
+                type="text"
+                value={element.nom ?? ''}
+                onChange={e => onChange({ nom: e.target.value })}
+                placeholder="Ex : Titre, Accroche…"
+                className="w-full border rounded px-2 py-0.5 text-xs"
+              />
+            </Row>
             <textarea
               value={element.text}
               onChange={e => onChange({ text: e.target.value })}
