@@ -65,6 +65,11 @@ async function graphPost(path, body = {}) {
 // ── Validation de la signature webhook ───────────────────────────────────────
 
 export function verifyWebhookSignature(rawBody, signature) {
+  // Bypass temporaire — mettre META_SKIP_SIG_CHECK=true dans .env pour ignorer la vérification
+  if (process.env.META_SKIP_SIG_CHECK === 'true') {
+    logAction('Webhook: vérification signature DÉSACTIVÉE (META_SKIP_SIG_CHECK=true)')
+    return true
+  }
   const secret = process.env.META_APP_SECRET
   if (!secret) return true
   const expected = `sha256=${crypto.createHmac('sha256', secret.trim()).update(rawBody).digest('hex')}`
