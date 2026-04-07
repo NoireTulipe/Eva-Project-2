@@ -66,8 +66,11 @@ async function graphPost(path, body = {}) {
 
 export function verifyWebhookSignature(rawBody, signature) {
   const secret = process.env.META_APP_SECRET
-  if (!secret) return true // tolérance en dev sans secret configuré
-  const expected = `sha256=${crypto.createHmac('sha256', secret).update(rawBody).digest('hex')}`
+  if (!secret) return true
+  const expected = `sha256=${crypto.createHmac('sha256', secret.trim()).update(rawBody).digest('hex')}`
+  logAction(`Webhook sig reçue  : ${signature}`)
+  logAction(`Webhook sig attendue: ${expected}`)
+  if (Buffer.from(signature).length !== Buffer.from(expected).length) return false
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
 }
 
