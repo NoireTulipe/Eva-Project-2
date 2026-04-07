@@ -117,9 +117,9 @@ webhookRouter.post('/webhook', express.raw({ type: 'application/json' }), async 
     if (!rawStr) { logError('Instagram webhook POST: body vide'); return }
 
     const body = JSON.parse(rawStr)
-    logAction(`Instagram webhook POST: object="${body.object}" entries=${body.entry?.length ?? 0}`)
+    logAction(`Instagram webhook POST reçu: object="${body.object}" entries=${body.entry?.length ?? 0} raw=${rawStr.slice(0, 300)}`)
 
-    if (body.object !== 'instagram') {
+    if (body.object !== 'instagram' && body.object !== 'page') {
       logAction(`Instagram webhook POST: object ignoré (${body.object})`)
       return
     }
