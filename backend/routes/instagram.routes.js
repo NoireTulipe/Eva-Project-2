@@ -515,15 +515,27 @@ ${jsonExemple}`
     const model = process.env.MISTRAL_FLASH_MODEL || 'mistral-small-latest'
     const raw   = await callAI('mistral', model, [{ role: 'user', content: userPrompt }])
 
+    logAction(`Mistral generer-texte raw: ${raw.slice(0, 500)}`)
+
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('Réponse Mistral invalide — JSON introuvable')
 
     const parsed = JSON.parse(jsonMatch[0])
 
-    // Isoler les champs et la légende
-    const legende = parsed.legende ?? ''
-    delete parsed.legende
-    res.json({ champs: parsed, legende })
+    // Mistral peut retourner { champs: {...}, legende: "..." } ou le format plat { Titre: "...", legende: "..." }
+    let champsObj, legende
+    if (parsed.champs && typeof parsed.champs === 'object') {
+      // Format imbriqué
+      champsObj = parsed.champs
+      legende   = parsed.legende ?? ''
+    } else {
+      // Format plat : toutes les clés sauf "legende" sont des champs
+      legende   = parsed.legende ?? ''
+      champsObj = Object.fromEntries(Object.entries(parsed).filter(([k]) => k !== 'legende'))
+    }
+
+    logAction(`Mistral generer-texte champs: ${JSON.stringify(champsObj)}`)
+    res.json({ champs: champsObj, legende })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

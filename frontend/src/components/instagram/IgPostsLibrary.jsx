@@ -9,7 +9,7 @@ const STATUT_LABEL = {
   erreur:     { label: 'Erreur',     cls: 'bg-red-100 text-red-600' },
 }
 
-export default function IgPostsLibrary({ onLoad, onClose }) {
+export default function IgPostsLibrary({ onLoad, onLoadGabarit, onClose }) {
   const [posts, setPosts]     = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(null)
@@ -94,29 +94,39 @@ export default function IgPostsLibrary({ onLoad, onClose }) {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex gap-1 flex-shrink-0">
-                      {(post.statut === 'brouillon' || post.statut === 'erreur') && (
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      <div className="flex gap-1">
+                        {(post.statut === 'brouillon' || post.statut === 'erreur') && (
+                          <button
+                            onClick={() => onLoad(post)}
+                            className="px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600"
+                            title="Remplace tout l'éditeur par ce post"
+                          >
+                            Ouvrir
+                          </button>
+                        )}
+                        {post.statut === 'programme' && (
+                          <button
+                            onClick={() => deprogrammer(post.id)}
+                            className="px-2 py-1 text-xs border border-blue-300 text-blue-600 rounded hover:bg-blue-50"
+                          >
+                            Déprog.
+                          </button>
+                        )}
                         <button
-                          onClick={() => onLoad(post)}
-                          className="px-3 py-1.5 text-sm bg-pink-500 text-white rounded hover:bg-pink-600"
+                          onClick={() => supprimer(post.id)}
+                          disabled={deleting === post.id}
+                          className="px-2 py-1 text-xs border border-red-200 text-red-400 rounded hover:bg-red-50 disabled:opacity-40"
                         >
-                          Ouvrir
+                          ✕
                         </button>
-                      )}
-                      {post.statut === 'programme' && (
-                        <button
-                          onClick={() => deprogrammer(post.id)}
-                          className="px-3 py-1.5 text-sm border border-blue-300 text-blue-600 rounded hover:bg-blue-50"
-                        >
-                          Déprogrammer
-                        </button>
-                      )}
+                      </div>
                       <button
-                        onClick={() => supprimer(post.id)}
-                        disabled={deleting === post.id}
-                        className="px-2 py-1.5 text-sm border border-red-200 text-red-400 rounded hover:bg-red-50 disabled:opacity-40"
+                        onClick={() => onLoadGabarit(post)}
+                        className="px-2 py-1 text-xs border border-purple-200 text-purple-600 rounded hover:bg-purple-50 w-full"
+                        title="Injecte la 1ère vignette comme gabarit dans la vignette courante"
                       >
-                        ✕
+                        📐 Gabarit
                       </button>
                     </div>
                   </div>

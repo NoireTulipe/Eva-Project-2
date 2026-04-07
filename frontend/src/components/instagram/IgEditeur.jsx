@@ -406,6 +406,7 @@ export default function IgEditeur() {
         <IgPostsLibrary
           onClose={() => setShowPosts(false)}
           onLoad={post => {
+            // Charge tout le post — remplace l'éditeur complet
             try {
               const vignettes = JSON.parse(post.vignettes)
               setSlides(vignettes)
@@ -415,6 +416,27 @@ export default function IgEditeur() {
               setTitre(post.titre ?? '')
               setLegende(post.legende ?? '')
               setPostId(post.id)
+            } catch {}
+            setShowPosts(false)
+          }}
+          onLoadGabarit={post => {
+            // Injecte uniquement le 1er slide du post comme gabarit dans la vignette courante
+            try {
+              const vignettes = JSON.parse(post.vignettes)
+              const gabarit   = vignettes[0]
+              if (!gabarit) return
+              // Génère de nouveaux IDs pour éviter les collisions
+              const ts = Date.now()
+              const elements = (gabarit.elements ?? []).map((el, i) => ({
+                ...el,
+                id: `el-${ts}-${i}`,
+              }))
+              updateSlide(s => ({
+                ...s,
+                elements,
+                background: gabarit.background ?? s.background,
+              }))
+              setSelectedId(null)
             } catch {}
             setShowPosts(false)
           }}
