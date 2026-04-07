@@ -138,8 +138,9 @@ webhookRouter.post('/webhook', express.raw({ type: 'application/json' }), async 
           }).catch(e => logError(`Instagram webhook commentaire: ${e.message}`))
         }
         if (change.field === 'messages') {
-          const msg = val.messages?.[0]
-          if (!msg) { logError('Instagram webhook message: messages[0] absent'); continue }
+          // Meta envoie val.message (objet) et non val.messages (tableau)
+          const msg = val.message ?? val.messages?.[0]
+          if (!msg) { logError(`Instagram webhook message: structure inattendue — val=${JSON.stringify(val).slice(0, 200)}`); continue }
           await meta.traiterMessage({
             igAuteurId: val.sender?.id ?? '', igAuteurNom: val.sender?.username ?? null,
             texte: msg.text ?? '', autoReply,
