@@ -44,7 +44,16 @@ export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply }) {
         body: JSON.stringify({ sujet, champs, legendeInstruction: legendeInst }),
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Erreur')
-      setResult(await res.json())
+      const data = await res.json()
+      // Fallback : si Mistral retourne encore { textes: [...] }, on mappe dans l'ordre des champs
+      if (data.champs?.textes && Array.isArray(data.champs.textes)) {
+        const mapped = {}
+        textEls.forEach((el, i) => {
+          mapped[el.nom ?? el.id] = data.champs.textes[i] ?? ''
+        })
+        data.champs = mapped
+      }
+      setResult(data)
     } catch (e) {
       setError(e.message)
     } finally {

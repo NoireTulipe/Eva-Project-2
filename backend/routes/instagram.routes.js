@@ -500,16 +500,18 @@ router.post('/generer-texte', async (req, res) => {
 
 Sujet : ${sujet}
 
-Génère le contenu pour chaque champ texte de la publication Instagram :
-${champsStr}
-- Légende : ${legendeInstruction || 'Légende Instagram complète avec emojis, call-to-action et hashtags pertinents'}
+Tu dois générer du texte pour une publication Instagram. Chaque champ a un nom exact et une instruction.
+IMPORTANT : utilise les noms de champs EXACTEMENT comme indiqué ci-dessous comme clés JSON.
+
+${champs.map(c => `Champ "${c.nom}" : ${c.instruction || 'texte libre adapté au sujet'}`).join('\n')}
+Champ "legende" : ${legendeInstruction || 'Légende Instagram complète avec emojis, call-to-action et hashtags pertinents'}
 
 Règles :
-- Si un champ demande plusieurs phrases, sépare-les par \\n
+- Si un champ demande plusieurs phrases, sépare-les par \\n dans la valeur
 - La légende comporte une accroche, un corps, un call-to-action et des hashtags, avec des \\n entre les sections
-- Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks
+- Réponds UNIQUEMENT avec le JSON, sans texte avant ni après, sans markdown, sans backticks
 
-Format attendu :
+JSON attendu (remplace ... par le contenu généré) :
 ${jsonExemple}`
 
     const model = process.env.MISTRAL_FLASH_MODEL || 'mistral-small-latest'
