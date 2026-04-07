@@ -103,19 +103,33 @@ webhookRouter.get('/webhook', (req, res) => {
 
 webhookRouter.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['x-hub-signature-256']
-  if (sig && !meta.verifyWebhookSignature(req.body, sig)) return res.sendStatus(401)
+  logAction(`Instagram webhook POST reçu — sig=${sig ? 'présente' : 'absente'} body_len=${req.body?.length ?? 0} content-type=${req.headers['content-type']}`)
+
+  if (sig && !meta.verifyWebhookSignature(req.body, sig)) {
+    logError('Instagram webhook POST: signature invalide — rejeté 401')
+    return res.sendStatus(401)
+  }
 
   res.sendStatus(200) // Répondre immédiatement à Meta
 
   try {
-    const body = JSON.parse(req.body.toString())
-    if (body.object !== 'instagram') return
+    const rawStr = req.body?.toString?.() ?? ''
+    if (!rawStr) { logError('Instagram webhook POST: body vide'); return }
+
+    const body = JSON.parse(rawStr)
+    logAction(`Instagram webhook POST: object="${body.object}" entries=${body.entry?.length ?? 0}`)
+
+    if (body.object !== 'instagram') {
+      logAction(`Instagram webhook POST: object ignoré (${body.object})`)
+      return
+    }
 
     const autoParam = await prisma.configParam.findUnique({ where: { cle: 'instagram.auto_reply' } })
     const autoReply = autoParam?.valeur === 'true'
 
     for (const entry of body.entry ?? []) {
       for (const change of entry.changes ?? []) {
+        logAction(`Instagram webhook: champ="${change.field}" autoReply=${autoReply}`)
         const val = change.value
         if (change.field === 'comments') {
           await meta.traiterCommentaire({
@@ -125,7 +139,7 @@ webhookRouter.post('/webhook', express.raw({ type: 'application/json' }), async 
         }
         if (change.field === 'messages') {
           const msg = val.messages?.[0]
-          if (!msg) continue
+          if (!msg) { logError('Instagram webhook message: messages[0] absent'); continue }
           await meta.traiterMessage({
             igAuteurId: val.sender?.id ?? '', igAuteurNom: val.sender?.username ?? null,
             texte: msg.text ?? '', autoReply,
@@ -134,7 +148,7 @@ webhookRouter.post('/webhook', express.raw({ type: 'application/json' }), async 
       }
     }
   } catch (e) {
-    logError(`Instagram webhook: ${e.message}`)
+    logError(`Instagram webhook POST: ${e.message} — body_raw=${req.body?.toString?.()?.slice(0, 200)}`)
   }
 })
 
