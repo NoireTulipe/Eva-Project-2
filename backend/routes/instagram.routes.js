@@ -15,18 +15,29 @@ const UPLOADS_BASE = resolve(__dirname, '../uploads/instagram')
 // Router PUBLIC — webhook Meta uniquement (sans auth)
 export const webhookRouter = Router()
 
+// Route de diagnostic temporaire — à supprimer une fois le webhook fonctionnel
+webhookRouter.get('/webhook-debug', (req, res) => {
+  res.json({
+    query: req.query,
+    url: req.url,
+    originalUrl: req.originalUrl,
+    envToken: process.env.META_WEBHOOK_VERIFY_TOKEN ? `[défini, ${process.env.META_WEBHOOK_VERIFY_TOKEN.length} chars]` : '[NON DÉFINI]',
+  })
+})
+
 webhookRouter.get('/webhook', (req, res) => {
-  // Express (via qs) parse hub.mode=subscribe en { hub: { mode: 'subscribe' } }
-  const hub = req.query.hub ?? {}
-  const mode      = hub.mode
-  const token     = hub.verify_token
-  const challenge = hub.challenge
+  // Express/qs garde les points comme clés littérales : req.query['hub.mode']
+  const mode      = req.query['hub.mode']
+  const token     = req.query['hub.verify_token']
+  const challenge = req.query['hub.challenge']
+
+  logAction(`Instagram webhook debug: mode="${mode}" token="${token}" challenge="${challenge}" query=${JSON.stringify(req.query)}`)
 
   if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
     logAction('Instagram: webhook Meta vérifié')
     return res.status(200).send(challenge)
   }
-  logError(`Instagram webhook: token reçu="${token}" attendu="${process.env.META_WEBHOOK_VERIFY_TOKEN}"`)
+  logError(`Instagram webhook: token reçu="${token}" attendu="${process.env.META_WEBHOOK_VERIFY_TOKEN}" query_raw=${JSON.stringify(req.query)}`)
   res.sendStatus(403)
 })
 
