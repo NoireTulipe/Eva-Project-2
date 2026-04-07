@@ -3,15 +3,24 @@ import { IG_FORMATS } from './igFormats.js'
 import IgBackgroundPicker from './IgBackgroundPicker.jsx'
 import IgElementPicker    from './IgElementPicker.jsx'
 
+const SHAPES = [
+  { id: 'rect',     label: 'Rectangle',  icon: '▬' },
+  { id: 'circle',   label: 'Ellipse',    icon: '●' },
+  { id: 'triangle', label: 'Triangle',   icon: '▲' },
+  { id: 'pentagon', label: 'Pentagone',  icon: '⬠' },
+  { id: 'star',     label: 'Étoile',     icon: '★' },
+]
+
 export default function IgToolbar({
   format, onFormatChange,
-  onAddText, onAddArrow, onAddImage, onSetBackground, background,
+  onAddText, onAddShape, onAddArrow, onAddImage, onSetBackground, background,
   onExport, onSave, saving, onShowIA, onShowProg, onShowPosts, onPublierMaintenant,
   titre, onTitreChange,
 }) {
-  const [showBgPicker, setShowBgPicker]  = useState(false)
-  const [showElPicker, setShowElPicker]  = useState(false)
-  const [showFormats, setShowFormats]    = useState(false)
+  const [showBgPicker, setShowBgPicker]   = useState(false)
+  const [showElPicker, setShowElPicker]   = useState(false)
+  const [showFormats, setShowFormats]     = useState(false)
+  const [showShapes, setShowShapes]       = useState(false)
 
   const fmt = IG_FORMATS[format]
 
@@ -66,6 +75,31 @@ export default function IgToolbar({
       <button onClick={onAddText} className="px-2 py-1 text-sm rounded hover:bg-gray-100 font-bold" title="Ajouter texte">
         T
       </button>
+
+      {/* Formes */}
+      <div className="relative">
+        <button
+          onClick={() => setShowShapes(v => !v)}
+          className="flex items-center gap-1 px-2 py-1 text-sm rounded hover:bg-gray-100"
+          title="Ajouter une forme"
+        >
+          ◼ <span className="text-gray-400 text-xs">▾</span>
+        </button>
+        {showShapes && (
+          <div className="absolute top-full left-0 mt-1 z-50 bg-white border rounded shadow-lg py-1 w-36">
+            {SHAPES.map(s => (
+              <button
+                key={s.id}
+                onClick={() => { onAddShape(s.id); setShowShapes(false) }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 text-left"
+              >
+                <span className="text-base w-5 text-center leading-none">{s.icon}</span>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Flèche */}
       <button onClick={onAddArrow} className="px-2 py-1 text-sm rounded hover:bg-gray-100" title="Ajouter une flèche courbe">

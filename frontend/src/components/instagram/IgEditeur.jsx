@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Stage, Layer, Rect, Text, Image as KImage, Transformer } from 'react-konva'
 import useImage from 'use-image'
-import CanvasArrow from './CanvasArrow.jsx'
+import CanvasArrow  from './CanvasArrow.jsx'
+import CanvasShape  from './CanvasShape.jsx'
 import { IG_FORMATS, FORMAT_PAR_DEFAUT } from './igFormats.js'
 import IgLayerPanel      from './IgLayerPanel.jsx'
 import IgToolbar         from './IgToolbar.jsx'
@@ -88,6 +89,31 @@ export default function IgEditeur() {
         text: 'Votre texte', fontSize: 32, fontFamily: 'Arial',
         fill: '#000000', align: 'center', fontStyle: '',
         draggable: true, opacity: 1, rotation: 0, visible: true, locked: false,
+      }]
+    }))
+    setSelectedId(id)
+  }
+
+  // ── Ajouter une forme ─────────────────────────────────────────────────────────
+  function addShape(shapeType) {
+    const id = `el-${Date.now()}`
+    const cx = Math.round(fmt.displayW / 2)
+    const cy = Math.round(fmt.displayH / 2)
+    const size = shapeType === 'rect' ? { width: 200, height: 140 } : { width: 140, height: 140 }
+    updateSlide(s => ({
+      ...s,
+      elements: [...s.elements, {
+        id, type: 'shape', shapeType,
+        x: cx - size.width / 2, y: cy - size.height / 2,
+        width: size.width, height: size.height,
+        fill: '#4f86f7', fillEnabled: true,
+        stroke: '#1a3a8a', strokeWidth: 0,
+        cornerRadius: 0,
+        shadowEnabled: false,
+        shadowColor: '#000000', shadowBlur: 10,
+        shadowOffsetX: 5, shadowOffsetY: 5, shadowOpacity: 0.5,
+        opacity: 1, rotation: 0,
+        draggable: true, visible: true, locked: false,
       }]
     }))
     setSelectedId(id)
@@ -221,6 +247,7 @@ export default function IgEditeur() {
         format={format}
         onFormatChange={changerFormat}
         onAddText={addText}
+        onAddShape={addShape}
         onAddArrow={addArrow}
         onAddImage={addImageFromUrl}
         onSetBackground={setBackground}
@@ -460,6 +487,13 @@ function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDeselect,
               onSelect={() => {
                 if (!el.locked) onSelect(el.id)
               }}
+              onUpdate={props => onUpdateElement(el.id, props)}
+            />
+          ) : el.type === 'shape' ? (
+            <CanvasShape
+              key={el.id}
+              el={el}
+              onSelect={() => { if (!el.locked) onSelect(el.id) }}
               onUpdate={props => onUpdateElement(el.id, props)}
             />
           ) : null

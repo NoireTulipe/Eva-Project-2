@@ -176,6 +176,72 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
           />
         )}
 
+        {/* Forme */}
+        {element.type === 'shape' && (
+          <>
+            <Section label="Forme">
+              <Row label="Remplissage">
+                <div className="flex items-center gap-2">
+                  <Toggle value={element.fillEnabled !== false} onChange={v => onChange({ fillEnabled: v })} />
+                  {element.fillEnabled !== false && (
+                    <input type="color" value={element.fill ?? '#4f86f7'}
+                      onChange={e => onChange({ fill: e.target.value })}
+                      className="w-8 h-6 border rounded cursor-pointer" />
+                  )}
+                </div>
+              </Row>
+              <Row label="Bordure">
+                <div className="flex items-center gap-2">
+                  <NumInput value={element.strokeWidth ?? 0} onChange={v => onChange({ strokeWidth: v })} min={0} max={30} />
+                  <input type="color" value={element.stroke ?? '#000000'}
+                    onChange={e => onChange({ stroke: e.target.value })}
+                    className="w-8 h-6 border rounded cursor-pointer" />
+                </div>
+              </Row>
+              {element.shapeType === 'rect' && (
+                <Row label="Arrondi">
+                  <NumInput value={element.cornerRadius ?? 0} onChange={v => onChange({ cornerRadius: v })} min={0} max={300} />
+                </Row>
+              )}
+              {(element.shapeType === 'rect') && (
+                <Row label="Hauteur">
+                  <NumInput value={element.height ?? 150} onChange={v => onChange({ height: v })} min={10} />
+                </Row>
+              )}
+            </Section>
+
+            <Section label="Ombre">
+              <Row label="Activer">
+                <Toggle value={element.shadowEnabled ?? false} onChange={v => onChange({ shadowEnabled: v })} />
+              </Row>
+              {element.shadowEnabled && (
+                <>
+                  <Row label="Couleur">
+                    <input type="color" value={element.shadowColor ?? '#000000'}
+                      onChange={e => onChange({ shadowColor: e.target.value })}
+                      className="w-10 h-7 border rounded cursor-pointer" />
+                  </Row>
+                  <Row label="Flou">
+                    <NumInput value={element.shadowBlur ?? 10} onChange={v => onChange({ shadowBlur: v })} min={0} max={60} />
+                  </Row>
+                  <Row label="Décal. X">
+                    <NumInput value={element.shadowOffsetX ?? 5} onChange={v => onChange({ shadowOffsetX: v })} min={-50} max={50} />
+                  </Row>
+                  <Row label="Décal. Y">
+                    <NumInput value={element.shadowOffsetY ?? 5} onChange={v => onChange({ shadowOffsetY: v })} min={-50} max={50} />
+                  </Row>
+                  <Row label="Opacité">
+                    <input type="range" min="0" max="1" step="0.05"
+                      value={element.shadowOpacity ?? 0.5}
+                      onChange={e => onChange({ shadowOpacity: parseFloat(e.target.value) })}
+                      className="w-full" />
+                  </Row>
+                </>
+              )}
+            </Section>
+          </>
+        )}
+
         {/* Image */}
         {element.type === 'image' && (
           <Section label="Image">
