@@ -6,7 +6,7 @@ import IgElementPicker    from './IgElementPicker.jsx'
 export default function IgToolbar({
   format, onFormatChange,
   onAddText, onAddArrow, onAddImage, onSetBackground, background,
-  onExport, onSave, saving, onShowIA, onShowProg, onPublierMaintenant,
+  onExport, onSave, saving, onShowIA, onShowProg, onShowPosts, onPublierMaintenant,
   titre, onTitreChange,
 }) {
   const [showBgPicker, setShowBgPicker]  = useState(false)
@@ -106,8 +106,11 @@ export default function IgToolbar({
         <button onClick={onExport} className="px-2 py-1 text-sm border rounded hover:bg-gray-50 hidden sm:block">
           PNG
         </button>
-        <button onClick={onSave} disabled={saving} className="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50">
-          {saving ? '…' : 'Sauv.'}
+        <button onClick={onShowPosts} className="px-3 py-1 text-sm border rounded hover:bg-gray-50" title="Mes posts sauvegardés">
+          📂
+        </button>
+        <button onClick={onSave} disabled={saving} className="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50" title="Sauvegarder le post en cours">
+          {saving ? '…' : '💾 Sauv.'}
         </button>
         <button onClick={onShowProg} className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600">
           🕐 Programmer

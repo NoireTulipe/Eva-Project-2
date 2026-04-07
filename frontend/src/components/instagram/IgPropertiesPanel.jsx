@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
 import { instagram } from '../../shared/api.js'
+import { loadGoogleFont } from './useGoogleFonts.js'
+import IgTextEffects from './IgTextEffects.jsx'
 
 export default function IgPropertiesPanel({ element, onChange, onDelete }) {
-  const [fonts, setFonts] = useState([])
+  const [fonts, setFonts]           = useState([])
+  const [showEffects, setShowEffects] = useState(false)
 
   useEffect(() => {
-    instagram.getFonts().then(setFonts).catch(() => {})
+    instagram.getFonts().then(fs => {
+      setFonts(fs)
+      // Pré-charger toutes les Google Fonts de la bibliothèque
+      fs.forEach(f => { if (f.googleFont) loadGoogleFont(f.googleFont) })
+    }).catch(() => {})
   }, [])
 
   if (!element) {
@@ -73,16 +80,31 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
             <Row label="Police">
               <select
                 value={element.fontFamily}
-                onChange={e => onChange({ fontFamily: e.target.value })}
+                onChange={e => {
+                  const nom = e.target.value
+                  // Charger la Google Font correspondante si besoin
+                  const f = fonts.find(f => f.nom === nom)
+                  if (f?.googleFont) loadGoogleFont(f.googleFont)
+                  onChange({ fontFamily: nom })
+                }}
                 className="w-full border rounded px-1 py-0.5 text-xs"
               >
-                <option value="Arial">Arial</option>
-                <option value="Georgia">Georgia</option>
-                <option value="Verdana">Verdana</option>
-                <option value="Times New Roman">Times New Roman</option>
-                {fonts.map(f => (
-                  <option key={f.id} value={f.nom}>{f.nom}</option>
-                ))}
+                <optgroup label="Système">
+                  <option value="Arial">Arial</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Verdana">Verdana</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                </optgroup>
+                {fonts.length > 0 && (
+                  <optgroup label="Bibliothèque">
+                    {fonts.map(f => (
+                      <option key={f.id} value={f.googleFont ?? f.nom}
+                        style={{ fontFamily: f.googleFont ?? f.nom }}>
+                        {f.nom}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </Row>
             <Row label="Style">
@@ -132,7 +154,26 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
                 className="w-10 h-7 border rounded cursor-pointer"
               />
             </Row>
+            <div className="pt-1">
+              <button
+                onClick={() => setShowEffects(true)}
+                className="w-full py-1.5 text-xs border border-purple-200 text-purple-600 rounded hover:bg-purple-50 font-medium"
+              >
+                ✦ Effets de texte
+                {(element.shadow?.active || element.contour?.active || element.effet3d?.active) && (
+                  <span className="ml-1 text-pink-500">●</span>
+                )}
+              </button>
+            </div>
           </Section>
+        )}
+
+        {showEffects && element.type === 'text' && (
+          <IgTextEffects
+            element={element}
+            onChange={onChange}
+            onClose={() => setShowEffects(false)}
+          />
         )}
 
         {/* Image */}

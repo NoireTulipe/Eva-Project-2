@@ -9,7 +9,9 @@ import IgPropertiesPanel from './IgPropertiesPanel.jsx'
 import IgSlideManager    from './IgSlideManager.jsx'
 import IgGenerateurIA    from './IgGenerateurIA.jsx'
 import IgProgrammation   from './IgProgrammation.jsx'
+import IgPostsLibrary    from './IgPostsLibrary.jsx'
 import { instagram }     from '../../shared/api.js'
+import { useGoogleFonts } from './useGoogleFonts.js'
 
 const EXPORT_SCALE = 2  // 540px × 2 = 1080px
 
@@ -29,11 +31,17 @@ export default function IgEditeur() {
   const [titre, setTitre]           = useState('')
   const [showIA, setShowIA]         = useState(false)
   const [showProg, setShowProg]     = useState(false)
+  const [showPosts, setShowPosts]   = useState(false)
   const [saving, setSaving]         = useState(false)
   const [postId, setPostId]         = useState(null)
 
   const fmt  = IG_FORMATS[format]
   const slide = slides[slideIdx]
+
+  // Charger les Google Fonts dès que la liste des fonts change
+  const [fonts, setFonts] = useState([])
+  useEffect(() => { instagram.getFonts().then(setFonts).catch(() => {}) }, [])
+  useGoogleFonts(fonts)
 
   // ── Transformer (seulement pour text & image, pas arrow) ──────────────────
   useEffect(() => {
@@ -222,6 +230,7 @@ export default function IgEditeur() {
         saving={saving}
         onShowIA={() => setShowIA(true)}
         onShowProg={() => setShowProg(true)}
+        onShowPosts={() => setShowPosts(true)}
         onPublierMaintenant={publierMaintenant}
         titre={titre}
         onTitreChange={setTitre}
@@ -321,6 +330,25 @@ export default function IgEditeur() {
         />
       )}
 
+      {showPosts && (
+        <IgPostsLibrary
+          onClose={() => setShowPosts(false)}
+          onLoad={post => {
+            try {
+              const vignettes = JSON.parse(post.vignettes)
+              setSlides(vignettes)
+              setSlideIdx(0)
+              setSelectedId(null)
+              setFormat(post.format ?? FORMAT_PAR_DEFAUT)
+              setTitre(post.titre ?? '')
+              setLegende(post.legende ?? '')
+              setPostId(post.id)
+            } catch {}
+            setShowPosts(false)
+          }}
+        />
+      )}
+
       {showProg && (
         <IgProgrammation
           onClose={() => setShowProg(false)}
@@ -337,6 +365,42 @@ export default function IgEditeur() {
       )}
     </div>
   )
+}
+
+// ── Effets Konva à partir des propriétés d'un élément texte ──────────────────
+function buildTextEffects(el) {
+  const props = {}
+
+  // Contour
+  if (el.contour?.active) {
+    props.stroke = el.contour.color ?? '#000000'
+    props.strokeWidth = el.contour.width ?? 2
+    props.fillAfterStrokeEnabled = true
+  }
+
+  // Ombre portée (priorité : ombre simple)
+  if (el.shadow?.active && !(el.effet3d?.active)) {
+    props.shadowColor   = el.shadow.color ?? '#000000'
+    props.shadowBlur    = el.shadow.blur ?? 8
+    props.shadowOffsetX = el.shadow.offsetX ?? 4
+    props.shadowOffsetY = el.shadow.offsetY ?? 4
+    props.shadowOpacity = el.shadow.opacity ?? 0.6
+    props.shadowEnabled = true
+  }
+
+  // Effet 3D — cascade d'ombres décalées via shadowColor + un seul offset
+  // Konva ne supporte qu'une ombre, on simule avec un offset diagonal et un blur=0
+  if (el.effet3d?.active) {
+    const d = el.effet3d.depth ?? 5
+    props.shadowColor   = el.effet3d.color ?? '#333333'
+    props.shadowBlur    = 0
+    props.shadowOffsetX = d
+    props.shadowOffsetY = d
+    props.shadowOpacity = 1
+    props.shadowEnabled = true
+  }
+
+  return props
 }
 
 // ── Canvas Konva ──────────────────────────────────────────────────────────────
@@ -379,6 +443,7 @@ function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDeselect,
                 })
                 node.scaleX(1); node.scaleY(1)
               }}
+              {...buildTextEffects(el)}
             />
           ) : el.type === 'image' ? (
             <CanvasImage
