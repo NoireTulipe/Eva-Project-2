@@ -113,11 +113,12 @@ export async function login() {
     })
     logAction(`Instagram private: connecté en tant que @${username}`)
   } catch (e) {
-    if (e instanceof IgCheckpointError) {
+    const isCheckpoint = e instanceof IgCheckpointError || e.message?.includes('checkpoint_required') || e.message?.includes('checkpoint')
+    if (isCheckpoint) {
       logAction('Instagram private: checkpoint requis — envoi du code de vérification…')
       _checkpointPending = true
       // Demander le code par email (méthode la plus fiable)
-      await ig.challenge.auto(true)
+      try { await ig.challenge.auto(true) } catch {}
       logAction('Instagram private: code de vérification envoyé — saisis-le dans EVA → Instagram → Paramètres')
       // Ne pas relancer d'erreur — l'état checkpoint est stocké, le polling attendra
       return
