@@ -11,7 +11,7 @@ export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply }) {
   // Collecter tous les champs texte nommés de toutes les vignettes
   const slidesAvecChamps = slides.map((s, si) => ({
     si,
-    textEls: (s.elements ?? []).filter(e => e.type === 'text'),
+    textEls: (s.elements ?? []).filter(e => e.type === 'text' && e.iaEnabled !== false),
   })).filter(s => s.textEls.length > 0)
 
   const [sujet, setSujet]           = useState('')

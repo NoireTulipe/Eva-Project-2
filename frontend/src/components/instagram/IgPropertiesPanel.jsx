@@ -77,6 +77,17 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
                 className="w-full border rounded px-2 py-0.5 text-xs"
               />
             </Row>
+            <Row label="IA">
+              <div className="flex items-center gap-1.5">
+                <Toggle
+                  value={element.iaEnabled !== false}
+                  onChange={v => onChange({ iaEnabled: v })}
+                />
+                <span className="text-xs text-gray-400">
+                  {element.iaEnabled !== false ? 'Rédige ce champ' : 'Ignoré'}
+                </span>
+              </div>
+            </Row>
             <textarea
               value={element.text}
               onChange={e => onChange({ text: e.target.value })}
