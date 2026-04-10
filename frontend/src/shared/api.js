@@ -469,5 +469,9 @@ export const instagram = {
   // OAuth
   getOauthUrl:    () => request('GET', '/instagram/oauth/url'),
   getOauthStatus: () => request('GET', '/instagram/oauth/status'),
+
+  // Private API
+  getPrivateStatus:      () => request('GET', '/instagram/private/status'),
+  submitCheckpointCode:  (code) => request('POST', '/instagram/private/checkpoint', { code }),
 }
 

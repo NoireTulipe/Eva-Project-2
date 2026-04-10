@@ -198,6 +198,29 @@ router.get('/oauth/status', async (req, res) => {
   }
 })
 
+// ─── Private API — statut checkpoint + soumission code ───────────────────────
+
+router.get('/private/status', (req, res) => {
+  const { isCheckpointPending } = svc.getPrivateApiStatus?.() ??
+    { isCheckpointPending: require('../modules/instagram/instagram.private.js').isCheckpointPending }
+  // Import dynamique pour éviter le circular
+  import('../modules/instagram/instagram.private.js').then(m => {
+    res.json({ checkpointPending: m.isCheckpointPending() })
+  }).catch(e => res.status(500).json({ error: e.message }))
+})
+
+router.post('/private/checkpoint', async (req, res) => {
+  const { code } = req.body
+  if (!code?.trim()) return res.status(400).json({ error: 'Code requis' })
+  try {
+    const m = await import('../modules/instagram/instagram.private.js')
+    await m.submitCheckpointCode(code.trim())
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(400).json({ error: e.message })
+  }
+})
+
 // ─── Multer — stockage par sous-dossier ───────────────────────────────────────
 
 function makeStorage(sub) {

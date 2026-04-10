@@ -27,10 +27,14 @@ export default function IgParametres() {
   const [edits, setEdits]           = useState({})
   const [oauthStatus, setOauthStatus]   = useState(null)
   const [connecting, setConnecting]     = useState(false)
-  const [pollEnabled, setPollEnabled]   = useState(false)
-  const [pollInterval, setPollInterval] = useState(60)
-  const [pollLastRun, setPollLastRun]   = useState(null)
-  const [savingPoll, setSavingPoll]     = useState(false)
+  const [pollEnabled, setPollEnabled]       = useState(false)
+  const [pollInterval, setPollInterval]     = useState(60)
+  const [pollLastRun, setPollLastRun]       = useState(null)
+  const [savingPoll, setSavingPoll]         = useState(false)
+  const [checkpointPending, setCheckpoint]  = useState(false)
+  const [checkpointCode, setCheckpointCode] = useState('')
+  const [checkpointError, setCheckpointErr] = useState(null)
+  const [checkpointOk, setCheckpointOk]     = useState(false)
 
   // Lire le statut OAuth, config poll, et résultat du callback depuis l'URL
   useEffect(() => {
@@ -40,6 +44,7 @@ export default function IgParametres() {
       setPollInterval(parseInt(cfg['instagram.poll.interval_minutes'] ?? '60'))
       setPollLastRun(cfg['instagram.poll.last_run'] ?? null)
     }).catch(() => {})
+    instagram.getPrivateStatus().then(s => setCheckpoint(s.checkpointPending)).catch(() => {})
 
     const params = new URLSearchParams(window.location.search)
     const result = params.get('oauth')
@@ -65,6 +70,18 @@ export default function IgParametres() {
     } catch (e) {
       alert(`Erreur : ${e.message}`)
       setConnecting(false)
+    }
+  }
+
+  async function validerCheckpoint() {
+    setCheckpointErr(null)
+    try {
+      await instagram.submitCheckpointCode(checkpointCode)
+      setCheckpoint(false)
+      setCheckpointOk(true)
+      setCheckpointCode('')
+    } catch (e) {
+      setCheckpointErr(e.message)
     }
   }
 
@@ -175,6 +192,38 @@ export default function IgParametres() {
               className="w-20 border rounded px-2 py-1 text-sm" />
             <span className="text-xs text-gray-400">(min. 15 min)</span>
           </div>
+        )}
+
+        {/* Checkpoint Instagram */}
+        {checkpointPending && (
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-2">
+            <p className="text-sm font-medium text-orange-700">
+              ⚠ Instagram demande une vérification
+            </p>
+            <p className="text-xs text-orange-600">
+              Un code a été envoyé à l'adresse email ou au téléphone associé au compte Instagram. Saisis-le ci-dessous.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text" value={checkpointCode}
+                onChange={e => setCheckpointCode(e.target.value)}
+                placeholder="Code à 6 chiffres"
+                className="flex-1 border rounded px-2 py-1.5 text-sm"
+                maxLength={8}
+              />
+              <button onClick={validerCheckpoint} disabled={!checkpointCode.trim()}
+                className="px-3 py-1.5 text-sm bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50">
+                Valider
+              </button>
+            </div>
+            {checkpointError && <p className="text-xs text-red-600">{checkpointError}</p>}
+          </div>
+        )}
+
+        {checkpointOk && (
+          <p className="text-xs text-green-600 font-medium">
+            ✓ Vérification réussie — le polling reprendra au prochain cycle.
+          </p>
         )}
 
         {pollLastRun && (

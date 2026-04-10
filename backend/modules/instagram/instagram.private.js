@@ -12,7 +12,7 @@
  * de se reconnecter à chaque polling.
  */
 
-import { IgApiClient } from 'instagram-private-api'
+import { IgApiClient, IgCheckpointError } from 'instagram-private-api'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { readFile, writeFile, mkdir } from 'fs/promises'
@@ -25,7 +25,26 @@ const DATA_DIR   = resolve(__dirname, '../../data')
 const SESSION_FILE = resolve(DATA_DIR, 'ig-session.json')
 
 const ig = new IgApiClient()
-let _loggedIn = false
+let _loggedIn        = false
+let _checkpointPending = false  // true quand Instagram attend un code de vérification
+
+export function isCheckpointPending() { return _checkpointPending }
+
+// ── Soumettre le code de vérification checkpoint ──────────────────────────────
+
+export async function submitCheckpointCode(code) {
+  if (!_checkpointPending) throw new Error('Aucun checkpoint en attente')
+  try {
+    await ig.challenge.sendSecurityCode(code)
+    await saveSession()
+    _loggedIn         = true
+    _checkpointPending = false
+    logAction('Instagram private: checkpoint validé, session sauvegardée')
+  } catch (e) {
+    logError(`Instagram private: code checkpoint invalide — ${e.message}`)
+    throw new Error('Code invalide ou expiré')
+  }
+}
 
 // ── Persistance session ───────────────────────────────────────────────────────
 
@@ -71,16 +90,32 @@ export async function login() {
   }
 
   // Connexion fraîche
-  await ig.simulate.preLoginFlow()
-  await ig.account.login(username, password)
-  await ig.simulate.postLoginFlow()
-  await saveSession()
-  _loggedIn = true
-  logAction(`Instagram private: connecté en tant que @${username}`)
+  try {
+    await ig.simulate.preLoginFlow()
+    await ig.account.login(username, password)
+    await ig.simulate.postLoginFlow()
+    await saveSession()
+    _loggedIn          = true
+    _checkpointPending = false
+    logAction(`Instagram private: connecté en tant que @${username}`)
+  } catch (e) {
+    if (e instanceof IgCheckpointError) {
+      logAction('Instagram private: checkpoint requis — envoi du code de vérification…')
+      _checkpointPending = true
+      // Demander le code par email (méthode la plus fiable)
+      await ig.challenge.auto(true)
+      logAction('Instagram private: code de vérification envoyé — saisis-le dans EVA → Instagram → Paramètres')
+      // Ne pas relancer d'erreur — l'état checkpoint est stocké, le polling attendra
+      return
+    }
+    throw e
+  }
 }
 
 async function ensureLoggedIn() {
+  if (_checkpointPending) throw new Error('Checkpoint Instagram en attente — saisis le code dans EVA → Paramètres')
   if (!_loggedIn) await login()
+  if (_checkpointPending) throw new Error('Checkpoint Instagram en attente — saisis le code dans EVA → Paramètres')
 }
 
 // ── Récupérer les commentaires récents non traités ────────────────────────────
