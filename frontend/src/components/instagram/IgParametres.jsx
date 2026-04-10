@@ -25,18 +25,26 @@ export default function IgParametres() {
   const [saving, setSaving]         = useState(null)
   const [saved, setSaved]           = useState(null)
   const [edits, setEdits]           = useState({})
-  const [oauthStatus, setOauthStatus] = useState(null)
-  const [connecting, setConnecting]   = useState(false)
+  const [oauthStatus, setOauthStatus]   = useState(null)
+  const [connecting, setConnecting]     = useState(false)
+  const [pollEnabled, setPollEnabled]   = useState(false)
+  const [pollInterval, setPollInterval] = useState(60)
+  const [pollLastRun, setPollLastRun]   = useState(null)
+  const [savingPoll, setSavingPoll]     = useState(false)
 
-  // Lire le statut OAuth et le résultat du callback depuis l'URL
+  // Lire le statut OAuth, config poll, et résultat du callback depuis l'URL
   useEffect(() => {
     instagram.getOauthStatus().then(setOauthStatus).catch(() => {})
+    instagram.getConfig().then(cfg => {
+      setPollEnabled(cfg['instagram.poll.enabled'] === 'true')
+      setPollInterval(parseInt(cfg['instagram.poll.interval_minutes'] ?? '60'))
+      setPollLastRun(cfg['instagram.poll.last_run'] ?? null)
+    }).catch(() => {})
 
     const params = new URLSearchParams(window.location.search)
     const result = params.get('oauth')
     if (result === 'success') {
       instagram.getOauthStatus().then(setOauthStatus).catch(() => {})
-      // Nettoyer l'URL sans recharger la page
       window.history.replaceState({}, '', window.location.pathname + '?tab=parametres')
     }
   }, [])
@@ -57,6 +65,16 @@ export default function IgParametres() {
     } catch (e) {
       alert(`Erreur : ${e.message}`)
       setConnecting(false)
+    }
+  }
+
+  async function savePoll() {
+    setSavingPoll(true)
+    try {
+      await instagram.setConfig('instagram.poll.enabled', String(pollEnabled))
+      await instagram.setConfig('instagram.poll.interval_minutes', String(pollInterval))
+    } finally {
+      setSavingPoll(false)
     }
   }
 
@@ -130,6 +148,50 @@ export default function IgParametres() {
             </p>
           </div>
         )}
+      </div>
+
+      {/* ── Polling private API ──────────────────────────────────────────────── */}
+      <div className="border rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-sm">Écoute des commentaires & DMs</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Polling via l'API privée Instagram. Nécessite IG_USERNAME et IG_PASSWORD dans le .env.
+            </p>
+          </div>
+          <button
+            onClick={() => setPollEnabled(v => !v)}
+            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${pollEnabled ? 'bg-pink-500' : 'bg-gray-300'}`}
+          >
+            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pollEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+
+        {pollEnabled && (
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-500 flex-shrink-0">Intervalle (min)</label>
+            <input type="number" min={15} max={1440} value={pollInterval}
+              onChange={e => setPollInterval(parseInt(e.target.value) || 60)}
+              className="w-20 border rounded px-2 py-1 text-sm" />
+            <span className="text-xs text-gray-400">(min. 15 min)</span>
+          </div>
+        )}
+
+        {pollLastRun && (
+          <p className="text-xs text-gray-400">
+            Dernier cycle : {new Date(pollLastRun).toLocaleString('fr-FR')}
+          </p>
+        )}
+
+        <div className="flex items-center gap-2">
+          <button onClick={savePoll} disabled={savingPoll}
+            className="px-3 py-1.5 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 disabled:opacity-50">
+            {savingPoll ? 'Sauvegarde…' : 'Enregistrer'}
+          </button>
+          <span className="text-xs text-gray-400">
+            Redémarrage d'EVA requis pour appliquer les changements.
+          </span>
+        </div>
       </div>
 
       <p className="text-sm text-gray-500">
