@@ -4,6 +4,7 @@ import useImage from 'use-image'
 import CanvasArrow    from './CanvasArrow.jsx'
 import CanvasShape    from './CanvasShape.jsx'
 import IgLibraryPanel from './IgLibraryPanel.jsx'
+import IgTextEditor   from './IgTextEditor.jsx'
 import { IG_FORMATS, FORMAT_PAR_DEFAUT } from './igFormats.js'
 import IgLayerPanel      from './IgLayerPanel.jsx'
 import IgToolbar         from './IgToolbar.jsx'
@@ -39,6 +40,7 @@ export default function IgEditeur() {
   const [showLibrary, setShowLibrary]   = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [dropFile, setDropFile]         = useState(null)   // fichier en attente d'import
+  const [editingTextId, setEditingTextId] = useState(null) // id de l'élément texte en édition
 
   const fmt  = IG_FORMATS[format]
   const slide = slides[slideIdx]
@@ -324,6 +326,12 @@ export default function IgEditeur() {
                 if (el?.locked) return
                 setSelectedId(id)
               }}
+              onDoubleClickText={id => {
+                const el = slide.elements.find(e => e.id === id)
+                if (el?.locked) return
+                setSelectedId(id)
+                setEditingTextId(id)
+              }}
               onDeselect={() => setSelectedId(null)}
               onUpdateElement={updateElement}
               width={fmt.displayW}
@@ -384,9 +392,23 @@ export default function IgEditeur() {
           slides={slides}
           slideIdx={slideIdx}
           onClose={() => setShowIA(false)}
-          onApply={({ champs, legende: leg }) => {
-            // Remplir chaque élément texte par son nom
-            if (champs) {
+          onApply={({ champsParSlide, champs, legende: leg }) => {
+            // Mode multi-slide : champsParSlide = [{ slideIdx, champs }]
+            if (champsParSlide) {
+              setSlides(prev => prev.map((s, si) => {
+                const entry = champsParSlide.find(e => e.slideIdx === si)
+                if (!entry) return s
+                return {
+                  ...s,
+                  elements: s.elements.map(el => {
+                    if (el.type !== 'text') return el
+                    const texte = entry.champs[el.nom ?? el.id]
+                    return texte ? { ...el, text: texte } : el
+                  })
+                }
+              }))
+            } else if (champs) {
+              // Mode slide courant uniquement
               updateSlide(s => ({
                 ...s,
                 elements: s.elements.map(el => {
@@ -401,6 +423,19 @@ export default function IgEditeur() {
           }}
         />
       )}
+
+      {/* Modale éditeur texte (double-clic) */}
+      {editingTextId && (() => {
+        const el = slide.elements.find(e => e.id === editingTextId)
+        if (!el) return null
+        return (
+          <IgTextEditor
+            element={el}
+            onChange={props => updateElement(editingTextId, props)}
+            onClose={() => setEditingTextId(null)}
+          />
+        )
+      })()}
 
       {showPosts && (
         <IgPostsLibrary
@@ -554,7 +589,7 @@ function buildTextEffects(el) {
 
 // ── Canvas Konva ──────────────────────────────────────────────────────────────
 
-function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDeselect, onUpdateElement, width, height }) {
+function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDoubleClickText, onDeselect, onUpdateElement, width, height }) {
   return (
     <Stage
       ref={stageRef}
@@ -582,6 +617,8 @@ function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDeselect,
               draggable={!el.locked}
               onClick={() => onSelect(el.id)}
               onTap={() => onSelect(el.id)}
+              onDblClick={() => onDoubleClickText(el.id)}
+              onDblTap={() => onDoubleClickText(el.id)}
               onDragEnd={e => onUpdateElement(el.id, { x: e.target.x(), y: e.target.y() })}
               onTransformEnd={e => {
                 const node = e.target
