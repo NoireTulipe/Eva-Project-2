@@ -6,7 +6,7 @@
  */
 import { useState } from 'react'
 
-export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply }) {
+export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply, onUpdateInstruction }) {
 
   // Collecter tous les champs texte nommés de toutes les vignettes
   const slidesAvecChamps = slides.map((s, si) => ({
@@ -14,9 +14,17 @@ export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply }) {
     textEls: (s.elements ?? []).filter(e => e.type === 'text' && e.iaEnabled !== false),
   })).filter(s => s.textEls.length > 0)
 
+  // Initialiser les instructions depuis el.iaInstruction (persistées sur l'élément)
+  const initInstructions = {}
+  slidesAvecChamps.forEach(({ si, textEls }) => {
+    textEls.forEach(el => {
+      if (el.iaInstruction) initInstructions[`${si}-${el.id}`] = el.iaInstruction
+    })
+  })
+
   const [sujet, setSujet]           = useState('')
   const [mode, setMode]             = useState('courant') // 'courant' | 'tous'
-  const [instructions, setInst]     = useState({})        // { `${si}-${id}`: string }
+  const [instructions, setInst]     = useState(initInstructions)
   const [legendeInst, setLegInst]   = useState('Légende Instagram avec emojis, call-to-action et hashtags pertinents')
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
@@ -28,6 +36,7 @@ export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply }) {
 
   function setInstruction(si, id, val) {
     setInst(prev => ({ ...prev, [`${si}-${id}`]: val }))
+    onUpdateInstruction?.(si, id, val)
   }
   function getInstruction(si, id) {
     return instructions[`${si}-${id}`] ?? ''

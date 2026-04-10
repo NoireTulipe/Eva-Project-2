@@ -392,6 +392,12 @@ export default function IgEditeur() {
           slides={slides}
           slideIdx={slideIdx}
           onClose={() => setShowIA(false)}
+          onUpdateInstruction={(si, id, val) =>
+            setSlides(prev => prev.map((s, i) => i !== si ? s : {
+              ...s,
+              elements: s.elements.map(el => el.id === id ? { ...el, iaInstruction: val } : el)
+            }))
+          }
           onApply={({ champsParSlide, champs, legende: leg }) => {
             // Mode multi-slide : champsParSlide = [{ slideIdx, champs }]
             if (champsParSlide) {
