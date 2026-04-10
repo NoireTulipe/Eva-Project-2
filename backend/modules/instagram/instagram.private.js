@@ -84,7 +84,14 @@ export async function login() {
       logAction('Instagram private: session restaurée')
       _loggedIn = true
       return
-    } catch {
+    } catch (e) {
+      if (e.message?.includes('checkpoint') || e instanceof IgCheckpointError) {
+        logAction('Instagram private: checkpoint requis après restauration session — envoi du code…')
+        _checkpointPending = true
+        await ig.challenge.auto(true).catch(() => {})
+        logAction('Instagram private: code de vérification envoyé — saisis-le dans EVA → Instagram → Paramètres')
+        return
+      }
       logAction('Instagram private: session expirée, reconnexion…')
       _loggedIn = false
     }
@@ -176,8 +183,11 @@ export async function fetchNouveauxCommentaires() {
       })
     }
   } catch (e) {
-    // Session expirée → forcer reconnexion au prochain cycle
-    if (e.message?.includes('login') || e.message?.includes('checkpoint') || e.message?.includes('401')) {
+    if (e.message?.includes('checkpoint') || e instanceof IgCheckpointError) {
+      _loggedIn = false
+      _checkpointPending = true
+      logError(`Instagram private commentaires: checkpoint requis — ${e.message}`)
+    } else if (e.message?.includes('login') || e.message?.includes('401')) {
       _loggedIn = false
       logError(`Instagram private: session invalide — ${e.message}`)
     } else {
@@ -234,7 +244,11 @@ export async function fetchNouveauxDMs() {
       })
     }
   } catch (e) {
-    if (e.message?.includes('login') || e.message?.includes('checkpoint') || e.message?.includes('401')) {
+    if (e.message?.includes('checkpoint') || e instanceof IgCheckpointError) {
+      _loggedIn = false
+      _checkpointPending = true
+      logError(`Instagram private DMs: checkpoint requis — ${e.message}`)
+    } else if (e.message?.includes('login') || e.message?.includes('401')) {
       _loggedIn = false
       logError(`Instagram private: session invalide — ${e.message}`)
     } else {
@@ -288,7 +302,11 @@ export async function listRecentDMs(limit = 20) {
       })
     }
   } catch (e) {
-    if (e.message?.includes('login') || e.message?.includes('checkpoint') || e.message?.includes('401')) {
+    if (e.message?.includes('checkpoint') || e instanceof IgCheckpointError) {
+      _loggedIn = false
+      _checkpointPending = true
+      logError(`Instagram private listRecentDMs: checkpoint requis — ${e.message}`)
+    } else if (e.message?.includes('login') || e.message?.includes('401')) {
       _loggedIn = false
       logError(`Instagram private listRecentDMs: session invalide — ${e.message}`)
     } else {
