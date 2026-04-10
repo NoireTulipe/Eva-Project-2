@@ -29,6 +29,7 @@ let _loggedIn        = false
 let _checkpointPending = false  // true quand Instagram attend un code de vérification
 
 export function isCheckpointPending() { return _checkpointPending }
+export function isLoggedIn()          { return _loggedIn }
 
 // ── Soumettre le code de vérification checkpoint ──────────────────────────────
 
@@ -97,6 +98,12 @@ export async function login() {
     await saveSession()
     _loggedIn          = true
     _checkpointPending = false
+    // Sauvegarder le username connecté en DB pour l'afficher dans l'UI
+    await prisma.configParam.upsert({
+      where:  { cle: 'instagram.poll.username' },
+      create: { cle: 'instagram.poll.username', valeur: username, description: 'Compte Instagram écouté par le polling' },
+      update: { valeur: username },
+    })
     logAction(`Instagram private: connecté en tant que @${username}`)
   } catch (e) {
     if (e instanceof IgCheckpointError) {
@@ -254,4 +261,40 @@ export async function repondreCommentairePrivate(mediaId, commentaireId, texte) 
 export async function repondreDMPrivate(threadId, texte) {
   await ensureLoggedIn()
   await ig.directThread.broadcastText({ threadIds: [threadId], text: texte })
+}
+
+// ── Lister les DMs récents (lecture seule — sans màj timestamp) ───────────────
+
+export async function listRecentDMs(limit = 20) {
+  await ensureLoggedIn()
+
+  const threads = []
+  try {
+    const inbox = ig.feed.directInbox()
+    const items = await inbox.items()
+
+    for (const thread of items.slice(0, limit)) {
+      const msg    = thread.items?.[0]
+      const sender = thread.users?.[0]
+      const ts     = msg ? Math.floor(parseInt(msg.timestamp ?? '0') / 1000) : 0
+
+      threads.push({
+        threadId:    String(thread.thread_id),
+        igAuteurId:  String(sender?.pk ?? ''),
+        igAuteurNom: sender?.username ?? null,
+        texte:       msg?.text ?? msg?.like?.unicode ?? '(media)',
+        timestamp:   ts ? new Date(ts * 1000).toISOString() : null,
+        isOwn:       msg ? (msg.user_id === parseInt(ig.state.cookieUserId)) : false,
+      })
+    }
+  } catch (e) {
+    if (e.message?.includes('login') || e.message?.includes('checkpoint') || e.message?.includes('401')) {
+      _loggedIn = false
+      logError(`Instagram private listRecentDMs: session invalide — ${e.message}`)
+    } else {
+      throw e
+    }
+  }
+
+  return threads
 }

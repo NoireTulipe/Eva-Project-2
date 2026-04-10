@@ -285,9 +285,8 @@ function ConfigPanel() {
   const [saved, setSaved]         = useState(false)
 
   useEffect(() => {
-    instagram.getConfig().then(params => {
-      const ar = params.find(p => p.cle === 'instagram.auto_reply')
-      if (ar) setAutoReply(ar.valeur === 'true')
+    instagram.getConfig().then(cfg => {
+      setAutoReply(cfg['instagram.auto_reply'] === 'true')
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])

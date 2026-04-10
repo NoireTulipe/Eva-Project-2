@@ -200,13 +200,18 @@ router.get('/oauth/status', async (req, res) => {
 
 // ─── Private API — statut checkpoint + soumission code ───────────────────────
 
-router.get('/private/status', (req, res) => {
-  const { isCheckpointPending } = svc.getPrivateApiStatus?.() ??
-    { isCheckpointPending: require('../modules/instagram/instagram.private.js').isCheckpointPending }
-  // Import dynamique pour éviter le circular
-  import('../modules/instagram/instagram.private.js').then(m => {
-    res.json({ checkpointPending: m.isCheckpointPending() })
-  }).catch(e => res.status(500).json({ error: e.message }))
+router.get('/private/status', async (req, res) => {
+  try {
+    const m = await import('../modules/instagram/instagram.private.js')
+    const usernameParam = await prisma.configParam.findUnique({ where: { cle: 'instagram.poll.username' } })
+    res.json({
+      checkpointPending: m.isCheckpointPending(),
+      loggedIn:  m.isLoggedIn(),
+      username:  usernameParam?.valeur ?? process.env.IG_USERNAME ?? null,
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
 })
 
 router.post('/private/checkpoint', async (req, res) => {
@@ -218,6 +223,17 @@ router.post('/private/checkpoint', async (req, res) => {
     res.json({ ok: true })
   } catch (e) {
     res.status(400).json({ error: e.message })
+  }
+})
+
+router.get('/private/dms', async (req, res) => {
+  try {
+    const m     = await import('../modules/instagram/instagram.private.js')
+    const limit = parseInt(req.query.limit) || 20
+    const dms   = await m.listRecentDMs(limit)
+    res.json(dms)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
   }
 })
 
@@ -673,9 +689,17 @@ router.get('/activite', async (req, res) => {
 // ─── CONFIG INSTAGRAM ─────────────────────────────────────────────────────────
 
 router.get('/config', async (req, res) => {
-  const keys = ['instagram.auto_reply']
+  const keys = [
+    'instagram.auto_reply',
+    'instagram.poll.enabled',
+    'instagram.poll.interval_minutes',
+    'instagram.poll.last_run',
+    'instagram.poll.username',  // compte écouté
+  ]
   const params = await prisma.configParam.findMany({ where: { cle: { in: keys } } })
-  res.json(params)
+  // Retourne un objet { cle: valeur } pour simplifier la lecture côté frontend
+  const obj = Object.fromEntries(params.map(p => [p.cle, p.valeur]))
+  res.json(obj)
 })
 
 router.put('/config/:cle', async (req, res) => {

@@ -473,5 +473,6 @@ export const instagram = {
   // Private API
   getPrivateStatus:      () => request('GET', '/instagram/private/status'),
   submitCheckpointCode:  (code) => request('POST', '/instagram/private/checkpoint', { code }),
+  getPrivateDMs:         (limit = 20) => request('GET', `/instagram/private/dms?limit=${limit}`),
 }
 

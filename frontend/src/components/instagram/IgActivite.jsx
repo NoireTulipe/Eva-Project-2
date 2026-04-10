@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { instagram } from '../../shared/api.js'
 
 export default function IgActivite() {
-  const [data, setData]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
-  const [limite, setLimite]   = useState(10)
-  const [tab, setTab]         = useState('feed')   // 'feed' | 'commentaires' | 'messages'
+  const [data, setData]           = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState(null)
+  const [limite, setLimite]       = useState(10)
+  const [tab, setTab]             = useState('feed')   // 'feed' | 'commentaires' | 'messages'
+  const [privateDMs, setPrivateDMs] = useState([])
 
   async function load() {
     setLoading(true)
@@ -18,6 +19,8 @@ export default function IgActivite() {
     } finally {
       setLoading(false)
     }
+    // DMs private API — chargement silencieux (non bloquant)
+    instagram.getPrivateDMs(20).then(setPrivateDMs).catch(() => {})
   }
 
   useEffect(() => { load() }, [limite])
@@ -39,7 +42,8 @@ export default function IgActivite() {
   ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
 
   const conversations = data?.conversations ?? []
-  const profil = data?.profil
+  const profil        = data?.profil
+  const totalMessages = conversations.length + privateDMs.length
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -75,7 +79,7 @@ export default function IgActivite() {
         {[
           { id: 'feed',         label: `Feed (${data?.medias?.length ?? 0})` },
           { id: 'commentaires', label: `Commentaires (${tousCommentaires.length})` },
-          { id: 'messages',     label: `Messages (${conversations.length})` },
+          { id: 'messages',     label: `Messages (${totalMessages})` },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-2 text-sm font-medium rounded-t transition-colors ${
@@ -89,7 +93,7 @@ export default function IgActivite() {
       <div className="flex-1 overflow-y-auto p-4">
         {tab === 'feed'         && <FeedTab medias={data?.medias ?? []} />}
         {tab === 'commentaires' && <CommentairesTab commentaires={tousCommentaires} />}
-        {tab === 'messages'     && <MessagesTab conversations={conversations} />}
+        {tab === 'messages'     && <MessagesTab conversations={conversations} privateDMs={privateDMs} />}
       </div>
     </div>
   )
@@ -167,35 +171,82 @@ function CommentairesTab({ commentaires }) {
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 
-function MessagesTab({ conversations }) {
-  if (!conversations.length) return (
+function MessagesTab({ conversations, privateDMs }) {
+  const hasConv = conversations.length > 0
+  const hasDMs  = privateDMs.length > 0
+
+  if (!hasConv && !hasDMs) return (
     <div className="text-center py-12 text-gray-400 max-w-md mx-auto">
       <p className="text-3xl mb-2">✉️</p>
       <p className="text-sm mb-1">Aucune conversation récente</p>
-      <p className="text-xs">La récupération des messages nécessite la permission <code>instagram_manage_messages</code> (App Review Meta).</p>
+      <p className="text-xs">
+        Les DMs via API privée apparaîtront ici dès que le polling sera actif (Instagram → Paramètres).
+      </p>
     </div>
   )
+
   return (
-    <div className="space-y-2 max-w-2xl">
-      {conversations.map(conv => {
-        const lastMsg = conv.messages?.data?.[0]
-        const participants = conv.participants?.data?.filter(p => p.id !== process.env.META_IG_USER_ID) ?? []
-        const nom = participants[0]?.name ?? participants[0]?.username ?? 'Inconnu'
-        return (
-          <div key={conv.id} className="flex gap-3 p-3 bg-white border rounded-lg">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm flex-shrink-0">
-              {nom[0]?.toUpperCase() ?? '?'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-medium">{nom}</span>
-                <span className="text-xs text-gray-400">{fmtDate(conv.updated_time)}</span>
-              </div>
-              {lastMsg && <p className="text-sm text-gray-600 truncate mt-0.5">{lastMsg.message}</p>}
-            </div>
+    <div className="space-y-6 max-w-2xl">
+
+      {/* ── DMs via API privée ── */}
+      {hasDMs && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Via API privée</span>
+            <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" title="Compte IG_USERNAME" />
           </div>
-        )
-      })}
+          <div className="space-y-2">
+            {privateDMs.map(dm => (
+              <div key={dm.threadId} className="flex gap-3 p-3 bg-white border rounded-lg">
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-sm flex-shrink-0">
+                  {(dm.igAuteurNom?.[0] ?? '?').toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-sm font-medium">
+                      {dm.igAuteurNom ? `@${dm.igAuteurNom}` : dm.igAuteurId}
+                    </span>
+                    <span className="text-xs text-gray-400">{fmtDate(dm.timestamp)}</span>
+                    {dm.isOwn && (
+                      <span className="text-xs text-gray-400 italic">répondu</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 truncate mt-0.5">{dm.texte}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Conversations Meta API ── */}
+      {hasConv && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Via Meta API</p>
+          <div className="space-y-2">
+            {conversations.map(conv => {
+              const lastMsg = conv.messages?.data?.[0]
+              const participants = conv.participants?.data ?? []
+              const nom = participants[0]?.name ?? participants[0]?.username ?? 'Inconnu'
+              return (
+                <div key={conv.id} className="flex gap-3 p-3 bg-white border rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm flex-shrink-0">
+                    {nom[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-medium">{nom}</span>
+                      <span className="text-xs text-gray-400">{fmtDate(conv.updated_time)}</span>
+                    </div>
+                    {lastMsg && <p className="text-sm text-gray-600 truncate mt-0.5">{lastMsg.message}</p>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

@@ -35,6 +35,8 @@ export default function IgParametres() {
   const [checkpointCode, setCheckpointCode] = useState('')
   const [checkpointError, setCheckpointErr] = useState(null)
   const [checkpointOk, setCheckpointOk]     = useState(false)
+  const [privateUsername, setPrivateUser]   = useState(null)
+  const [privateLoggedIn, setPrivateLogged] = useState(false)
 
   // Lire le statut OAuth, config poll, et résultat du callback depuis l'URL
   useEffect(() => {
@@ -44,7 +46,11 @@ export default function IgParametres() {
       setPollInterval(parseInt(cfg['instagram.poll.interval_minutes'] ?? '60'))
       setPollLastRun(cfg['instagram.poll.last_run'] ?? null)
     }).catch(() => {})
-    instagram.getPrivateStatus().then(s => setCheckpoint(s.checkpointPending)).catch(() => {})
+    instagram.getPrivateStatus().then(s => {
+      setCheckpoint(s.checkpointPending)
+      setPrivateLogged(s.loggedIn)
+      setPrivateUser(s.username)
+    }).catch(() => {})
 
     const params = new URLSearchParams(window.location.search)
     const result = params.get('oauth')
@@ -182,6 +188,15 @@ export default function IgParametres() {
           >
             <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pollEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
+        </div>
+
+        {/* Compte écouté */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${privateLoggedIn ? 'bg-green-500' : 'bg-gray-300'}`} />
+          {privateUsername
+            ? <span className="text-gray-600">Compte écouté : <strong>@{privateUsername}</strong></span>
+            : <span className="text-gray-400">Non connecté — vérifiez IG_USERNAME dans le .env</span>
+          }
         </div>
 
         {pollEnabled && (
