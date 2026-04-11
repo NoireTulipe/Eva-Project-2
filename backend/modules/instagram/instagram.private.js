@@ -86,10 +86,9 @@ export async function login() {
       return
     } catch (e) {
       if (e.message?.includes('checkpoint') || e instanceof IgCheckpointError) {
-        logAction('Instagram private: checkpoint requis après restauration session — envoi du code…')
+        logAction('Instagram private: checkpoint requis après restauration session — tentative envoi code…')
         _checkpointPending = true
-        await ig.challenge.auto(true).catch(() => {})
-        logAction('Instagram private: code de vérification envoyé — saisis-le dans EVA → Instagram → Paramètres')
+        await envoyerCodeChallenge()
         return
       }
       logAction('Instagram private: session expirée, reconnexion…')
@@ -105,7 +104,6 @@ export async function login() {
     await saveSession()
     _loggedIn          = true
     _checkpointPending = false
-    // Sauvegarder le username connecté en DB pour l'afficher dans l'UI
     await prisma.configParam.upsert({
       where:  { cle: 'instagram.poll.username' },
       create: { cle: 'instagram.poll.username', valeur: username, description: 'Compte Instagram écouté par le polling' },
@@ -115,15 +113,43 @@ export async function login() {
   } catch (e) {
     const isCheckpoint = e instanceof IgCheckpointError || e.message?.includes('checkpoint_required') || e.message?.includes('checkpoint')
     if (isCheckpoint) {
-      logAction('Instagram private: checkpoint requis — envoi du code de vérification…')
+      logAction('Instagram private: checkpoint requis — tentative envoi code…')
       _checkpointPending = true
-      // Demander le code par email (méthode la plus fiable)
-      try { await ig.challenge.auto(true) } catch {}
-      logAction('Instagram private: code de vérification envoyé — saisis-le dans EVA → Instagram → Paramètres')
-      // Ne pas relancer d'erreur — l'état checkpoint est stocké, le polling attendra
+      await envoyerCodeChallenge()
       return
     }
     throw e
+  }
+}
+
+// ── Tenter d'envoyer le code checkpoint (email d'abord, SMS ensuite) ──────────
+// Remplace les catch(() => {}) silencieux — log toujours le résultat réel
+
+async function envoyerCodeChallenge() {
+  // 1. Essai email
+  try {
+    await ig.challenge.selectVerifyMethod('0')
+    logAction('Instagram private: code de vérification envoyé par email — saisis-le dans EVA → Instagram → Paramètres')
+    return
+  } catch (e1) {
+    logError(`Instagram private: échec envoi code par email — ${e1.message}`)
+  }
+
+  // 2. Fallback SMS
+  try {
+    await ig.challenge.selectVerifyMethod('1')
+    logAction('Instagram private: code de vérification envoyé par SMS — saisis-le dans EVA → Instagram → Paramètres')
+    return
+  } catch (e2) {
+    logError(`Instagram private: échec envoi code par SMS — ${e2.message}`)
+  }
+
+  // 3. Fallback auto (laisse Instagram choisir)
+  try {
+    await ig.challenge.auto(true)
+    logAction('Instagram private: code de vérification envoyé (méthode auto) — saisis-le dans EVA → Instagram → Paramètres')
+  } catch (e3) {
+    logError(`Instagram private: IMPOSSIBLE d'envoyer le code — ${e3.message} — vérification manuelle nécessaire dans l'app Instagram`)
   }
 }
 
