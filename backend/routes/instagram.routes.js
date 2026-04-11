@@ -198,16 +198,16 @@ router.get('/oauth/status', async (req, res) => {
   }
 })
 
-// ─── Private API — statut checkpoint + soumission code ───────────────────────
+// ─── Private API — statut checkpoint + soumission code (via ig-service Python) ─
 
 router.get('/private/status', async (req, res) => {
   try {
-    const m = await import('../modules/instagram/instagram.private.js')
-    const usernameParam = await prisma.configParam.findUnique({ where: { cle: 'instagram.poll.username' } })
+    const m      = await import('../modules/instagram/instagram.igrapi.js')
+    const status = await m.refreshStatus()
     res.json({
-      checkpointPending: m.isCheckpointPending(),
-      loggedIn:  m.isLoggedIn(),
-      username:  usernameParam?.valeur ?? process.env.IG_USERNAME ?? null,
+      checkpointPending: status.checkpointPending,
+      loggedIn:          status.loggedIn,
+      username:          status.username ?? process.env.IG_USERNAME ?? null,
     })
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -218,7 +218,7 @@ router.post('/private/checkpoint', async (req, res) => {
   const { code } = req.body
   if (!code?.trim()) return res.status(400).json({ error: 'Code requis' })
   try {
-    const m = await import('../modules/instagram/instagram.private.js')
+    const m = await import('../modules/instagram/instagram.igrapi.js')
     await m.submitCheckpointCode(code.trim())
     res.json({ ok: true })
   } catch (e) {
@@ -228,7 +228,7 @@ router.post('/private/checkpoint', async (req, res) => {
 
 router.get('/private/dms', async (req, res) => {
   try {
-    const m     = await import('../modules/instagram/instagram.private.js')
+    const m     = await import('../modules/instagram/instagram.igrapi.js')
     const limit = parseInt(req.query.limit) || 20
     const dms   = await m.listRecentDMs(limit)
     res.json(dms)
@@ -237,10 +237,9 @@ router.get('/private/dms', async (req, res) => {
   }
 })
 
-// Tester si la session est valide (résout le checkpoint si Instagram a approuvé via notif)
 router.post('/private/test-connection', async (req, res) => {
   try {
-    const m      = await import('../modules/instagram/instagram.private.js')
+    const m      = await import('../modules/instagram/instagram.igrapi.js')
     const result = await m.testConnection()
     res.json({ ok: true, ...result })
   } catch (e) {
@@ -248,11 +247,10 @@ router.post('/private/test-connection', async (req, res) => {
   }
 })
 
-// Renvoyer le code checkpoint via email ou SMS
 router.post('/private/resend-code', async (req, res) => {
-  const { method } = req.body  // 'email' | 'sms'
+  const { method } = req.body
   try {
-    const m = await import('../modules/instagram/instagram.private.js')
+    const m = await import('../modules/instagram/instagram.igrapi.js')
     await m.resendCheckpointCode(method ?? 'email')
     res.json({ ok: true })
   } catch (e) {
@@ -260,18 +258,11 @@ router.post('/private/resend-code', async (req, res) => {
   }
 })
 
-// Forcer une reconnexion propre (efface la session — utile si mauvais compte connecté)
 router.post('/private/force-login', async (req, res) => {
   try {
-    const m = await import('../modules/instagram/instagram.private.js')
-    await m.forceLogin()
-    const usernameParam = await prisma.configParam.findUnique({ where: { cle: 'instagram.poll.username' } })
-    res.json({
-      ok:       true,
-      loggedIn: m.isLoggedIn(),
-      checkpointPending: m.isCheckpointPending(),
-      username: usernameParam?.valeur ?? process.env.IG_USERNAME ?? null,
-    })
+    const m      = await import('../modules/instagram/instagram.igrapi.js')
+    const result = await m.forceLogin()
+    res.json({ ok: true, ...result })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

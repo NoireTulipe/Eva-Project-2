@@ -11,7 +11,7 @@ import { traiterCommentaire, traiterMessage } from '../modules/instagram/instagr
 import {
   fetchNouveauxCommentaires,
   fetchNouveauxDMs,
-} from '../modules/instagram/instagram.private.js'
+} from '../modules/instagram/instagram.igrapi.js'
 
 let _cronHandle = null
 
