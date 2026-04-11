@@ -15,7 +15,6 @@ import memoireRoutes from './routes/memoire.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import mailRoutes from './routes/mail.routes.js'
 import instagramRoutes, { webhookRouter as instagramWebhookRouter } from './routes/instagram.routes.js'
-import { startInstagramPoll } from './crons/instagram-poll.cron.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
 import prisma from './config/db.js'
@@ -96,9 +95,6 @@ app.listen(PORT, async () => {
 
   // Démarrer les crons
   startAllCrons().catch(err => logError(`Crons: échec démarrage — ${err.message}`))
-
-  // Démarrer le polling Instagram (si activé en DB)
-  startInstagramPoll().catch(err => logAction(`Instagram poll: désactivé ou erreur — ${err.message}`))
 
   // Démarrer le bot Discord si activé
   const discordParam = await prisma.configParam.findUnique({ where: { cle: 'discord.enabled' } })

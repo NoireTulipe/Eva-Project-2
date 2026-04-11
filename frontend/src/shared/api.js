@@ -469,13 +469,5 @@ export const instagram = {
   // OAuth
   getOauthUrl:    () => request('GET', '/instagram/oauth/url'),
   getOauthStatus: () => request('GET', '/instagram/oauth/status'),
-
-  // Private API
-  getPrivateStatus:      () => request('GET', '/instagram/private/status'),
-  submitCheckpointCode:  (code) => request('POST', '/instagram/private/checkpoint', { code }),
-  getPrivateDMs:         (limit = 20) => request('GET', `/instagram/private/dms?limit=${limit}`),
-  testPrivateConnection: ()           => request('POST', '/instagram/private/test-connection', {}),
-  resendCheckpointCode:  (method)     => request('POST', '/instagram/private/resend-code', { method }),
-  forceLogin:            ()           => request('POST', '/instagram/private/force-login', {}),
 }
 

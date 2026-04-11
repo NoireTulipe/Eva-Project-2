@@ -198,76 +198,6 @@ router.get('/oauth/status', async (req, res) => {
   }
 })
 
-// ─── Private API — statut checkpoint + soumission code (via ig-service Python) ─
-
-router.get('/private/status', async (req, res) => {
-  try {
-    const m      = await import('../modules/instagram/instagram.igrapi.js')
-    const status = await m.refreshStatus()
-    res.json({
-      checkpointPending: status.checkpointPending,
-      loggedIn:          status.loggedIn,
-      username:          status.username ?? process.env.IG_USERNAME ?? null,
-    })
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
-})
-
-router.post('/private/checkpoint', async (req, res) => {
-  const { code } = req.body
-  if (!code?.trim()) return res.status(400).json({ error: 'Code requis' })
-  try {
-    const m = await import('../modules/instagram/instagram.igrapi.js')
-    await m.submitCheckpointCode(code.trim())
-    res.json({ ok: true })
-  } catch (e) {
-    res.status(400).json({ error: e.message })
-  }
-})
-
-router.get('/private/dms', async (req, res) => {
-  try {
-    const m     = await import('../modules/instagram/instagram.igrapi.js')
-    const limit = parseInt(req.query.limit) || 20
-    const dms   = await m.listRecentDMs(limit)
-    res.json(dms)
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
-})
-
-router.post('/private/test-connection', async (req, res) => {
-  try {
-    const m      = await import('../modules/instagram/instagram.igrapi.js')
-    const result = await m.testConnection()
-    res.json({ ok: true, ...result })
-  } catch (e) {
-    res.status(400).json({ ok: false, error: e.message })
-  }
-})
-
-router.post('/private/resend-code', async (req, res) => {
-  const { method } = req.body
-  try {
-    const m = await import('../modules/instagram/instagram.igrapi.js')
-    await m.resendCheckpointCode(method ?? 'email')
-    res.json({ ok: true })
-  } catch (e) {
-    res.status(400).json({ error: e.message })
-  }
-})
-
-router.post('/private/force-login', async (req, res) => {
-  try {
-    const m      = await import('../modules/instagram/instagram.igrapi.js')
-    const result = await m.forceLogin()
-    res.json({ ok: true, ...result })
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
-})
-
 // ─── Multer — stockage par sous-dossier ───────────────────────────────────────
 
 function makeStorage(sub) {
@@ -720,15 +650,8 @@ router.get('/activite', async (req, res) => {
 // ─── CONFIG INSTAGRAM ─────────────────────────────────────────────────────────
 
 router.get('/config', async (req, res) => {
-  const keys = [
-    'instagram.auto_reply',
-    'instagram.poll.enabled',
-    'instagram.poll.interval_minutes',
-    'instagram.poll.last_run',
-    'instagram.poll.username',  // compte écouté
-  ]
+  const keys = ['instagram.auto_reply']
   const params = await prisma.configParam.findMany({ where: { cle: { in: keys } } })
-  // Retourne un objet { cle: valeur } pour simplifier la lecture côté frontend
   const obj = Object.fromEntries(params.map(p => [p.cle, p.valeur]))
   res.json(obj)
 })
