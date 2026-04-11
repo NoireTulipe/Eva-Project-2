@@ -148,8 +148,22 @@ async function envoyerCodeChallenge() {
   try {
     await ig.challenge.auto(true)
     logAction('Instagram private: code de vérification envoyé (méthode auto) — saisis-le dans EVA → Instagram → Paramètres')
+    return
   } catch (e3) {
-    logError(`Instagram private: IMPOSSIBLE d'envoyer le code — ${e3.message} — vérification manuelle nécessaire dans l'app Instagram`)
+    logError(`Instagram private: échec méthode auto — ${e3.message}`)
+  }
+
+  // 4. Toutes les méthodes ont échoué avec "No checkpoint data" → Instagram a lancé
+  //    un faux checkpoint (erreur de consentement sans données de challenge).
+  //    On vérifie si la session est en fait valide.
+  try {
+    const user = await ig.account.currentUser()
+    _loggedIn          = true
+    _checkpointPending = false
+    await saveSession()
+    logAction(`Instagram private: faux checkpoint résolu — session valide pour @${user.username}`)
+  } catch (e4) {
+    logError(`Instagram private: session invalide confirmée — ${e4.message}`)
   }
 }
 
