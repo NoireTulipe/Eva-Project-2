@@ -237,6 +237,46 @@ router.get('/private/dms', async (req, res) => {
   }
 })
 
+// Tester si la session est valide (résout le checkpoint si Instagram a approuvé via notif)
+router.post('/private/test-connection', async (req, res) => {
+  try {
+    const m      = await import('../modules/instagram/instagram.private.js')
+    const result = await m.testConnection()
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message })
+  }
+})
+
+// Renvoyer le code checkpoint via email ou SMS
+router.post('/private/resend-code', async (req, res) => {
+  const { method } = req.body  // 'email' | 'sms'
+  try {
+    const m = await import('../modules/instagram/instagram.private.js')
+    await m.resendCheckpointCode(method ?? 'email')
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(400).json({ error: e.message })
+  }
+})
+
+// Forcer une reconnexion propre (efface la session — utile si mauvais compte connecté)
+router.post('/private/force-login', async (req, res) => {
+  try {
+    const m = await import('../modules/instagram/instagram.private.js')
+    await m.forceLogin()
+    const usernameParam = await prisma.configParam.findUnique({ where: { cle: 'instagram.poll.username' } })
+    res.json({
+      ok:       true,
+      loggedIn: m.isLoggedIn(),
+      checkpointPending: m.isCheckpointPending(),
+      username: usernameParam?.valeur ?? process.env.IG_USERNAME ?? null,
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── Multer — stockage par sous-dossier ───────────────────────────────────────
 
 function makeStorage(sub) {

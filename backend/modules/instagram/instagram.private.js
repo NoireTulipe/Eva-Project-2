@@ -15,7 +15,7 @@
 import { IgApiClient, IgCheckpointError } from 'instagram-private-api'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { readFile, writeFile, mkdir } from 'fs/promises'
+import { readFile, writeFile, mkdir, unlink } from 'fs/promises'
 import { existsSync }  from 'fs'
 import prisma          from '../../config/db.js'
 import { logAction, logError } from '../../logs/logger.js'
@@ -276,6 +276,65 @@ export async function repondreCommentairePrivate(mediaId, commentaireId, texte) 
 export async function repondreDMPrivate(threadId, texte) {
   await ensureLoggedIn()
   await ig.directThread.broadcastText({ threadIds: [threadId], text: texte })
+}
+
+// ── Tester la connexion (vérifie si la session est valide, résout le checkpoint
+//    si Instagram a approuvé via notification push) ──────────────────────────────
+
+export async function testConnection() {
+  try {
+    const user = await ig.account.currentUser()
+    // La session est valide — si un checkpoint était en attente (approuvé via notif app),
+    // on le résout automatiquement
+    if (_checkpointPending) {
+      _checkpointPending = false
+      await saveSession()
+      logAction(`Instagram private: checkpoint auto-résolu via test — session valide pour @${user.username}`)
+    }
+    _loggedIn = true
+    return {
+      username:       user.username,
+      fullName:       user.full_name,
+      profilePicUrl:  user.profile_pic_url,
+    }
+  } catch (e) {
+    if (e instanceof IgCheckpointError || e.message?.includes('checkpoint')) {
+      _checkpointPending = true
+      throw new Error('Checkpoint toujours en attente — saisis le code ou demande un renvoi')
+    }
+    if (e.message?.includes('login') || e.message?.includes('401')) {
+      _loggedIn = false
+      throw new Error('Session expirée — relance une reconnexion forcée')
+    }
+    throw e
+  }
+}
+
+// ── Renvoyer le code de vérification checkpoint (email ou SMS) ────────────────
+
+export async function resendCheckpointCode(method = 'email') {
+  if (!_checkpointPending) throw new Error('Aucun checkpoint en attente')
+  try {
+    // 0 = email, 1 = SMS/téléphone
+    await ig.challenge.selectVerifyMethod(method === 'sms' ? '1' : '0')
+    logAction(`Instagram private: code checkpoint renvoyé via ${method}`)
+  } catch {
+    // Fallback : auto (true = préférer email)
+    await ig.challenge.auto(method !== 'sms')
+    logAction(`Instagram private: code checkpoint renvoyé via ${method} (fallback auto)`)
+  }
+}
+
+// ── Forcer une reconnexion propre (efface la session — utile si mauvais compte) ─
+
+export async function forceLogin() {
+  try {
+    if (existsSync(SESSION_FILE)) await unlink(SESSION_FILE)
+  } catch {}
+  _loggedIn          = false
+  _checkpointPending = false
+  logAction('Instagram private: session effacée — reconnexion forcée')
+  await login()
 }
 
 // ── Lister les DMs récents (lecture seule — sans màj timestamp) ───────────────
