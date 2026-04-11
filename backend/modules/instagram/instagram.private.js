@@ -184,7 +184,12 @@ export async function fetchNouveauxCommentaires() {
       })
     }
   } catch (e) {
-    if (e.message?.includes('checkpoint') || e instanceof IgCheckpointError) {
+    // 467 = refus de consentement/présence par Instagram — non bloquant, pas un vrai checkpoint
+    if (e.message?.includes('467') || e.message?.includes('get_presence')) {
+      logError(`Instagram private commentaires: erreur présence 467 ignorée — ${e.message?.slice(0, 100)}`)
+      return nouveaux
+    }
+    if (e instanceof IgCheckpointError || e.message?.includes('checkpoint_required')) {
       _loggedIn = false
       _checkpointPending = true
       logError(`Instagram private commentaires: checkpoint requis — ${e.message}`)
@@ -245,7 +250,12 @@ export async function fetchNouveauxDMs() {
       })
     }
   } catch (e) {
-    if (e.message?.includes('checkpoint') || e instanceof IgCheckpointError) {
+    // 467 = refus de consentement/présence par Instagram — non bloquant, pas un vrai checkpoint
+    if (e.message?.includes('467') || e.message?.includes('get_presence')) {
+      logError(`Instagram private DMs: erreur présence 467 ignorée — ${e.message?.slice(0, 100)}`)
+      return nouveaux
+    }
+    if (e instanceof IgCheckpointError || e.message?.includes('checkpoint_required')) {
       _loggedIn = false
       _checkpointPending = true
       logError(`Instagram private DMs: checkpoint requis — ${e.message}`)
