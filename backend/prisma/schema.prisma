@@ -475,18 +475,38 @@ model IgCouleur {
 }
 
 model IgPost {
-  id            Int       @id @default(autoincrement())
-  titre         String?
-  format        String    @default("portrait") // "portrait" | "carre" | "paysage" | "story"
-  vignettes     String    // JSON : tableau d'états canvas Konva (une entrée par slide)
-  legende       String?   // texte d'accompagnement généré ou saisi
-  statut        String    @default("brouillon") // "brouillon" | "programme" | "publie" | "erreur"
-  scheduledAt   DateTime? // date/heure de publication programmée
-  publishedAt   DateTime?
-  metaMediaId   String?   // ID retourné par Meta après publication
-  erreurPubli   String?   // message d'erreur si statut = "erreur"
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 Int              @id @default(autoincrement())
+  titre              String?
+  format             String           @default("portrait") // "portrait" | "carre" | "paysage" | "story"
+  vignettes          String           // JSON : tableau d'états canvas Konva (une entrée par slide)
+  legende            String?          // texte d'accompagnement généré ou saisi
+  sujet              String?          // sujet saisi dans le générateur IA
+  legendeInstruction String?          // instruction pour générer la légende
+  estTemplate        Boolean          @default(false) // true = template réutilisable, false = brouillon/post
+  statut             String           @default("brouillon") // "brouillon" | "programme" | "publie" | "erreur"
+  scheduledAt        DateTime?        // date/heure de publication programmée
+  publishedAt        DateTime?
+  metaMediaId        String?          // ID retourné par Meta après publication
+  erreurPubli        String?          // message d'erreur si statut = "erreur"
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  planifications     IgPlanification[]
+}
+
+model IgPlanification {
+  id           Int       @id @default(autoincrement())
+  templateId   Int                    // template à utiliser pour générer la vignette
+  template     IgPost    @relation(fields: [templateId], references: [id])
+  sujet        String                 // instruction de contenu pour ce post
+  datePost     DateTime               // quand le poster
+  statut       String    @default("planifie") // "planifie" | "en_cours" | "propose" | "valide" | "publie" | "erreur"
+  postGenereId Int?                   // IgPost généré par EVA après traitement
+  vignettePng  String?                // chemin du PNG généré côté serveur
+  legende      String?                // légende générée par EVA
+  discordMsgId String?                // ID du message Discord envoyé pour validation
+  erreur       String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model IgExclusion {

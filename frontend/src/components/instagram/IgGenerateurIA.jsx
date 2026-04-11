@@ -6,7 +6,7 @@
  */
 import { useState } from 'react'
 
-export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply, onUpdateInstruction }) {
+export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply, onUpdateInstruction, sujetInitial = '', legendeInstructionInitiale = '' }) {
 
   // Collecter tous les champs texte nommés de toutes les vignettes
   const slidesAvecChamps = slides.map((s, si) => ({
@@ -22,10 +22,10 @@ export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply, onU
     })
   })
 
-  const [sujet, setSujet]           = useState('')
+  const [sujet, setSujet]           = useState(sujetInitial)
   const [mode, setMode]             = useState('courant') // 'courant' | 'tous'
   const [instructions, setInst]     = useState(initInstructions)
-  const [legendeInst, setLegInst]   = useState('Légende Instagram avec emojis, call-to-action et hashtags pertinents')
+  const [legendeInst, setLegInst]   = useState(legendeInstructionInitiale || 'Légende Instagram avec emojis, call-to-action et hashtags pertinents')
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
   const [result, setResult]         = useState(null)
@@ -239,7 +239,7 @@ export default function IgGenerateurIA({ slides, slideIdx, onClose, onApply, onU
               <button onClick={() => setResult(null)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">
                 Régénérer
               </button>
-              <button onClick={() => onApply(result)}
+              <button onClick={() => onApply({ ...result, sujet, legendeInstruction: legendeInst })}
                 className="px-4 py-2 text-sm bg-pink-500 text-white rounded hover:bg-pink-600">
                 Appliquer au canvas
               </button>

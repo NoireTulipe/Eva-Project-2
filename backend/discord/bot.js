@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits } from 'discord.js'
 import { processMessage, processConversation } from '../llm/orchestrateur.js'
 import { getCanalConfig } from './canal.service.js'
 import { logAction, logError } from '../logs/logger.js'
+import { setDiscordClient } from './instagram.discord.js'
 import prisma from '../config/db.js'
 
 const DISCORD_LIMIT = 2000
@@ -17,6 +18,47 @@ const client = new Client({
 
 client.once('ready', () => {
   logAction(`Discord : bot connecté en tant que ${client.user.tag}`)
+  setDiscordClient(client)
+})
+
+// ── Interactions boutons Instagram ────────────────────────────────────────────
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return
+  const id = interaction.customId
+
+  if (id.startsWith('ig_valider_') || id.startsWith('ig_modifier_') || id.startsWith('ig_refuser_')) {
+    const [, action, planifId, postId] = id.split('_')
+    try {
+      if (action === 'valider') {
+        // Programmer le post à sa date prévue
+        const planif = await prisma.igPlanification.findUnique({ where: { id: Number(planifId) } })
+        if (planif) {
+          await prisma.igPost.update({
+            where: { id: Number(postId) },
+            data:  { statut: 'programme', scheduledAt: planif.datePost },
+          })
+          await prisma.igPlanification.update({
+            where: { id: Number(planifId) },
+            data:  { statut: 'valide' },
+          })
+          await interaction.update({ content: `✅ Post #${postId} programmé pour ${planif.datePost.toLocaleDateString('fr-FR')}`, components: [] })
+        }
+      } else if (action === 'modifier') {
+        await prisma.igPlanification.update({ where: { id: Number(planifId) }, data: { statut: 'planifie' } })
+        await interaction.update({
+          content: `✏️ Post #${postId} renvoyé en brouillon — ouvre Instafacile → Bibliothèque → Post #${postId} pour modifier, puis reprogramme.`,
+          components: [],
+        })
+      } else if (action === 'refuser') {
+        await prisma.igPlanification.update({ where: { id: Number(planifId) }, data: { statut: 'planifie' } })
+        await prisma.igPost.delete({ where: { id: Number(postId) } }).catch(() => {})
+        await interaction.update({ content: `❌ Post refusé et supprimé. La planification est repassée à "planifié" pour régénération.`, components: [] })
+      }
+    } catch (e) {
+      logError(`Discord interaction Instagram: ${e.message}`)
+      await interaction.reply({ content: `Erreur : ${e.message}`, ephemeral: true }).catch(() => {})
+    }
+  }
 })
 
 client.on('messageCreate', async (message) => {

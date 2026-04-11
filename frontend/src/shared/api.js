@@ -466,6 +466,14 @@ export const instagram = {
   // Activité
   getActivite: (limite = 10) => request('GET', `/instagram/activite?limite=${limite}`),
 
+  // Templates
+  getTemplates: () => request('GET', '/instagram/templates'),
+
+  // Planification
+  getPlanification:     ()           => request('GET', '/instagram/planification'),
+  createPlanification:  (data)       => request('POST', '/instagram/planification', data),
+  deletePlanification:  (id)         => request('DELETE', `/instagram/planification/${id}`),
+
   // OAuth
   getOauthUrl:    () => request('GET', '/instagram/oauth/url'),
   getOauthStatus: () => request('GET', '/instagram/oauth/status'),

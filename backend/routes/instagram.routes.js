@@ -198,6 +198,39 @@ router.get('/oauth/status', async (req, res) => {
   }
 })
 
+// ─── TEMPLATES ────────────────────────────────────────────────────────────────
+
+router.get('/templates', async (req, res) => {
+  res.json(await svc.listTemplates())
+})
+
+// ─── PLANIFICATION ────────────────────────────────────────────────────────────
+
+router.get('/planification', async (req, res) => {
+  res.json(await svc.listPlanifications())
+})
+
+router.post('/planification', async (req, res) => {
+  try {
+    const { templateId, sujet, datePost } = req.body
+    if (!templateId || !sujet?.trim() || !datePost) {
+      return res.status(400).json({ error: 'templateId, sujet et datePost requis' })
+    }
+    res.status(201).json(await svc.createPlanification({ templateId, sujet, datePost }))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+router.delete('/planification/:id', async (req, res) => {
+  try {
+    await svc.deletePlanification(Number(req.params.id))
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── Multer — stockage par sous-dossier ───────────────────────────────────────
 
 function makeStorage(sub) {

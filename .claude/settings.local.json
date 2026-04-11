@@ -11,7 +11,8 @@
       "Bash(npx @capacitor/assets generate --android)",
       "Bash(npx vite:*)",
       "Bash(where node:*)",
-      "Bash(where npm:*)"
+      "Bash(where npm:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

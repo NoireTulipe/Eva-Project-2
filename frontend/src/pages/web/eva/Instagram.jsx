@@ -3,11 +3,13 @@ import IgEditeur       from '../../../components/instagram/IgEditeur.jsx'
 import IgBibliotheques from '../../../components/instagram/IgBibliotheques.jsx'
 import IgParametres    from '../../../components/instagram/IgParametres.jsx'
 import IgPostsPlanning from '../../../components/instagram/IgPostsPlanning.jsx'
+import IgCalendrier    from '../../../components/instagram/IgCalendrier.jsx'
 
 const ONGLETS = [
   { id: 'editeur',       label: 'Éditeur' },
   { id: 'bibliotheques', label: 'Bibliothèques' },
   { id: 'planning',      label: 'Planning' },
+  { id: 'calendrier',    label: '📅 Calendrier EVA' },
   { id: 'parametres',    label: 'Paramètres' },
 ]
 
@@ -38,6 +40,7 @@ export default function Instagram() {
         {onglet === 'editeur'       && <IgEditeur />}
         {onglet === 'bibliotheques' && <IgBibliotheques />}
         {onglet === 'planning'      && <IgPostsPlanning />}
+        {onglet === 'calendrier'    && <IgCalendrier />}
         {onglet === 'parametres'    && <IgParametres />}
       </div>
     </div>

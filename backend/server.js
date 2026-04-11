@@ -17,6 +17,7 @@ import mailRoutes from './routes/mail.routes.js'
 import instagramRoutes, { webhookRouter as instagramWebhookRouter } from './routes/instagram.routes.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
+import { startInstagramPlanifCron } from './crons/instagram-planif.cron.js'
 import prisma from './config/db.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -95,6 +96,7 @@ app.listen(PORT, async () => {
 
   // Démarrer les crons
   startAllCrons().catch(err => logError(`Crons: échec démarrage — ${err.message}`))
+  startInstagramPlanifCron()
 
   // Démarrer le bot Discord si activé
   const discordParam = await prisma.configParam.findUnique({ where: { cle: 'discord.enabled' } })

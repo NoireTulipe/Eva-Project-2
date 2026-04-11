@@ -39,8 +39,11 @@ export default function IgEditeur() {
   const [postId, setPostId]             = useState(null)
   const [showLibrary, setShowLibrary]   = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [dropFile, setDropFile]         = useState(null)   // fichier en attente d'import
-  const [editingTextId, setEditingTextId] = useState(null) // id de l'élément texte en édition
+  const [dropFile, setDropFile]         = useState(null)
+  const [editingTextId, setEditingTextId] = useState(null)
+  const [sujet, setSujet]               = useState('')
+  const [legendeInstruction, setLegendeInstruction] = useState('')
+  const [estTemplate, setEstTemplate]   = useState(false)
 
   const fmt  = IG_FORMATS[format]
   const slide = slides[slideIdx]
@@ -233,7 +236,14 @@ export default function IgEditeur() {
   async function savePost() {
     setSaving(true)
     try {
-      const data = { titre, format, vignettes: JSON.stringify(slides), legende }
+      const data = {
+        titre, format,
+        vignettes: JSON.stringify(slides),
+        legende,
+        sujet,
+        legendeInstruction,
+        estTemplate,
+      }
       let saved
       if (postId) {
         saved = await instagram.updatePost(postId, data)
@@ -391,6 +401,8 @@ export default function IgEditeur() {
         <IgGenerateurIA
           slides={slides}
           slideIdx={slideIdx}
+          sujetInitial={sujet}
+          legendeInstructionInitiale={legendeInstruction}
           onClose={() => setShowIA(false)}
           onUpdateInstruction={(si, id, val) =>
             setSlides(prev => prev.map((s, i) => i !== si ? s : {
@@ -398,7 +410,9 @@ export default function IgEditeur() {
               elements: s.elements.map(el => el.id === id ? { ...el, iaInstruction: val } : el)
             }))
           }
-          onApply={({ champsParSlide, champs, legende: leg }) => {
+          onApply={({ champsParSlide, champs, legende: leg, sujet: suj, legendeInstruction: legInst }) => {
+            if (suj !== undefined) setSujet(suj)
+            if (legInst !== undefined) setLegendeInstruction(legInst)
             // Mode multi-slide : champsParSlide = [{ slideIdx, champs }]
             if (champsParSlide) {
               setSlides(prev => prev.map((s, si) => {

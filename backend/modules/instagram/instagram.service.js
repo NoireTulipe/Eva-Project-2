@@ -116,11 +116,29 @@ export async function getPost(id) {
   return prisma.igPost.findUnique({ where: { id } })
 }
 
-export async function createPost({ titre, vignettes, legende }) {
-  return prisma.igPost.create({ data: { titre: titre ?? null, vignettes, legende: legende ?? null } })
+export async function listTemplates() {
+  return prisma.igPost.findMany({ where: { estTemplate: true }, orderBy: { createdAt: 'desc' } })
 }
 
-export async function updatePost(id, { titre, vignettes, legende, statut }) {
+export async function listBrouillonsPost() {
+  return prisma.igPost.findMany({ where: { estTemplate: false }, orderBy: { createdAt: 'desc' } })
+}
+
+export async function createPost({ titre, vignettes, legende, sujet, legendeInstruction, estTemplate, format }) {
+  return prisma.igPost.create({
+    data: {
+      titre: titre ?? null,
+      format: format ?? 'portrait',
+      vignettes,
+      legende: legende ?? null,
+      sujet: sujet ?? null,
+      legendeInstruction: legendeInstruction ?? null,
+      estTemplate: estTemplate ?? false,
+    }
+  })
+}
+
+export async function updatePost(id, { titre, vignettes, legende, statut, sujet, legendeInstruction, estTemplate, format }) {
   return prisma.igPost.update({
     where: { id },
     data: {
@@ -128,12 +146,40 @@ export async function updatePost(id, { titre, vignettes, legende, statut }) {
       ...(vignettes !== undefined && { vignettes }),
       ...(legende !== undefined && { legende }),
       ...(statut !== undefined && { statut }),
+      ...(sujet !== undefined && { sujet }),
+      ...(legendeInstruction !== undefined && { legendeInstruction }),
+      ...(estTemplate !== undefined && { estTemplate }),
+      ...(format !== undefined && { format }),
     }
   })
 }
 
 export async function deletePost(id) {
   return prisma.igPost.delete({ where: { id } })
+}
+
+// ─── PLANIFICATION ────────────────────────────────────────────────────────────
+
+export async function listPlanifications() {
+  return prisma.igPlanification.findMany({
+    orderBy: { datePost: 'asc' },
+    include: { template: { select: { id: true, titre: true, format: true, vignettes: true } } },
+  })
+}
+
+export async function createPlanification({ templateId, sujet, datePost }) {
+  return prisma.igPlanification.create({
+    data: { templateId: Number(templateId), sujet, datePost: new Date(datePost) },
+    include: { template: { select: { id: true, titre: true, format: true } } },
+  })
+}
+
+export async function updatePlanification(id, data) {
+  return prisma.igPlanification.update({ where: { id }, data })
+}
+
+export async function deletePlanification(id) {
+  return prisma.igPlanification.delete({ where: { id } })
 }
 
 // ─── EXCLUSIONS ───────────────────────────────────────────────────────────────
