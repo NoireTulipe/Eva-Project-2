@@ -11,9 +11,10 @@
 import { createCanvas, loadImage, registerFont } from 'canvas'
 import { resolve, dirname, join }  from 'path'
 import { fileURLToPath }           from 'url'
-import { writeFile, mkdir, readdir } from 'fs/promises'
+import { writeFile, mkdir }        from 'fs/promises'
 import { existsSync }              from 'fs'
 import { IG_FORMATS_SERVER }       from './igFormats.server.js'
+import prisma                      from '../../config/db.js'
 
 const __dirname  = dirname(fileURLToPath(import.meta.url))
 const UPLOADS    = resolve(__dirname, '../../uploads/instagram')
@@ -39,21 +40,24 @@ function resolveUploadPath(value) {
   return resolve(UPLOADS, rel)
 }
 
-// ── Polices : enregistrer les TTF/OTF présents dans uploads/fonts ─────────────
+// ── Polices : enregistrer via les noms DB (= ce qui est stocké dans fontFamily) ─
 
-let _fontsRegistered = false
+const _registeredFonts = new Set()
+
 async function ensureFontsRegistered() {
-  if (_fontsRegistered) return
-  _fontsRegistered = true
   const fontsDir = resolve(__dirname, '../../uploads/instagram/fonts')
   if (!existsSync(fontsDir)) return
   try {
-    const files = await readdir(fontsDir)
-    for (const f of files) {
-      if (!f.match(/\.(ttf|otf)$/i)) continue
+    // On utilise le nom DB comme family pour correspondre à el.fontFamily côté front
+    const dbFonts = await prisma.igFont.findMany({ where: { fichier: { not: null } } })
+    for (const font of dbFonts) {
+      if (!font.fichier || _registeredFonts.has(font.fichier)) continue
+      if (!font.fichier.match(/\.(ttf|otf|woff|woff2)$/i)) continue
+      const path = join(fontsDir, font.fichier)
+      if (!existsSync(path)) continue
       try {
-        const family = f.replace(/[-_](regular|bold|italic|light|medium|black).*/i, '').replace(/\.[^.]+$/, '')
-        registerFont(join(fontsDir, f), { family })
+        registerFont(path, { family: font.nom })
+        _registeredFonts.add(font.fichier)
       } catch {}
     }
   } catch {}
@@ -166,15 +170,32 @@ function renderText(ctx, el, scale, canvasW) {
   ctx.textAlign = align
 
   const boxX  = (el.x ?? 0) * scale
-  const boxW  = (el.width ?? (canvasW / scale)) * scale
+  const boxW  = (el.width  ?? (canvasW / scale)) * scale
+  const boxH  = el.height ? el.height * scale : null
   const lineH = fontSize * (el.lineHeight ?? 1.2)
-  // Baseline : on part du haut de la boîte + ~85% fontSize (approx ascent)
-  const startY = (el.y ?? 0) * scale + fontSize * 0.85
 
-  // Point X selon l'alignement (identique à Konva)
+  // Point X selon l'alignement horizontal
   const textX = align === 'center' ? boxX + boxW / 2
               : align === 'right'  ? boxX + boxW
               : boxX
+
+  // Pré-calcul du nombre de lignes pour l'alignement vertical
+  // (on passe canvasW pour éviter une dépendance circulaire — les lignes seront
+  //  recalculées de toute façon lors du fillText)
+  const rawLinesPre = (el.text ?? '').split('\n')
+  const allLinesPre = rawLinesPre.flatMap(raw => wrapLine(ctx, raw, boxW))
+  const totalH      = allLinesPre.length * lineH
+
+  // Baseline de départ selon verticalAlign
+  const boxTop = (el.y ?? 0) * scale
+  let startY
+  if (boxH && el.verticalAlign === 'middle') {
+    startY = boxTop + (boxH - totalH) / 2 + fontSize * 0.85
+  } else if (boxH && el.verticalAlign === 'bottom') {
+    startY = boxTop + boxH - totalH + fontSize * 0.85
+  } else {
+    startY = boxTop + fontSize * 0.85
+  }
 
   // Effets shadow/contour
   if (el.effet3d?.active) {
@@ -195,7 +216,7 @@ function renderText(ctx, el, scale, canvasW) {
     ctx.lineJoin    = 'round'
   }
 
-  // Découpe : \n explicites puis word-wrap dans la boîte
+  // Découpe finale (identique au pré-calcul, ctx.font est déjà posé)
   const rawLines = (el.text ?? '').split('\n')
   const allLines = rawLines.flatMap(raw => wrapLine(ctx, raw, boxW))
 

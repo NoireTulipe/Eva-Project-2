@@ -155,21 +155,52 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
                 ))}
               </div>
             </Row>
-            <Row label="Alignement">
+            <Row label="Alignement H">
               <div className="flex gap-1">
-                {['left', 'center', 'right'].map(a => (
-                  <button
-                    key={a}
-                    onClick={() => onChange({ align: a })}
-                    className={`px-2 py-0.5 text-xs border rounded ${
-                      element.align === a ? 'bg-gray-800 text-white' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    {a === 'left' ? '⬅' : a === 'center' ? '↔' : '➡'}
+                {[
+                  { val: 'left',   icon: '⬅' },
+                  { val: 'center', icon: '↔' },
+                  { val: 'right',  icon: '➡' },
+                ].map(a => (
+                  <button key={a.val} onClick={() => onChange({ align: a.val })}
+                    className={`px-2 py-0.5 text-xs border rounded ${element.align === a.val ? 'bg-gray-800 text-white' : 'hover:bg-gray-50'}`}>
+                    {a.icon}
                   </button>
                 ))}
               </div>
             </Row>
+            <Row label="Hauteur boîte">
+              <div className="flex items-center gap-1">
+                <NumInput
+                  value={element.height ?? ''}
+                  onChange={v => onChange({ height: v > 0 ? v : undefined })}
+                  min={10} max={2000}
+                />
+                {element.height && (
+                  <button onClick={() => onChange({ height: undefined })}
+                    className="text-xs text-gray-400 hover:text-red-400 px-1" title="Hauteur automatique">
+                    ×
+                  </button>
+                )}
+              </div>
+            </Row>
+            {element.height && (
+              <Row label="Alignement V">
+                <div className="flex gap-1">
+                  {[
+                    { val: 'top',    icon: '⬆', title: 'Haut' },
+                    { val: 'middle', icon: '↕',  title: 'Centre' },
+                    { val: 'bottom', icon: '⬇', title: 'Bas' },
+                  ].map(a => (
+                    <button key={a.val} onClick={() => onChange({ verticalAlign: a.val })}
+                      title={a.title}
+                      className={`px-2 py-0.5 text-xs border rounded ${(element.verticalAlign ?? 'top') === a.val ? 'bg-gray-800 text-white' : 'hover:bg-gray-50'}`}>
+                      {a.icon}
+                    </button>
+                  ))}
+                </div>
+              </Row>
+            )}
             <Row label="Couleur">
               <input
                 type="color"

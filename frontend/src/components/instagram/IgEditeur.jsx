@@ -104,9 +104,10 @@ export default function IgEditeur() {
       elements: [...s.elements, {
         id, type: 'text',
         nom: `Texte ${idx}`,
-        x: 40, y: Math.round(fmt.displayH / 2) - 40, width: fmt.displayW - 80,
+        x: 40, y: Math.round(fmt.displayH / 2) - 60, width: fmt.displayW - 80,
+        height: 120,
         text: 'Votre texte', fontSize: 32, fontFamily: 'Arial',
-        fill: '#000000', align: 'center', fontStyle: '',
+        fill: '#000000', align: 'center', verticalAlign: 'middle', fontStyle: '',
         draggable: true, opacity: 1, rotation: 0, visible: true, locked: false,
       }]
     }))
@@ -629,11 +630,13 @@ function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDoubleCli
               id={el.id}
               x={el.x} y={el.y}
               width={el.width}
+              height={el.height}
               text={el.text}
               fontSize={el.fontSize}
               fontFamily={el.fontFamily}
               fill={el.fill}
               align={el.align}
+              verticalAlign={el.verticalAlign ?? 'top'}
               fontStyle={el.fontStyle}
               opacity={el.opacity ?? 1}
               rotation={el.rotation ?? 0}
@@ -647,7 +650,8 @@ function CanvasSlide({ slide, stageRef, trRef, selectedId, onSelect, onDoubleCli
                 const node = e.target
                 onUpdateElement(el.id, {
                   x: node.x(), y: node.y(),
-                  width: Math.max(5, node.width() * node.scaleX()),
+                  width:  Math.max(5, node.width()  * node.scaleX()),
+                  height: el.height ? Math.max(5, node.height() * node.scaleY()) : undefined,
                   rotation: node.rotation(),
                 })
                 node.scaleX(1); node.scaleY(1)
