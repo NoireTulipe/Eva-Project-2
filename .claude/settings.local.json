@@ -12,7 +12,10 @@
       "Bash(npx vite:*)",
       "Bash(where node:*)",
       "Bash(where npm:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(npx --prefix frontend vite build --mode development)",
+      "Bash(node_modules/.bin/vite build:*)",
+      "Bash(./node_modules/.bin/vite build:*)"
     ]
   }
 }

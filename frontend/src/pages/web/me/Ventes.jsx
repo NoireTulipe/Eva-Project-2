@@ -565,7 +565,7 @@ function VueHistorique() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
-  const [vueParProduits, setVueParProduits] = useState(false)
+  const [vueParProduits, setVueParProduits] = useState(true)
   const [triColonne, setTriColonne] = useState('nom')
   const [triDir, setTriDir] = useState('asc')
   const [supprimant, setSupprimant] = useState(null)
@@ -584,6 +584,46 @@ function VueHistorique() {
   function IconTri({ col }) {
     if (triColonne !== col) return <span className="ml-1 text-gray-300">⇅</span>
     return <span className="ml-1 text-indigo-500">{triDir === 'asc' ? '↑' : '↓'}</span>
+  }
+
+  function renderVentesParPanier(ventesSession) {
+    if (!ventesSession?.length) {
+      return <p className="text-sm text-gray-400 px-4 py-4">Aucune vente.</p>
+    }
+    return (
+      <div className="space-y-2">
+        {ventesSession.map((v, idx) => {
+          const total = v.lignes?.reduce((a, l) => a + l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100), 0) ?? 0
+          return (
+            <div key={v.id} className={`rounded-lg border overflow-hidden ${v.annulee ? 'opacity-40' : 'border-gray-200'}`}>
+              <div className={`px-4 py-2 flex items-center justify-between text-xs ${v.annulee ? 'bg-red-50 border-b border-red-100' : 'bg-gray-50 border-b border-gray-200'}`}>
+                <span className="font-medium text-gray-500">Panier #{idx + 1}</span>
+                <div className="flex items-center gap-3 text-gray-500">
+                  {v.annulee && <span className="text-red-500 font-medium">Annulé</span>}
+                  <span>{v.methodePaiement?.nom ?? '—'}</span>
+                  <span className="font-semibold text-gray-700">{EUR(total)}</span>
+                </div>
+              </div>
+              <table className="w-full text-sm">
+                <tbody>
+                  {v.lignes?.map((l, i) => (
+                    <tr key={i} className={`border-b border-gray-100 last:border-0 ${v.annulee ? 'line-through' : ''}`}>
+                      <td className="px-4 py-2 text-gray-800">{l.produit?.nom ?? `#${l.produitId}`}</td>
+                      <td className="px-4 py-2 text-gray-400 text-xs">{l.produit?.categorie?.nom ?? ''}</td>
+                      <td className="px-4 py-2 text-center text-gray-600">×{l.quantite}</td>
+                      <td className="px-4 py-2 text-gray-400">{EUR(l.prixUnitaire)}</td>
+                      {l.remise > 0 && <td className="px-4 py-2 text-orange-500 text-xs">−{l.remise}%</td>}
+                      {!l.remise && <td className="px-4 py-2"></td>}
+                      <td className="px-4 py-2 text-right font-medium text-gray-700">{EUR(l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   function renderVentesParProduits(ventesSession) {
@@ -615,9 +655,11 @@ function VueHistorique() {
       })
     }
 
+    const catOrder = Object.keys(parCategorie).sort((a, b) => a.localeCompare(b, 'fr'))
+
     return (
       <div className="rounded-lg overflow-hidden border border-gray-200">
-        {Object.entries(parCategorie).map(([cat, lignes]) => (
+        {catOrder.map(cat => (
           <div key={cat}>
             <div className="bg-indigo-50 px-4 py-2 flex items-center gap-2 border-b border-indigo-100">
               <span className="w-1 h-4 rounded bg-indigo-400 inline-block"></span>
@@ -644,7 +686,7 @@ function VueHistorique() {
                 </tr>
               </thead>
               <tbody>
-                {trierLignes(Object.entries(lignes)).map(([nom, data]) => (
+                {trierLignes(Object.entries(parCategorie[cat])).map(([nom, data]) => (
                   <tr key={nom} className="border-b border-gray-100 last:border-0">
                     <td className="px-4 py-2 text-gray-800">{nom}</td>
                     <td className="px-4 py-2 text-center font-semibold text-gray-700">{data.quantite}</td>
@@ -721,93 +763,73 @@ function VueHistorique() {
 
           return (
             <div key={s.id} className="bg-white rounded-lg shadow overflow-hidden">
-              <button
+              {/* En-tête cliquable */}
+              <div
+                className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors cursor-pointer"
                 onClick={() => toggleExpanded(s.id)}
-                className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                <div className="flex items-center gap-4 min-w-0">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
                     s.statut === 'ouverte' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                   }`}>
                     {s.statut}
                   </span>
-                  <span className="font-medium text-gray-800">{s.pointDeVente?.nom}</span>
-                  <span className="text-sm text-gray-500">{DATE(s.debut)}</span>
-                  {s.fin && <span className="text-sm text-gray-400">→ {DATE(s.fin)}</span>}
+                  <span className="font-medium text-gray-800 truncate">{s.pointDeVente?.nom}</span>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 flex-shrink-0">
+                    <span>{DATE(s.debut)}</span>
+                    {s.fin && <span className="text-gray-400">→ {DATE(s.fin)}</span>}
+                    {isOpen && (
+                      <span className="flex items-center gap-1.5 ml-2" onClick={e => e.stopPropagation()}>
+                        {s.statut === 'cloturee' && (
+                          <button
+                            onClick={() => handleRouvrir(s.id)}
+                            disabled={rouvrant === s.id}
+                            className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 px-2 py-1 rounded disabled:opacity-50 bg-white"
+                          >
+                            {rouvrant === s.id ? 'Réouverture…' : 'Rouvrir'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleSupprimer(s.id)}
+                          disabled={supprimant === s.id}
+                          className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2 py-1 rounded disabled:opacity-50 bg-white"
+                        >
+                          {supprimant === s.id ? 'Suppression…' : 'Supprimer'}
+                        </button>
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-6 text-sm">
+                <div className="flex items-center gap-6 text-sm flex-shrink-0">
                   <span className="text-gray-500">{ventesActives.length} vente(s)</span>
                   {totalFrais > 0 && <span className="text-red-500">{EUR(totalFrais)} frais</span>}
                   <span className="font-semibold text-gray-800">{EUR(ca)}</span>
                   <span className="text-gray-400">{isOpen ? '▲' : '▼'}</span>
                 </div>
-              </button>
+              </div>
 
               {isOpen && (
                 <div className="border-t border-gray-100 p-5 space-y-4">
-                  <div className="flex justify-end gap-2">
-                    {s.statut === 'cloturee' && (
-                      <button
-                        onClick={() => handleRouvrir(s.id)}
-                        disabled={rouvrant === s.id}
-                        className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 px-3 py-1.5 rounded disabled:opacity-50"
-                      >
-                        {rouvrant === s.id ? 'Réouverture…' : 'Rouvrir cette session'}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleSupprimer(s.id)}
-                      disabled={supprimant === s.id}
-                      className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded disabled:opacity-50"
-                    >
-                      {supprimant === s.id ? 'Suppression…' : 'Supprimer cette session'}
-                    </button>
-                  </div>
-                  {/* Ventes */}
-                  <div className="flex items-center justify-between mb-2">
+                  {/* Toggle vue */}
+                  <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium text-gray-600">Ventes</h4>
-                    <button
-                      onClick={() => setVueParProduits(v => !v)}
-                      className={`text-xs px-3 py-1.5 rounded border transition-colors ${
-                        vueParProduits
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'text-indigo-600 border-indigo-200 hover:border-indigo-400'
-                      }`}
-                    >
-                      Classer par produits
-                    </button>
+                    <div className="flex rounded border border-gray-200 overflow-hidden text-xs">
+                      <button
+                        onClick={() => setVueParProduits(true)}
+                        className={`px-3 py-1.5 transition-colors ${vueParProduits ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        Par produits
+                      </button>
+                      <button
+                        onClick={() => setVueParProduits(false)}
+                        className={`px-3 py-1.5 border-l border-gray-200 transition-colors ${!vueParProduits ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        Par panier
+                      </button>
+                    </div>
                   </div>
 
-                  {vueParProduits ? renderVentesParProduits(s.ventes) : (
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 font-medium text-gray-500">Produit</th>
-                          <th className="px-4 py-2 font-medium text-gray-500">Qté</th>
-                          <th className="px-4 py-2 font-medium text-gray-500">Prix unit.</th>
-                          <th className="px-4 py-2 font-medium text-gray-500">Total</th>
-                          <th className="px-4 py-2 font-medium text-gray-500">Statut</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {s.ventes?.length === 0 && (
-                          <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-400">Aucune vente</td></tr>
-                        )}
-                        {s.ventes?.map(v =>
-                          v.lignes?.map((l, i) => (
-                            <tr key={`${v.id}-${i}`}
-                              className={`border-b border-gray-100 ${v.annulee ? 'opacity-40 line-through' : ''}`}>
-                              <td className="px-4 py-2">{l.produit?.nom ?? `#${l.produitId}`}</td>
-                              <td className="px-4 py-2">{l.quantite}</td>
-                              <td className="px-4 py-2">{EUR(l.prixUnitaire)}</td>
-                              <td className="px-4 py-2">{EUR(l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100))}</td>
-                              <td className="px-4 py-2">{v.annulee ? 'Annulée' : 'OK'}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  )}
+                  {vueParProduits ? renderVentesParProduits(s.ventes) : renderVentesParPanier(s.ventes)}
 
                   {/* Frais de la session */}
                   {s.frais?.length > 0 && (
