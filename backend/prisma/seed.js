@@ -92,8 +92,9 @@ async function main() {
     { cle: 'llm.flash_model',  valeur: 'gemini-2.5-flash', description: 'Modèle orchestrateur (rapide)' },
     { cle: 'llm.pro_model',    valeur: 'gemini-2.5-pro',   description: 'Modèle rédacteur (qualité)' },
     { cle: 'llm.pro_provider', valeur: 'gemini',           description: 'Provider du rédacteur (gemini | mistral)' },
-    { cle: 'discord.enabled',  valeur: 'false',            description: 'Activer le bot Discord (true | false)' },
-    { cle: 'backup.path',      valeur: './prisma/',        description: 'Dossier de destination des sauvegardes SQLite (chemin relatif à backend/)' },
+    { cle: 'discord.enabled',              valeur: 'false',    description: 'Activer le bot Discord (true | false)' },
+    { cle: 'discord.instagram.channel_id', valeur: '',         description: 'Salon Discord pour validation des vignettes Instafacile' },
+    { cle: 'backup.path',                  valeur: './prisma/', description: 'Dossier de destination des sauvegardes SQLite (chemin relatif à backend/)' },
     { cle: 'backup.keep',      valeur: '10',               description: 'Nombre de sauvegardes à conserver (rotation automatique)' },
   ]
 
