@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { instagram } from '../../shared/api.js'
-import { loadGoogleFont } from './useGoogleFonts.js'
+import { loadGoogleFont, loadLocalFont } from './useGoogleFonts.js'
 
 export default function IgLibraryPanel({ onAddImage, onSetBackground }) {
   const [tab, setTab]           = useState('fonds')
@@ -22,7 +22,10 @@ export default function IgLibraryPanel({ onAddImage, onSetBackground }) {
     if (t === 'elements') instagram.getElements().then(setEls).catch(() => {})
     if (t === 'polices')  instagram.getFonts().then(fs => {
       setFonts(fs)
-      fs.forEach(f => f.googleFont && loadGoogleFont(f.googleFont))
+      fs.forEach(f => {
+        if (f.googleFont) loadGoogleFont(f.googleFont)
+        else if (f.fichier) loadLocalFont(f.nom, f.fichier)
+      })
     }).catch(() => {})
   }
 

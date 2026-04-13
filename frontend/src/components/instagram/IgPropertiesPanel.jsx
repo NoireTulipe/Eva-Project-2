@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { instagram } from '../../shared/api.js'
-import { loadGoogleFont } from './useGoogleFonts.js'
+import { loadGoogleFont, loadLocalFont } from './useGoogleFonts.js'
 import IgTextEffects from './IgTextEffects.jsx'
 
 export default function IgPropertiesPanel({ element, onChange, onDelete }) {
@@ -10,8 +10,11 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
   useEffect(() => {
     instagram.getFonts().then(fs => {
       setFonts(fs)
-      // Pré-charger toutes les Google Fonts de la bibliothèque
-      fs.forEach(f => { if (f.googleFont) loadGoogleFont(f.googleFont) })
+      // Pré-charger toutes les polices de la bibliothèque
+      fs.forEach(f => {
+        if (f.googleFont) loadGoogleFont(f.googleFont)
+        else if (f.fichier) loadLocalFont(f.nom, f.fichier)
+      })
     }).catch(() => {})
   }, [])
 
@@ -101,11 +104,12 @@ export default function IgPropertiesPanel({ element, onChange, onDelete }) {
               <select
                 value={element.fontFamily}
                 onChange={e => {
-                  const nom = e.target.value
-                  // Charger la Google Font correspondante si besoin
-                  const f = fonts.find(f => f.nom === nom)
+                  const family = e.target.value
+                  // Charger la police si besoin
+                  const f = fonts.find(f => (f.googleFont ?? f.nom) === family)
                   if (f?.googleFont) loadGoogleFont(f.googleFont)
-                  onChange({ fontFamily: nom })
+                  else if (f?.fichier) loadLocalFont(f.nom, f.fichier)
+                  onChange({ fontFamily: family })
                 }}
                 className="w-full border rounded px-1 py-0.5 text-xs"
               >

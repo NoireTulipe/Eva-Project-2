@@ -50,10 +50,16 @@ app.use(loggerMiddleware)
 // Thumbnails — lazy-resize via sharp, cachés 30 jours
 app.get('/uploads/thumb/:filename', thumbMiddleware)
 
-// Servir les uploads produits (images) — sans auth, cachés 30 jours
+// Servir les uploads produits (images + fonts) — sans auth, cachés 30 jours
 app.use('/uploads', express.static(resolve(__dirname, 'uploads'), {
   maxAge: '30d',
   immutable: true,
+  setHeaders: (res, path) => {
+    if (path.endsWith('.ttf') || path.endsWith('.otf') || path.endsWith('.woff') || path.endsWith('.woff2')) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable')
+      res.setHeader('Access-Control-Allow-Origin', '*')
+    }
+  }
 }))
 
 // Servir le frontend buildé (production)
