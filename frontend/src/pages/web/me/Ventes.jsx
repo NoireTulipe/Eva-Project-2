@@ -565,8 +565,66 @@ function VueHistorique() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
+  const [vueParProduits, setVueParProduits] = useState(false)
   const [supprimant, setSupprimant] = useState(null)
   const [rouvrant, setRouvrant] = useState(null)
+
+  function toggleExpanded(id) {
+    if (expanded !== id) setVueParProduits(false)
+    setExpanded(v => v === id ? null : id)
+  }
+
+  function renderVentesParProduits(ventesSession) {
+    const lignesActives = []
+    ventesSession?.forEach(v => {
+      if (!v.annulee) v.lignes?.forEach(l => lignesActives.push(l))
+    })
+
+    const parCategorie = {}
+    lignesActives.forEach(l => {
+      const cat = l.produit?.categorie?.nom ?? 'Sans catégorie'
+      const prodNom = l.produit?.nom ?? `#${l.produitId}`
+      if (!parCategorie[cat]) parCategorie[cat] = {}
+      if (!parCategorie[cat][prodNom]) parCategorie[cat][prodNom] = { quantite: 0, total: 0 }
+      parCategorie[cat][prodNom].quantite += l.quantite
+      parCategorie[cat][prodNom].total += l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100)
+    })
+
+    if (lignesActives.length === 0) {
+      return <p className="text-sm text-gray-400 px-4 py-4">Aucune vente active.</p>
+    }
+
+    return (
+      <div className="rounded-lg overflow-hidden border border-gray-200">
+        {Object.entries(parCategorie).map(([cat, produits]) => (
+          <div key={cat}>
+            <div className="bg-indigo-50 px-4 py-2 flex items-center gap-2 border-b border-indigo-100">
+              <span className="w-1 h-4 rounded bg-indigo-400 inline-block"></span>
+              <span className="font-semibold text-indigo-700 text-xs uppercase tracking-wider">{cat}</span>
+            </div>
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 font-medium text-gray-500">Produit</th>
+                  <th className="px-4 py-2 font-medium text-gray-500 text-center">Nb vendus</th>
+                  <th className="px-4 py-2 font-medium text-gray-500 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(produits).map(([nom, data]) => (
+                  <tr key={nom} className="border-b border-gray-100 last:border-0">
+                    <td className="px-4 py-2 text-gray-800">{nom}</td>
+                    <td className="px-4 py-2 text-center font-semibold text-gray-700">{data.quantite}</td>
+                    <td className="px-4 py-2 text-right font-medium text-gray-700">{EUR(data.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   async function charger() {
     try {
@@ -631,7 +689,7 @@ function VueHistorique() {
           return (
             <div key={s.id} className="bg-white rounded-lg shadow overflow-hidden">
               <button
-                onClick={() => setExpanded(isOpen ? null : s.id)}
+                onClick={() => toggleExpanded(s.id)}
                 className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-4">
@@ -673,34 +731,50 @@ function VueHistorique() {
                     </button>
                   </div>
                   {/* Ventes */}
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 font-medium text-gray-500">Produit</th>
-                        <th className="px-4 py-2 font-medium text-gray-500">Qté</th>
-                        <th className="px-4 py-2 font-medium text-gray-500">Prix unit.</th>
-                        <th className="px-4 py-2 font-medium text-gray-500">Total</th>
-                        <th className="px-4 py-2 font-medium text-gray-500">Statut</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {s.ventes?.length === 0 && (
-                        <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-400">Aucune vente</td></tr>
-                      )}
-                      {s.ventes?.map(v =>
-                        v.lignes?.map((l, i) => (
-                          <tr key={`${v.id}-${i}`}
-                            className={`border-b border-gray-100 ${v.annulee ? 'opacity-40 line-through' : ''}`}>
-                            <td className="px-4 py-2">{l.produit?.nom ?? `#${l.produitId}`}</td>
-                            <td className="px-4 py-2">{l.quantite}</td>
-                            <td className="px-4 py-2">{EUR(l.prixUnitaire)}</td>
-                            <td className="px-4 py-2">{EUR(l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100))}</td>
-                            <td className="px-4 py-2">{v.annulee ? 'Annulée' : 'OK'}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-600">Ventes</h4>
+                    <button
+                      onClick={() => setVueParProduits(v => !v)}
+                      className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+                        vueParProduits
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'text-indigo-600 border-indigo-200 hover:border-indigo-400'
+                      }`}
+                    >
+                      Classer par produits
+                    </button>
+                  </div>
+
+                  {vueParProduits ? renderVentesParProduits(s.ventes) : (
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 font-medium text-gray-500">Produit</th>
+                          <th className="px-4 py-2 font-medium text-gray-500">Qté</th>
+                          <th className="px-4 py-2 font-medium text-gray-500">Prix unit.</th>
+                          <th className="px-4 py-2 font-medium text-gray-500">Total</th>
+                          <th className="px-4 py-2 font-medium text-gray-500">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {s.ventes?.length === 0 && (
+                          <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-400">Aucune vente</td></tr>
+                        )}
+                        {s.ventes?.map(v =>
+                          v.lignes?.map((l, i) => (
+                            <tr key={`${v.id}-${i}`}
+                              className={`border-b border-gray-100 ${v.annulee ? 'opacity-40 line-through' : ''}`}>
+                              <td className="px-4 py-2">{l.produit?.nom ?? `#${l.produitId}`}</td>
+                              <td className="px-4 py-2">{l.quantite}</td>
+                              <td className="px-4 py-2">{EUR(l.prixUnitaire)}</td>
+                              <td className="px-4 py-2">{EUR(l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100))}</td>
+                              <td className="px-4 py-2">{v.annulee ? 'Annulée' : 'OK'}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  )}
 
                   {/* Frais de la session */}
                   {s.frais?.length > 0 && (
