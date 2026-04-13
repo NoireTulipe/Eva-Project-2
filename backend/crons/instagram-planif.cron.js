@@ -56,7 +56,7 @@ async function runPlanif() {
   }
 }
 
-async function traiterPlanification(planif) {
+export async function traiterPlanification(planif) {
   const template = planif.template
   logAction(`Instagram planif #${planif.id}: génération pour "${planif.sujet}"`)
 

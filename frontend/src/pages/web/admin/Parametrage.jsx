@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { admin } from '../../../shared/api.js'
+import { admin, instagram } from '../../../shared/api.js'
 
 const CATEGORIES_DISPO = ['ventes', 'memoire', 'web']
 
@@ -13,9 +13,10 @@ export default function Parametrage() {
       {/* Onglets */}
       <div className="flex gap-1 mb-6 border-b border-gray-200">
         {[
-          { id: 'prompts', label: 'Prompts' },
-          { id: 'config',  label: 'Config LLM' },
-          { id: 'discord', label: 'Discord' }
+          { id: 'prompts',    label: 'Prompts' },
+          { id: 'config',     label: 'Config LLM' },
+          { id: 'discord',    label: 'Discord' },
+          { id: 'instagram',  label: '📸 Instagram' },
         ].map(o => (
           <button
             key={o.id}
@@ -31,9 +32,10 @@ export default function Parametrage() {
         ))}
       </div>
 
-      {onglet === 'prompts' && <OngletPrompts />}
-      {onglet === 'config'  && <OngletConfig />}
-      {onglet === 'discord' && <OngletDiscord />}
+      {onglet === 'prompts'   && <OngletPrompts />}
+      {onglet === 'config'    && <OngletConfig />}
+      {onglet === 'discord'   && <OngletDiscord />}
+      {onglet === 'instagram' && <OngletInstagram />}
     </div>
   )
 }
@@ -549,6 +551,197 @@ function OngletDiscord() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Onglet Instagram ─────────────────────────────────────────────────────────
+
+function OngletInstagram() {
+  const [oauthStatus, setOauthStatus]   = useState(null)
+  const [connecting, setConnecting]     = useState(false)
+  const [prompts, setPrompts]           = useState([])
+  const [edits, setEdits]               = useState({})
+  const [saving, setSaving]             = useState(null)
+  const [saved, setSaved]               = useState(null)
+  const [discordChannelId, setDiscordChannelId] = useState('')
+  const [discordParam, setDiscordParam] = useState(null)
+  const [savingDiscord, setSavingDiscord] = useState(false)
+  const [savedDiscord, setSavedDiscord] = useState(false)
+
+  useEffect(() => {
+    instagram.getOauthStatus().then(setOauthStatus).catch(() => {})
+    admin.getPrompts().then(all => setPrompts(all.filter(p => p.module === 'instagram'))).catch(() => {})
+    admin.getConfig().then(all => {
+      const p = all.find(x => x.cle === 'discord.instagram.channel_id')
+      if (p) { setDiscordParam(p); setDiscordChannelId(p.valeur ?? '') }
+    }).catch(() => {})
+  }, [])
+
+  async function connecter() {
+    setConnecting(true)
+    try {
+      const { url } = await instagram.getOauthUrl()
+      window.location.href = url
+    } catch (e) {
+      alert(`Erreur : ${e.message}`)
+      setConnecting(false)
+    }
+  }
+
+  async function savePrompt(prompt) {
+    setSaving(prompt.id)
+    try {
+      const contenu = edits[prompt.id] ?? prompt.contenu
+      await admin.updatePrompt(prompt.id, { contenu })
+      setPrompts(prev => prev.map(p => p.id === prompt.id ? { ...p, contenu } : p))
+      setEdits(prev => { const n = { ...prev }; delete n[prompt.id]; return n })
+      setSaved(prompt.id)
+      setTimeout(() => setSaved(null), 2000)
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  async function saveDiscordChannel() {
+    if (!discordParam) return
+    setSavingDiscord(true)
+    try {
+      await admin.updateConfig(discordParam.id, discordChannelId)
+      setSavedDiscord(true)
+      setTimeout(() => setSavedDiscord(false), 2000)
+    } finally {
+      setSavingDiscord(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+
+      {/* ── Connexion OAuth Meta ─────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <h3 className="font-semibold text-sm text-gray-800">Connexion au compte Instagram</h3>
+        <p className="text-xs text-gray-400">
+          Nécessaire pour publier des posts. Token valide 60 jours, renouvelable ici.
+        </p>
+
+        {oauthStatus?.connected ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+              <span className="text-sm text-green-700 font-medium">Connecté</span>
+              {oauthStatus.tokenSource === 'env' && (
+                <span className="text-xs text-gray-400">(token .env)</span>
+              )}
+            </div>
+            {oauthStatus.igUserId && (
+              <p className="text-xs text-gray-500">ID compte : {oauthStatus.igUserId}</p>
+            )}
+            {oauthStatus.expiresAt && (
+              <p className="text-xs text-gray-500">
+                Token valide jusqu'au : {new Date(oauthStatus.expiresAt).toLocaleDateString('fr-FR', {
+                  day: 'numeric', month: 'long', year: 'numeric'
+                })}
+              </p>
+            )}
+            {oauthStatus.tokenSource !== 'env' && (
+              <button onClick={connecter} disabled={connecting}
+                className="px-3 py-1.5 text-xs border border-pink-200 text-pink-600 rounded hover:bg-pink-50 disabled:opacity-50">
+                {connecting ? 'Redirection…' : 'Reconnecter / Renouveler le token'}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">Autorisez EVA à accéder à votre compte Instagram pour publier.</p>
+            <button onClick={connecter} disabled={connecting}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium">
+              {connecting ? 'Redirection vers Meta…' : '🔗 Connecter le compte Instagram'}
+            </button>
+            <p className="text-xs text-gray-400">
+              Nécessite META_APP_ID et META_APP_SECRET dans le fichier .env du serveur.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Salon Discord validation ──────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <h3 className="font-semibold text-sm text-gray-800">Salon Discord — validation Instafacile</h3>
+        <p className="text-xs text-gray-400">
+          EVA enverra les vignettes générées dans ce salon pour validation avant publication.
+          Copiez l'ID du salon Discord (clic droit sur le salon → Copier l'identifiant).
+        </p>
+        {!discordParam ? (
+          <p className="text-xs text-orange-600">
+            Paramètre <code>discord.instagram.channel_id</code> introuvable en base.
+            Ajoutez-le via : <code>INSERT INTO ConfigParam (cle, valeur) VALUES ('discord.instagram.channel_id', '');</code>
+          </p>
+        ) : (
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={discordChannelId}
+              onChange={e => setDiscordChannelId(e.target.value)}
+              placeholder="ex: 1234567890123456789"
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <button
+              onClick={saveDiscordChannel}
+              disabled={savingDiscord || discordChannelId === (discordParam?.valeur ?? '')}
+              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+            >
+              {savingDiscord ? '…' : 'OK'}
+            </button>
+            {savedDiscord && <span className="text-sm text-green-600">Sauvegardé ✓</span>}
+          </div>
+        )}
+      </div>
+
+      {/* ── Prompt IA texte vignette ──────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <h3 className="font-semibold text-sm text-gray-800">Prompt IA — texte des vignettes</h3>
+        <p className="text-xs text-gray-400">
+          Utilisé par EVA lors de la génération automatique (Calendrier EVA) et par le générateur manuel dans l'éditeur.
+        </p>
+
+        {prompts.filter(p => p.role === 'texte_image').map(prompt => {
+          const contenu = edits[prompt.id] ?? prompt.contenu
+          const isDirty = edits[prompt.id] !== undefined
+          return (
+            <div key={prompt.id} className="space-y-2">
+              <textarea
+                value={contenu}
+                onChange={e => setEdits(prev => ({ ...prev, [prompt.id]: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                rows={8}
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => savePrompt(prompt)}
+                  disabled={saving === prompt.id || !isDirty}
+                  className="px-3 py-1.5 text-sm bg-pink-500 text-white rounded hover:bg-pink-600 disabled:opacity-40"
+                >
+                  {saving === prompt.id ? 'Sauvegarde…' : 'Sauvegarder'}
+                </button>
+                {isDirty && (
+                  <button
+                    onClick={() => setEdits(prev => { const n = { ...prev }; delete n[prompt.id]; return n })}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    Annuler
+                  </button>
+                )}
+                {saved === prompt.id && <span className="text-sm text-green-600">Sauvegardé ✓</span>}
+              </div>
+            </div>
+          )
+        })}
+
+        {prompts.filter(p => p.role === 'texte_image').length === 0 && (
+          <p className="text-xs text-orange-600">Prompt introuvable — relancez le seed.</p>
+        )}
+      </div>
     </div>
   )
 }

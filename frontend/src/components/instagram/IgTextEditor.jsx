@@ -79,7 +79,7 @@ export default function IgTextEditor({ element, onChange, onClose }) {
   return (
     <div
       ref={panelRef}
-      className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 w-72 select-none"
+      className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 w-[500px] select-none"
       style={{ left: pos.left, top: pos.top }}
     >
       {/* Handle déplaçable */}

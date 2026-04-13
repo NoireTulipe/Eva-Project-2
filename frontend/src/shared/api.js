@@ -473,6 +473,7 @@ export const instagram = {
   getPlanification:     ()           => request('GET', '/instagram/planification'),
   createPlanification:  (data)       => request('POST', '/instagram/planification', data),
   deletePlanification:  (id)         => request('DELETE', `/instagram/planification/${id}`),
+  testerPlanification:  (id)         => request('POST', `/instagram/planification/${id}/tester`),
 
   // OAuth
   getOauthUrl:    () => request('GET', '/instagram/oauth/url'),

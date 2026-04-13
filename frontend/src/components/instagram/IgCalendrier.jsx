@@ -22,6 +22,8 @@ export default function IgCalendrier() {
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
   const [deleting, setDeleting]     = useState(null)
+  const [testing, setTesting]       = useState(null)
+  const [testResult, setTestResult] = useState({})
 
   // Formulaire
   const [fSujet, setFSujet]         = useState('')
@@ -68,6 +70,20 @@ export default function IgCalendrier() {
     await instagram.deletePlanification(id).catch(() => {})
     await load()
     setDeleting(null)
+  }
+
+  async function tester(id) {
+    setTesting(id)
+    setTestResult(prev => ({ ...prev, [id]: null }))
+    try {
+      await instagram.testerPlanification(id)
+      setTestResult(prev => ({ ...prev, [id]: { ok: true } }))
+      await load()
+    } catch (e) {
+      setTestResult(prev => ({ ...prev, [id]: { ok: false, error: e.message } }))
+    } finally {
+      setTesting(null)
+    }
   }
 
   // Grouper par semaine
@@ -201,15 +217,32 @@ export default function IgCalendrier() {
                     </div>
 
                     {/* Statut + actions */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${st.cls}`}>
-                        {st.label}
-                      </span>
-                      {(p.statut === 'planifie' || p.statut === 'erreur') && (
-                        <button onClick={() => supprimer(p.id)} disabled={deleting === p.id}
-                          className="text-gray-300 hover:text-red-400 text-lg leading-none disabled:opacity-40">
-                          ✕
-                        </button>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${st.cls}`}>
+                          {st.label}
+                        </span>
+                        {p.statut === 'planifie' && (
+                          <button
+                            onClick={() => tester(p.id)}
+                            disabled={testing === p.id}
+                            title="Génère la vignette et envoie sur Discord pour test (statut inchangé)"
+                            className="px-2 py-0.5 text-xs border border-indigo-200 text-indigo-600 rounded-full hover:bg-indigo-50 disabled:opacity-40"
+                          >
+                            {testing === p.id ? '…' : '🧪 Tester'}
+                          </button>
+                        )}
+                        {(p.statut === 'planifie' || p.statut === 'erreur') && (
+                          <button onClick={() => supprimer(p.id)} disabled={deleting === p.id}
+                            className="text-gray-300 hover:text-red-400 text-lg leading-none disabled:opacity-40">
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      {testResult[p.id] && (
+                        <p className={`text-xs ${testResult[p.id].ok ? 'text-green-600' : 'text-red-500'}`}>
+                          {testResult[p.id].ok ? '✓ Envoyé sur Discord' : `⚠ ${testResult[p.id].error}`}
+                        </p>
                       )}
                     </div>
                   </div>

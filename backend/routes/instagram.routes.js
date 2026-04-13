@@ -231,6 +231,36 @@ router.delete('/planification/:id', async (req, res) => {
   }
 })
 
+router.post('/planification/:id/tester', async (req, res) => {
+  try {
+    const { traiterPlanification } = await import('../crons/instagram-planif.cron.js')
+    const planif = await prisma.igPlanification.findUnique({
+      where: { id: Number(req.params.id) },
+      include: { template: true },
+    })
+    if (!planif) return res.status(404).json({ error: 'Planification introuvable' })
+
+    // Générer sans modifier le statut final (on remet 'planifie' après)
+    await traiterPlanification(planif)
+
+    // Remettre en 'planifie' pour pouvoir retester
+    await prisma.igPlanification.update({
+      where: { id: planif.id },
+      data: { statut: 'planifie', erreur: null },
+    })
+
+    res.json({ ok: true, message: 'Génération de test effectuée — vignette envoyée sur Discord.' })
+  } catch (e) {
+    logError(`Instagram test planif #${req.params.id}: ${e.message}`)
+    // Remettre en 'planifie' même en cas d'erreur
+    await prisma.igPlanification.update({
+      where: { id: Number(req.params.id) },
+      data: { statut: 'planifie', erreur: null },
+    }).catch(() => {})
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── Multer — stockage par sous-dossier ───────────────────────────────────────
 
 function makeStorage(sub) {
