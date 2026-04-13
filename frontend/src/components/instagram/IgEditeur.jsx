@@ -470,6 +470,9 @@ export default function IgEditeur() {
               setFormat(post.format ?? FORMAT_PAR_DEFAUT)
               setTitre(post.titre ?? '')
               setLegende(post.legende ?? '')
+              setSujet(post.sujet ?? '')
+              setLegendeInstruction(post.legendeInstruction ?? '')
+              setEstTemplate(post.estTemplate ?? false)
               setPostId(post.id)
             } catch {}
             setShowPosts(false)
