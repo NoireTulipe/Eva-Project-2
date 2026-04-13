@@ -44,7 +44,8 @@ app.use((req, res, next) => {
 // Webhook Instagram — AVANT express.json() pour que express.raw() fonctionne
 app.use('/api/instagram', instagramWebhookRouter)
 
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ limit: '50mb', extended: true }))
 app.use(loggerMiddleware)
 
 // Thumbnails — lazy-resize via sharp, cachés 30 jours
