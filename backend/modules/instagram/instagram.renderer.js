@@ -2,58 +2,122 @@
  * instagram.renderer.js — Rendu serveur d'une vignette Instafacile en PNG
  *
  * Les coordonnées Konva sont en espace "display" (540px de large).
- * On applique un scale (exportW / displayW = 2) pour obtenir 1080px.
+ * On applique scale = exportW / 540 pour obtenir 1080px.
+ *
+ * Chemins images : stockés côté front comme "/uploads/instagram/…"
+ * → on strip le préfixe et on résout depuis le dossier uploads local.
  */
 
 import { createCanvas, loadImage, registerFont } from 'canvas'
-import { resolve, dirname }        from 'path'
+import { resolve, dirname, join }  from 'path'
 import { fileURLToPath }           from 'url'
-import { writeFile, mkdir }        from 'fs/promises'
+import { writeFile, mkdir, readdir } from 'fs/promises'
 import { existsSync }              from 'fs'
 import { IG_FORMATS_SERVER }       from './igFormats.server.js'
 
 const __dirname  = dirname(fileURLToPath(import.meta.url))
-const OUTPUT_DIR = resolve(__dirname, '../../uploads/instagram/generated')
 const UPLOADS    = resolve(__dirname, '../../uploads/instagram')
+const OUTPUT_DIR = resolve(UPLOADS, 'generated')
 
-// Largeur d'affichage de référence (identique à igFormats.js côté front)
+// Largeur d'affichage de référence côté front (igFormats.js → displayW)
 const DISPLAY_W = 540
+
+// ── Résolution des chemins images ─────────────────────────────────────────────
+// Le front stocke les URLs comme "/uploads/instagram/backgrounds/file.jpg"
+// On extrait la partie relative et on résout depuis UPLOADS.
+
+function resolveUploadPath(value) {
+  if (!value) return null
+  if (value.startsWith('data:'))            return value  // data URL → direct
+  if (value.startsWith('http://') || value.startsWith('https://')) return value  // URL externe → direct
+
+  // Strip le préfixe connu
+  let rel = value
+  if (rel.startsWith('/uploads/instagram/')) rel = rel.slice('/uploads/instagram/'.length)
+  else if (rel.startsWith('/'))              rel = rel.slice(1)
+
+  return resolve(UPLOADS, rel)
+}
+
+// ── Polices : enregistrer les TTF/OTF présents dans uploads/fonts ─────────────
+
+let _fontsRegistered = false
+async function ensureFontsRegistered() {
+  if (_fontsRegistered) return
+  _fontsRegistered = true
+  const fontsDir = resolve(__dirname, '../../uploads/instagram/fonts')
+  if (!existsSync(fontsDir)) return
+  try {
+    const files = await readdir(fontsDir)
+    for (const f of files) {
+      if (!f.match(/\.(ttf|otf)$/i)) continue
+      try {
+        const family = f.replace(/[-_](regular|bold|italic|light|medium|black).*/i, '').replace(/\.[^.]+$/, '')
+        registerFont(join(fontsDir, f), { family })
+      } catch {}
+    }
+  } catch {}
+}
+
+// ── Word-wrap ─────────────────────────────────────────────────────────────────
+
+function wrapLine(ctx, text, maxWidth) {
+  if (!text || ctx.measureText(text).width <= maxWidth) return [text || '']
+  const words = text.split(' ')
+  const lines = []
+  let cur = ''
+  for (const word of words) {
+    const test = cur ? cur + ' ' + word : word
+    if (ctx.measureText(test).width <= maxWidth) {
+      cur = test
+    } else {
+      if (cur) lines.push(cur)
+      cur = word
+    }
+  }
+  if (cur) lines.push(cur)
+  return lines.length ? lines : [text]
+}
 
 // ── Rendu d'une vignette ──────────────────────────────────────────────────────
 
 async function renderSlide(slideData, exportW, exportH) {
-  const scale  = exportW / DISPLAY_W   // = 2 pour tous les formats
+  await ensureFontsRegistered()
+
+  const scale  = exportW / DISPLAY_W
   const canvas = createCanvas(exportW, exportH)
   const ctx    = canvas.getContext('2d')
 
   // 1. Fond
   const bg = slideData.background
-  if (bg?.type === 'color' || !bg?.type) {
+  if (!bg || bg.type === 'color') {
     ctx.fillStyle = bg?.value ?? '#ffffff'
     ctx.fillRect(0, 0, exportW, exportH)
-  } else if (bg?.type === 'image' && bg?.value) {
+  } else if (bg.type === 'image' && bg.value) {
+    // Remplir d'abord avec blanc en fallback
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, exportW, exportH)
     try {
-      // bg.value peut être une URL data: ou un chemin relatif
-      const src = bg.value.startsWith('data:') || bg.value.startsWith('http')
-        ? bg.value
-        : resolve(UPLOADS, 'backgrounds', bg.value)
+      const src = resolveUploadPath(bg.value)
       const img = await loadImage(src)
       // object-fit: cover
       const s  = Math.max(exportW / img.width, exportH / img.height)
       const sw = img.width  * s
       const sh = img.height * s
       ctx.drawImage(img, (exportW - sw) / 2, (exportH - sh) / 2, sw, sh)
-    } catch {}
+    } catch (e) {
+      // fond blanc déjà posé
+    }
   }
 
-  // 2. Éléments dans l'ordre du tableau (= ordre z dans Konva)
+  // 2. Éléments dans l'ordre du tableau (= ordre z Konva)
   const elements = (slideData.elements ?? []).filter(e => e.visible !== false)
 
   for (const el of elements) {
     ctx.save()
     ctx.globalAlpha = el.opacity ?? 1
 
-    // Rotation autour du centre de l'élément (en coordonnées scalées)
+    // Rotation autour du centre de l'élément
     if (el.rotation) {
       const cx = ((el.x ?? 0) + (el.width  ?? 0) / 2) * scale
       const cy = ((el.y ?? 0) + (el.height ?? 0) / 2) * scale
@@ -63,13 +127,10 @@ async function renderSlide(slideData, exportW, exportH) {
     }
 
     if (el.type === 'text') {
-      await renderText(ctx, el, scale, exportW)
-
+      renderText(ctx, el, scale, exportW)
     } else if (el.type === 'image' && el.src) {
       try {
-        const src = el.src.startsWith('data:') || el.src.startsWith('http')
-          ? el.src
-          : resolve(UPLOADS, el.src)
+        const src = resolveUploadPath(el.src)
         const img = await loadImage(src)
         ctx.drawImage(
           img,
@@ -79,7 +140,6 @@ async function renderSlide(slideData, exportW, exportH) {
           (el.height ?? 100) * scale,
         )
       } catch {}
-
     } else if (el.type === 'shape') {
       renderShape(ctx, el, scale)
     }
@@ -90,75 +150,52 @@ async function renderSlide(slideData, exportW, exportH) {
   return canvas
 }
 
-// ── Word-wrap : découpe une ligne en plusieurs selon la largeur max ────────────
-
-function wrapLine(ctx, text, maxWidth) {
-  if (!text) return ['']
-  // Si la ligne entière tient, pas besoin de découper
-  if (ctx.measureText(text).width <= maxWidth) return [text]
-
-  const words = text.split(' ')
-  const lines = []
-  let current = ''
-
-  for (const word of words) {
-    const test = current ? current + ' ' + word : word
-    if (ctx.measureText(test).width <= maxWidth) {
-      current = test
-    } else {
-      if (current) lines.push(current)
-      // Si un seul mot dépasse déjà la largeur, on le garde quand même
-      current = word
-    }
-  }
-  if (current) lines.push(current)
-  return lines.length ? lines : [text]
-}
-
 // ── Texte ─────────────────────────────────────────────────────────────────────
 
-async function renderText(ctx, el, scale, canvasW) {
+function renderText(ctx, el, scale, canvasW) {
   const fontSize   = (el.fontSize ?? 24) * scale
-  const fontFamily = el.fontFamily ?? 'sans-serif'
+  const fontFamily = el.fontFamily ?? 'Arial'
   const bold       = el.fontStyle?.includes('bold')   ? 'bold '   : ''
   const italic     = el.fontStyle?.includes('italic') ? 'italic ' : ''
-  ctx.font         = `${italic}${bold}${fontSize}px "${fontFamily}", Arial, sans-serif`
-  ctx.fillStyle    = el.fill ?? '#000000'
 
+  // Essayer la police demandée, avec Arial en fallback garanti
+  ctx.font = `${italic}${bold}${fontSize}px ${fontFamily}, Arial, sans-serif`
+
+  ctx.fillStyle = el.fill ?? '#000000'
   const align   = el.align ?? 'left'
   ctx.textAlign = align
 
-  const boxX   = (el.x ?? 0) * scale
-  const boxW   = (el.width ?? (canvasW / scale)) * scale
-  const lineH  = fontSize * (el.lineHeight ?? 1.2)
-  const startY = (el.y ?? 0) * scale + fontSize * 0.85  // baseline approx
+  const boxX  = (el.x ?? 0) * scale
+  const boxW  = (el.width ?? (canvasW / scale)) * scale
+  const lineH = fontSize * (el.lineHeight ?? 1.2)
+  // Baseline : on part du haut de la boîte + ~85% fontSize (approx ascent)
+  const startY = (el.y ?? 0) * scale + fontSize * 0.85
 
-  // Point X selon l'alignement
+  // Point X selon l'alignement (identique à Konva)
   const textX = align === 'center' ? boxX + boxW / 2
               : align === 'right'  ? boxX + boxW
               : boxX
 
-  // Effets
+  // Effets shadow/contour
+  if (el.effet3d?.active) {
+    ctx.shadowColor   = el.effet3d.color ?? '#333333'
+    ctx.shadowOffsetX = (el.effet3d.depth ?? 5) * scale
+    ctx.shadowOffsetY = (el.effet3d.depth ?? 5) * scale
+    ctx.shadowBlur    = 0
+  } else if (el.shadow?.active) {
+    ctx.shadowColor   = el.shadow.color ?? '#000000'
+    ctx.shadowOffsetX = (el.shadow.offsetX ?? 4) * scale
+    ctx.shadowOffsetY = (el.shadow.offsetY ?? 4) * scale
+    ctx.shadowBlur    = (el.shadow.blur ?? 8) * scale
+  }
+
   if (el.contour?.active) {
     ctx.strokeStyle = el.contour.color ?? '#000000'
     ctx.lineWidth   = (el.contour.width ?? 2) * scale
     ctx.lineJoin    = 'round'
   }
-  if (el.shadow?.active || el.effet3d?.active) {
-    if (el.effet3d?.active) {
-      ctx.shadowColor   = el.effet3d.color ?? '#333333'
-      ctx.shadowOffsetX = (el.effet3d.depth ?? 5) * scale
-      ctx.shadowOffsetY = (el.effet3d.depth ?? 5) * scale
-      ctx.shadowBlur    = 0
-    } else {
-      ctx.shadowColor   = el.shadow.color ?? '#000000'
-      ctx.shadowOffsetX = (el.shadow.offsetX ?? 4) * scale
-      ctx.shadowOffsetY = (el.shadow.offsetY ?? 4) * scale
-      ctx.shadowBlur    = (el.shadow.blur ?? 8) * scale
-    }
-  }
 
-  // Découper d'abord sur les \n explicites, puis word-wrap dans chaque segment
+  // Découpe : \n explicites puis word-wrap dans la boîte
   const rawLines = (el.text ?? '').split('\n')
   const allLines = rawLines.flatMap(raw => wrapLine(ctx, raw, boxW))
 
@@ -172,11 +209,11 @@ async function renderText(ctx, el, scale, canvasW) {
 // ── Forme ─────────────────────────────────────────────────────────────────────
 
 function renderShape(ctx, el, scale) {
-  const x  = (el.x ?? 0) * scale
-  const y  = (el.y ?? 0) * scale
-  const w  = (el.width  ?? 100) * scale
-  const h  = (el.height ?? 100) * scale
-  const r  = (el.cornerRadius ?? 0) * scale
+  const x = (el.x ?? 0) * scale
+  const y = (el.y ?? 0) * scale
+  const w = (el.width  ?? 100) * scale
+  const h = (el.height ?? 100) * scale
+  const r = (el.cornerRadius ?? 0) * scale
 
   if (el.shadowEnabled && el.shadowColor) {
     ctx.shadowColor   = el.shadowColor
@@ -188,29 +225,22 @@ function renderShape(ctx, el, scale) {
   ctx.beginPath()
   if (el.shapeType === 'circle') {
     ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2)
+  } else if (r > 0) {
+    ctx.moveTo(x + r, y)
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r)
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r)
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r)
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r)
+    ctx.closePath()
   } else {
-    // rect avec cornerRadius
-    if (r > 0) {
-      ctx.moveTo(x + r, y)
-      ctx.lineTo(x + w - r, y)
-      ctx.arcTo(x + w, y, x + w, y + r, r)
-      ctx.lineTo(x + w, y + h - r)
-      ctx.arcTo(x + w, y + h, x + w - r, y + h, r)
-      ctx.lineTo(x + r, y + h)
-      ctx.arcTo(x, y + h, x, y + h - r, r)
-      ctx.lineTo(x, y + r)
-      ctx.arcTo(x, y, x + r, y, r)
-      ctx.closePath()
-    } else {
-      ctx.rect(x, y, w, h)
-    }
+    ctx.rect(x, y, w, h)
   }
 
   if (el.fillEnabled !== false && el.fill) {
     ctx.fillStyle = el.fill
     ctx.fill()
   }
-  if (el.strokeWidth > 0 && el.stroke) {
+  if ((el.strokeWidth ?? 0) > 0 && el.stroke) {
     ctx.strokeStyle = el.stroke
     ctx.lineWidth   = el.strokeWidth * scale
     ctx.stroke()
