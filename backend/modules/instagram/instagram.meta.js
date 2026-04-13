@@ -9,9 +9,10 @@
  */
 
 import crypto from 'crypto'
-import { writeFile } from 'fs/promises'
+import { writeFile, mkdir } from 'fs/promises'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { existsSync } from 'fs'
 import prisma  from '../../config/db.js'
 import { callAI }   from '../../llm/providers.js'
 import { logError, logAction } from '../../logs/logger.js'
@@ -112,6 +113,7 @@ export async function publierPost(postId, imagesBase64) {
   if (!post) throw new Error('Post introuvable')
 
   // 1. Sauvegarder les images sur le disque
+  if (!existsSync(POSTS_DIR)) await mkdir(POSTS_DIR, { recursive: true })
   const filenames = []
   for (let i = 0; i < imagesBase64.length; i++) {
     const b64 = imagesBase64[i].replace(/^data:image\/\w+;base64,/, '')
