@@ -90,6 +90,31 @@ async function renderSlide(slideData, exportW, exportH) {
   return canvas
 }
 
+// ── Word-wrap : découpe une ligne en plusieurs selon la largeur max ────────────
+
+function wrapLine(ctx, text, maxWidth) {
+  if (!text) return ['']
+  // Si la ligne entière tient, pas besoin de découper
+  if (ctx.measureText(text).width <= maxWidth) return [text]
+
+  const words = text.split(' ')
+  const lines = []
+  let current = ''
+
+  for (const word of words) {
+    const test = current ? current + ' ' + word : word
+    if (ctx.measureText(test).width <= maxWidth) {
+      current = test
+    } else {
+      if (current) lines.push(current)
+      // Si un seul mot dépasse déjà la largeur, on le garde quand même
+      current = word
+    }
+  }
+  if (current) lines.push(current)
+  return lines.length ? lines : [text]
+}
+
 // ── Texte ─────────────────────────────────────────────────────────────────────
 
 async function renderText(ctx, el, scale, canvasW) {
@@ -100,13 +125,13 @@ async function renderText(ctx, el, scale, canvasW) {
   ctx.font         = `${italic}${bold}${fontSize}px "${fontFamily}", Arial, sans-serif`
   ctx.fillStyle    = el.fill ?? '#000000'
 
-  const align  = el.align ?? 'left'
+  const align   = el.align ?? 'left'
   ctx.textAlign = align
 
-  const boxX  = (el.x ?? 0) * scale
-  const boxW  = (el.width ?? (canvasW / scale)) * scale
-  const lineH = fontSize * (el.lineHeight ?? 1.2)
-  const startY = (el.y ?? 0) * scale + fontSize * 0.85  // baseline
+  const boxX   = (el.x ?? 0) * scale
+  const boxW   = (el.width ?? (canvasW / scale)) * scale
+  const lineH  = fontSize * (el.lineHeight ?? 1.2)
+  const startY = (el.y ?? 0) * scale + fontSize * 0.85  // baseline approx
 
   // Point X selon l'alignement
   const textX = align === 'center' ? boxX + boxW / 2
@@ -133,10 +158,11 @@ async function renderText(ctx, el, scale, canvasW) {
     }
   }
 
-  const text  = el.text ?? ''
-  const lines = text.split('\n')
+  // Découper d'abord sur les \n explicites, puis word-wrap dans chaque segment
+  const rawLines = (el.text ?? '').split('\n')
+  const allLines = rawLines.flatMap(raw => wrapLine(ctx, raw, boxW))
 
-  lines.forEach((line, i) => {
+  allLines.forEach((line, i) => {
     const y = startY + i * lineH
     if (el.contour?.active) ctx.strokeText(line, textX, y)
     ctx.fillText(line, textX, y)
