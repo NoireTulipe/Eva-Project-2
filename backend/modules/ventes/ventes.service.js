@@ -178,7 +178,7 @@ export async function getSessions({ limit = 20, offset = 0 } = {}) {
     include: {
       pointDeVente: true,
       ventes: {
-        include: { lignes: { include: { produit: true } } },
+        include: { lignes: { include: { produit: { include: { categorie: true } } } } },
       },
       frais: true,
     },
@@ -196,7 +196,7 @@ export async function getSessionById(id) {
       frais: { include: { typeFrais: true } },
       ventes: {
         include: {
-          lignes: { include: { produit: true } },
+          lignes: { include: { produit: { include: { categorie: true } } } },
           methodePaiement: true,
         },
       },

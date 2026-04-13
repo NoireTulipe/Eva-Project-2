@@ -566,6 +566,8 @@ function VueHistorique() {
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [vueParProduits, setVueParProduits] = useState(false)
+  const [triColonne, setTriColonne] = useState('nom')
+  const [triDir, setTriDir] = useState('asc')
   const [supprimant, setSupprimant] = useState(null)
   const [rouvrant, setRouvrant] = useState(null)
 
@@ -574,11 +576,25 @@ function VueHistorique() {
     setExpanded(v => v === id ? null : id)
   }
 
+  function handleTri(col) {
+    if (triColonne === col) setTriDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setTriColonne(col); setTriDir(col === 'nom' ? 'asc' : 'desc') }
+  }
+
+  function IconTri({ col }) {
+    if (triColonne !== col) return <span className="ml-1 text-gray-300">⇅</span>
+    return <span className="ml-1 text-indigo-500">{triDir === 'asc' ? '↑' : '↓'}</span>
+  }
+
   function renderVentesParProduits(ventesSession) {
     const lignesActives = []
     ventesSession?.forEach(v => {
       if (!v.annulee) v.lignes?.forEach(l => lignesActives.push(l))
     })
+
+    if (lignesActives.length === 0) {
+      return <p className="text-sm text-gray-400 px-4 py-4">Aucune vente active.</p>
+    }
 
     const parCategorie = {}
     lignesActives.forEach(l => {
@@ -590,28 +606,45 @@ function VueHistorique() {
       parCategorie[cat][prodNom].total += l.prixUnitaire * l.quantite * (1 - (l.remise || 0) / 100)
     })
 
-    if (lignesActives.length === 0) {
-      return <p className="text-sm text-gray-400 px-4 py-4">Aucune vente active.</p>
+    function trierLignes(entries) {
+      return [...entries].sort(([nomA, a], [nomB, b]) => {
+        if (triColonne === 'nom') return triDir === 'asc' ? nomA.localeCompare(nomB, 'fr') : nomB.localeCompare(nomA, 'fr')
+        if (triColonne === 'quantite') return triDir === 'asc' ? a.quantite - b.quantite : b.quantite - a.quantite
+        if (triColonne === 'total') return triDir === 'asc' ? a.total - b.total : b.total - a.total
+        return 0
+      })
     }
 
     return (
       <div className="rounded-lg overflow-hidden border border-gray-200">
-        {Object.entries(parCategorie).map(([cat, produits]) => (
+        {Object.entries(parCategorie).map(([cat, lignes]) => (
           <div key={cat}>
             <div className="bg-indigo-50 px-4 py-2 flex items-center gap-2 border-b border-indigo-100">
               <span className="w-1 h-4 rounded bg-indigo-400 inline-block"></span>
               <span className="font-semibold text-indigo-700 text-xs uppercase tracking-wider">{cat}</span>
             </div>
             <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-2 font-medium text-gray-500">Produit</th>
-                  <th className="px-4 py-2 font-medium text-gray-500 text-center">Nb vendus</th>
-                  <th className="px-4 py-2 font-medium text-gray-500 text-right">Total</th>
+                  <th className="px-4 py-2 font-medium text-gray-500">
+                    <button onClick={() => handleTri('nom')} className="flex items-center hover:text-gray-800">
+                      Produit <IconTri col="nom" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-2 font-medium text-gray-500 text-center">
+                    <button onClick={() => handleTri('quantite')} className="flex items-center justify-center w-full hover:text-gray-800">
+                      Nb vendus <IconTri col="quantite" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-2 font-medium text-gray-500 text-right">
+                    <button onClick={() => handleTri('total')} className="flex items-center justify-end w-full hover:text-gray-800">
+                      Total <IconTri col="total" />
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(produits).map(([nom, data]) => (
+                {trierLignes(Object.entries(lignes)).map(([nom, data]) => (
                   <tr key={nom} className="border-b border-gray-100 last:border-0">
                     <td className="px-4 py-2 text-gray-800">{nom}</td>
                     <td className="px-4 py-2 text-center font-semibold text-gray-700">{data.quantite}</td>
