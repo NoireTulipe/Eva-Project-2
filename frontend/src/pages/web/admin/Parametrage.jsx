@@ -644,11 +644,14 @@ function OngletInstagram() {
                 })}
               </p>
             )}
-            {oauthStatus.tokenSource !== 'env' && (
-              <button onClick={connecter} disabled={connecting}
-                className="px-3 py-1.5 text-xs border border-pink-200 text-pink-600 rounded hover:bg-pink-50 disabled:opacity-50">
-                {connecting ? 'Redirection…' : 'Reconnecter / Renouveler le token'}
-              </button>
+            <button onClick={connecter} disabled={connecting}
+              className="px-3 py-1.5 text-xs border border-pink-200 text-pink-600 rounded hover:bg-pink-50 disabled:opacity-50">
+              {connecting ? 'Redirection…' : 'Reconnecter / Renouveler le token'}
+            </button>
+            {oauthStatus.tokenSource === 'env' && (
+              <p className="text-xs text-orange-500">
+                ⚠ Token actuel provient du .env — après reconnexion il sera sauvegardé en base et le .env sera ignoré.
+              </p>
             )}
           </div>
         ) : (
