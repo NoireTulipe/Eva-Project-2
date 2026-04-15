@@ -7,7 +7,11 @@ import {
   getWcCategories,
   createWooProduct,
   listWooProducts,
-  uploadWPImage
+  uploadWPImage,
+  getNewsPrompt,
+  saveNewsPrompt,
+  generateArticle,
+  publishWPArticle
 } from '../modules/site/site.service.js'
 
 const router = Router()
@@ -89,6 +93,52 @@ router.post('/produit', async (req, res) => {
   if (!bookData?.title) return res.status(400).json({ error: 'bookData avec un titre requis.' })
   try {
     res.json(await createWooProduct(bookData, options || {}))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// GET  /api/site/news-prompt
+router.get('/news-prompt', async (req, res) => {
+  try {
+    res.json({ prompt: await getNewsPrompt() })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// PUT  /api/site/news-prompt
+router.put('/news-prompt', async (req, res) => {
+  const { prompt } = req.body
+  if (!prompt?.trim()) return res.status(400).json({ error: 'Prompt vide.' })
+  try {
+    await saveNewsPrompt(prompt.trim())
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/site/article/generer
+// Corps : { generalPrompt, instruction }
+router.post('/article/generer', async (req, res) => {
+  const { generalPrompt, instruction } = req.body
+  if (!instruction?.trim()) return res.status(400).json({ error: 'Instruction requise.' })
+  if (!generalPrompt?.trim()) return res.status(400).json({ error: 'Prompt général requis.' })
+  try {
+    res.json(await generateArticle(generalPrompt, instruction))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/site/article
+// Corps : { title, content, date, status }
+router.post('/article', async (req, res) => {
+  const { title, content, date, status } = req.body
+  if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: 'Titre et contenu requis.' })
+  try {
+    res.json(await publishWPArticle({ title, content, date, status }))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

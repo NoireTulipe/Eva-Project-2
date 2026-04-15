@@ -432,6 +432,14 @@ export const site = {
     }
     return res.json() // { id, src }
   },
+  // Prompt général articles
+  getNewsPrompt: () => request('GET', '/site/news-prompt'),
+  saveNewsPrompt: (prompt) => request('PUT', '/site/news-prompt', { prompt }),
+  // Génère un article via Gemini Pro
+  genererArticle: (generalPrompt, instruction) =>
+    request('POST', '/site/article/generer', { generalPrompt, instruction }),
+  // Publie un article sur WordPress
+  publierArticle: (data) => request('POST', '/site/article', data),
   // Publie un produit sur WooCommerce
   publierProduit: (bookData, options) => request('POST', '/site/produit', { bookData, options }),
   // Liste les produits WooCommerce

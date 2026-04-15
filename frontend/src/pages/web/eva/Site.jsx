@@ -23,7 +23,7 @@ export default function Site() {
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Site ME — echodeplumes.com</h1>
 
       <div className="flex gap-2 mb-6 border-b border-gray-200">
-        {[['ajouter', 'Ajouter un produit'], ['produits', 'Produits publiés']].map(([val, label]) => (
+        {[['ajouter', 'Ajouter un produit'], ['produits', 'Produits publiés'], ['articles', 'News / Articles']].map(([val, label]) => (
           <button
             key={val}
             onClick={() => setTab(val)}
@@ -38,7 +38,9 @@ export default function Site() {
         ))}
       </div>
 
-      {tab === 'ajouter' ? <AjouterProduit /> : <ListeProduits />}
+      {tab === 'ajouter' && <AjouterProduit />}
+      {tab === 'produits' && <ListeProduits />}
+      {tab === 'articles' && <NouvelArticle />}
     </div>
   )
 }
@@ -617,6 +619,281 @@ function ListeProduits() {
       )}
     </div>
   )
+}
+
+// ─── Onglet : News / Articles ────────────────────────────────────────────────
+
+function NouvelArticle() {
+  const [generalPrompt, setGeneralPrompt]   = useState('')
+  const [promptEditing, setPromptEditing]   = useState(false)
+  const [promptSaving, setPromptSaving]     = useState(false)
+  const [instruction, setInstruction]       = useState('')
+  const [generating, setGenerating]         = useState(false)
+  const [publishing, setPublishing]         = useState(false)
+  const [error, setError]                   = useState(null)
+  const [succes, setSucces]                 = useState(null)
+
+  // Résultat généré
+  const [title, setTitle]   = useState('')
+  const [content, setContent] = useState('')
+
+  // Options publication
+  const [date, setDate]         = useState(todayISO())
+  const [autoPublish, setAutoPublish] = useState(false)
+
+  // Chargement du prompt général au montage
+  useEffect(() => {
+    site.getNewsPrompt()
+      .then(data => setGeneralPrompt(data.prompt))
+      .catch(() => {})
+  }, [])
+
+  async function handleSavePrompt() {
+    setPromptSaving(true)
+    try {
+      await site.saveNewsPrompt(generalPrompt)
+      setPromptEditing(false)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setPromptSaving(false)
+    }
+  }
+
+  async function handleGenerer() {
+    if (!instruction.trim()) return
+    setError(null)
+    setGenerating(true)
+    setTitle('')
+    setContent('')
+    try {
+      const result = await site.genererArticle(generalPrompt, instruction)
+      setTitle(result.title)
+      setContent(result.content)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function handlePublier(status) {
+    if (!title.trim() || !content.trim()) return
+    setError(null)
+    setPublishing(true)
+    try {
+      // Construire la date ISO complète si seulement la date est fournie
+      const isoDate = date ? (date.includes('T') ? date : `${date}T08:00:00`) : undefined
+      const result = await site.publierArticle({ title, content, date: isoDate, status })
+      setSucces(result)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  function reset() {
+    setTitle('')
+    setContent('')
+    setInstruction('')
+    setSucces(null)
+    setError(null)
+    setDate(todayISO())
+    setAutoPublish(false)
+  }
+
+  // ── Succès ──
+  if (succes) {
+    return (
+      <div className="bg-white rounded-lg shadow p-8 text-center max-w-lg mx-auto">
+        <div className="text-4xl mb-3">✅</div>
+        <h2 className="text-lg font-bold text-gray-800 mb-1">{succes.title}</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Article {succes.status === 'publish' ? 'publié' : 'créé en brouillon'}
+        </p>
+        <div className="flex justify-center gap-3 flex-wrap">
+          <a href={succes.editUrl} target="_blank" rel="noreferrer"
+            className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700">
+            Éditer sur WordPress
+          </a>
+          {succes.status === 'publish' && (
+            <a href={succes.link} target="_blank" rel="noreferrer"
+              className="px-4 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+              Voir sur le site
+            </a>
+          )}
+          <button onClick={reset}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
+            Nouvel article
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+
+      {/* Prompt général */}
+      <div className="bg-white rounded-lg shadow p-5">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-gray-700">Prompt général</h3>
+          {!promptEditing ? (
+            <button onClick={() => setPromptEditing(true)}
+              className="text-xs text-indigo-600 hover:underline">Modifier</button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => setPromptEditing(false)}
+                className="text-xs text-gray-500 hover:underline">Annuler</button>
+              <button onClick={handleSavePrompt} disabled={promptSaving}
+                className="text-xs bg-indigo-600 text-white px-2 py-0.5 rounded hover:bg-indigo-700 disabled:opacity-50">
+                {promptSaving ? 'Sauvegarde…' : 'Sauvegarder'}
+              </button>
+            </div>
+          )}
+        </div>
+        {promptEditing ? (
+          <textarea
+            value={generalPrompt}
+            onChange={e => setGeneralPrompt(e.target.value)}
+            rows={10}
+            className={`${inputCls} resize-y font-mono text-xs`}
+          />
+        ) : (
+          <p className="text-xs text-gray-400 line-clamp-3 whitespace-pre-wrap">{generalPrompt}</p>
+        )}
+      </div>
+
+      {/* Instructions + bouton générer */}
+      <div className="bg-white rounded-lg shadow p-5">
+        <Field label="Instructions pour cet article">
+          <textarea
+            value={instruction}
+            onChange={e => setInstruction(e.target.value)}
+            rows={5}
+            placeholder={"Ex : Annonce de la sortie de Kazuki Tome 3.\nRésumé : Après avoir retrouvé sa magie, Kazuki doit affronter le Conseil des Arcanes...\nAuteurs : Magali et François Bonacci.\nISBN : 978-XXXXXXXXX\nPrix : 16,90 €"}
+            className={`${inputCls} resize-y`}
+          />
+        </Field>
+        <div className="mt-3 flex justify-end">
+          <button
+            onClick={handleGenerer}
+            disabled={generating || !instruction.trim()}
+            className="px-5 py-2 bg-violet-600 text-white rounded text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {generating
+              ? <><Spinner /> Génération en cours…</>
+              : '✦ Générer avec Gemini Pro'}
+          </button>
+        </div>
+      </div>
+
+      {/* Zone résultat — visible seulement si contenu généré */}
+      {(title || content || generating) && (
+        <>
+          {/* Titre + date */}
+          <div className="bg-white rounded-lg shadow p-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Field label="Titre de l'article">
+                  <input type="text" value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    className={inputCls}
+                    placeholder={generating ? 'Génération en cours…' : ''} />
+                </Field>
+              </div>
+              <Field label="Date de publication">
+                <input type="datetime-local" value={date}
+                  onChange={e => setDate(e.target.value)}
+                  className={inputCls} />
+              </Field>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={autoPublish}
+                    onChange={e => setAutoPublish(e.target.checked)}
+                    className="w-4 h-4 rounded accent-indigo-600" />
+                  <span className="text-sm text-gray-700">Publier directement</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Éditeur + Prévisualisation côte à côte */}
+          <div className="grid grid-cols-2 gap-4" style={{ minHeight: '400px' }}>
+            {/* HTML brut */}
+            <div className="bg-white rounded-lg shadow p-4 flex flex-col">
+              <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">HTML Gutenberg</p>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                className="flex-1 text-xs font-mono border border-gray-200 rounded p-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder={generating ? 'Génération en cours…' : ''}
+              />
+            </div>
+
+            {/* Prévisualisation */}
+            <div className="bg-white rounded-lg shadow p-4 overflow-auto">
+              <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Prévisualisation</p>
+              {content ? (
+                <div
+                  className="article-preview text-gray-800 text-sm"
+                  dangerouslySetInnerHTML={{ __html: content }}
+                />
+              ) : (
+                <p className="text-xs text-gray-300 italic">La prévisualisation apparaîtra ici…</p>
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{error}</div>
+          )}
+
+          {/* Boutons publication */}
+          {(title || content) && !generating && (
+            <div className="flex justify-end gap-3">
+              <button onClick={reset}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
+                Réinitialiser
+              </button>
+              <button
+                onClick={() => handlePublier('draft')}
+                disabled={publishing || !title.trim() || !content.trim()}
+                className="px-4 py-2 bg-gray-700 text-white rounded text-sm hover:bg-gray-800 disabled:opacity-50">
+                {publishing ? 'En cours…' : 'Créer en brouillon'}
+              </button>
+              <button
+                onClick={() => handlePublier('publish')}
+                disabled={publishing || !title.trim() || !content.trim()}
+                className="px-5 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                {publishing ? 'En cours…' : 'Publier sur le site'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {error && !title && !content && (
+        <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{error}</div>
+      )}
+    </div>
+  )
+}
+
+function Spinner() {
+  return (
+    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+    </svg>
+  )
+}
+
+function todayISO() {
+  const now = new Date()
+  // Format pour datetime-local : "YYYY-MM-DDTHH:MM"
+  return now.toISOString().slice(0, 16)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

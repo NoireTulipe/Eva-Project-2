@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer'
 import { logAction, logError } from '../../logs/logger.js'
+import prisma from '../../config/db.js'
 
 // ─── Config WooCommerce / WordPress ──────────────────────────────────────────
 
@@ -417,6 +418,105 @@ export async function createWooProduct(bookData, options = {}) {
     permalink: product.permalink,
     status: product.status,
     editUrl: `${WP_BASE}/wp-admin/post.php?post=${product.id}&action=edit`
+  }
+}
+
+// ─── Prompt général articles (ConfigParam) ───────────────────────────────────
+
+const NEWS_PROMPT_KEY = 'site.news_prompt'
+
+const DEFAULT_NEWS_PROMPT = `Tu es le rédacteur officiel des Éditions Écho de Plumes, une maison d'édition indépendante spécialisée dans les romans illustrés, les "romanga" et les œuvres jeunesse/YA. Les auteurs de la maison sont Magali et François Bonacci.
+
+Tu rédiges des articles de blog enthousiastes et chaleureux pour le site WordPress d'Écho de Plumes. Tutoiement avec les lecteurs autorisé. Utilise quelques emojis avec parcimonie.
+
+STRUCTURE OBLIGATOIRE :
+1. Introduction accrocheuse (1-2 paragraphes <p>)
+2. <hr class="wp-block-separator has-alpha-channel-opacity"/>
+3. Sections avec <h2 class="wp-block-heading"><strong>...</strong></h2> et <h3 class="wp-block-heading"><strong>...</strong></h3>
+4. Listes <ul class="wp-block-list"> ou <ol start="1" class="wp-block-list"> avec <li>
+5. Éventuellement une <blockquote class="wp-block-quote is-layout-flow wp-block-quote-is-layout-flow"><p>...</p></blockquote>
+6. <hr class="wp-block-separator has-alpha-channel-opacity"/> entre grandes sections
+7. Call-to-action final (1 paragraphe)
+
+FORMAT DE SORTIE : JSON strict, sans markdown autour, avec exactement deux champs :
+- "title" : titre accrocheur commençant obligatoirement par un emoji unicode (🎉 📚 ✨ 🔥 🎊 📖 🌟 etc.)
+- "content" : corps complet en HTML WordPress Gutenberg
+
+Ne génère QUE le JSON brut.`
+
+export async function getNewsPrompt() {
+  const row = await prisma.configParam.findUnique({ where: { cle: NEWS_PROMPT_KEY } })
+  return row ? row.valeur : DEFAULT_NEWS_PROMPT
+}
+
+export async function saveNewsPrompt(valeur) {
+  await prisma.configParam.upsert({
+    where:  { cle: NEWS_PROMPT_KEY },
+    update: { valeur },
+    create: { cle: NEWS_PROMPT_KEY, valeur, description: 'Prompt général pour la génération d\'articles de news' }
+  })
+}
+
+// ─── Générer un article via Gemini 2.5 Pro ────────────────────────────────────
+
+export async function generateArticle(generalPrompt, instruction) {
+  if (!instruction?.trim()) throw new Error('Instruction vide.')
+  if (!process.env.GEMINI_API_KEY) throw new Error('Clé Gemini manquante.')
+
+  const { GoogleGenerativeAI } = await import('@google/generative-ai')
+  const genAI  = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' })
+
+  const prompt = `${generalPrompt}\n\n---\n\nINSTRUCTIONS POUR CET ARTICLE :\n${instruction}`
+
+  const result = await model.generateContent(prompt)
+  const raw    = result.response.text().trim()
+
+  // Nettoyer si Gemini a quand même mis du markdown autour
+  const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+
+  let parsed
+  try {
+    parsed = JSON.parse(cleaned)
+  } catch {
+    throw new Error('La réponse de Gemini n\'est pas un JSON valide. Réessaie.')
+  }
+
+  if (!parsed.title || !parsed.content) {
+    throw new Error('JSON incomplet : champs "title" et "content" attendus.')
+  }
+
+  logAction(`Article généré : ${parsed.title}`)
+  return { title: parsed.title, content: parsed.content }
+}
+
+// ─── Publier un article WordPress ────────────────────────────────────────────
+
+export async function publishWPArticle({ title, content, date, status = 'draft' }) {
+  logAction(`Publication article WP : ${title} (${status})`)
+
+  const body = { title, content, status }
+  if (date) body.date = date  // format ISO 8601 : "2025-04-15T10:00:00"
+
+  const url = `${WP_BASE}/wp-json/wp/v2/posts`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': getWpAuth(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+
+  const json = await res.json()
+  if (!res.ok) {
+    throw new Error(`WP Posts API → ${res.status} : ${json.message || JSON.stringify(json)}`)
+  }
+
+  logAction(`Article WP créé : ${json.title?.rendered} (ID: ${json.id})`)
+  return {
+    id:      json.id,
+    title:   json.title?.rendered || title,
+    status:  json.status,
+    link:    json.link,
+    editUrl: `${WP_BASE}/wp-admin/post.php?post=${json.id}&action=edit`
   }
 }
 
