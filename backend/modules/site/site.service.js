@@ -496,7 +496,11 @@ export async function publishWPArticle({ title, content, date, status = 'draft',
   logAction(`Publication article WP : ${title} (${status})`)
 
   const body = { title, content, status }
-  if (date) body.date = date
+  if (date) {
+    // WordPress exige le format complet YYYY-MM-DDTHH:MM:SS
+    const normalized = date.length === 16 ? `${date}:00` : date
+    body.date = normalized
+  }
   if (featuredMediaId) body.featured_media = featuredMediaId
 
   const url = `${WP_BASE}/wp-json/wp/v2/posts`
