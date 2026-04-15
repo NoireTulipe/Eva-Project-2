@@ -1,38 +1,45 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { authMiddleware } from '../middleware/auth.js'
 import {
   scrapeAmazon,
   generateShortDescription,
   getWcCategories,
   createWooProduct,
-  listWooProducts
+  listWooProducts,
+  uploadWPImage
 } from '../modules/site/site.service.js'
 
 const router = Router()
 router.use(authMiddleware)
 
+// Multer en mémoire pour l'upload d'images (pas de disque local)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 Mo max
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true)
+    else cb(new Error('Seules les images sont acceptées.'))
+  }
+})
+
 // POST /api/site/scrape
-// Corps : { url: "https://www.amazon.fr/dp/..." }
 router.post('/scrape', async (req, res) => {
   const { url } = req.body
   if (!url || !url.includes('amazon')) {
     return res.status(400).json({ error: 'URL Amazon valide requise.' })
   }
   try {
-    const result = await scrapeAmazon(url)
-    res.json(result)
+    res.json(await scrapeAmazon(url))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
 // POST /api/site/generer-accroche
-// Corps : { description: "..." }
 router.post('/generer-accroche', async (req, res) => {
   const { description } = req.body
-  if (!description || !description.trim()) {
-    return res.status(400).json({ error: 'Description requise.' })
-  }
+  if (!description?.trim()) return res.status(400).json({ error: 'Description requise.' })
   try {
     const accroche = await generateShortDescription(description.trim())
     res.json({ accroche })
@@ -51,29 +58,48 @@ router.get('/categories', async (req, res) => {
   }
 })
 
+// POST /api/site/media
+// Upload une image supplémentaire vers la médiathèque WP
+// Corps : multipart/form-data avec champ "image" + champs optionnels altText, title, caption
+router.post('/media', upload.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Aucune image reçue.' })
+  try {
+    const ext = req.file.originalname.split('.').pop().toLowerCase() || 'jpg'
+    const filename = req.body.filename
+      ? `${req.body.filename}.${ext}`
+      : req.file.originalname
+
+    const metadata = {
+      altText:     req.body.altText     || '',
+      title:       req.body.title       || '',
+      caption:     req.body.caption     || '',
+      description: req.body.description || ''
+    }
+
+    const media = await uploadWPImage(req.file.buffer, filename, metadata)
+    res.json(media) // { id, src }
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // POST /api/site/produit
-// Corps : { bookData: {...}, options: { price, categoryIds, impression, autoPublish, shortDescription, upsellIds } }
 router.post('/produit', async (req, res) => {
   const { bookData, options } = req.body
-  if (!bookData || !bookData.title) {
-    return res.status(400).json({ error: 'bookData avec un titre requis.' })
-  }
+  if (!bookData?.title) return res.status(400).json({ error: 'bookData avec un titre requis.' })
   try {
-    const result = await createWooProduct(bookData, options || {})
-    res.json(result)
+    res.json(await createWooProduct(bookData, options || {}))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
 // GET /api/site/produits
-// Query : ?limit=20&status=any
 router.get('/produits', async (req, res) => {
   const limit  = parseInt(req.query.limit)  || 20
   const status = req.query.status || 'any'
   try {
-    const products = await listWooProducts({ limit, status })
-    res.json(products)
+    res.json(await listWooProducts({ limit, status }))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

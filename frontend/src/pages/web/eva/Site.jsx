@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { site } from '../../../shared/api.js'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -73,6 +73,11 @@ function AjouterProduit() {
   const [upsellCombo, setUpsellCombo]     = useState('')   // valeur du select combo
   const [generatingAccroche, setGeneratingAccroche] = useState(false)
 
+  // Images supplémentaires
+  const [extraImages, setExtraImages]     = useState([])   // [{ id, src, name }]
+  const [uploadingImg, setUploadingImg]   = useState(false)
+  const fileInputRef                      = useRef(null)
+
   // Chargement catégories + produits WC au montage
   useEffect(() => {
     site.getCategories().then(setCategories).catch(() => {})
@@ -94,6 +99,7 @@ function AjouterProduit() {
       isbn:             bookData.details?.isbn13 || bookData.details?.isbn10 || ''
     })
     setUpsellIds([])
+    setExtraImages([])
     setEtape('formulaire')
   }, [bookData])
 
@@ -123,6 +129,31 @@ function AjouterProduit() {
     } finally {
       setGeneratingAccroche(false)
     }
+  }
+
+  async function handleImageUpload(e) {
+    const files = Array.from(e.target.files)
+    if (!files.length) return
+    setUploadingImg(true)
+    setError(null)
+    try {
+      for (const file of files) {
+        const media = await site.uploadMedia(file, {
+          altText: `Image de ${form.title || bookData?.title || ''}`,
+          title:   form.title || bookData?.title || file.name
+        })
+        setExtraImages(imgs => [...imgs, { id: media.id, src: media.src, name: file.name }])
+      }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setUploadingImg(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  function retirerExtraImage(id) {
+    setExtraImages(imgs => imgs.filter(i => i.id !== id))
   }
 
   function ajouterUpsell() {
@@ -157,7 +188,8 @@ function AjouterProduit() {
         impression:       form.impression || null,
         autoPublish:      form.autoPublish,
         shortDescription: form.shortDescription,
-        upsellIds
+        upsellIds,
+        extraImageIds: extraImages.map(i => i.id)
       }
       const result = await site.publierProduit(updatedBook, options)
       setSucces(result)
@@ -176,6 +208,7 @@ function AjouterProduit() {
     setSucces(null)
     setError(null)
     setUpsellIds([])
+    setExtraImages([])
   }
 
   // ── Succès ──
@@ -328,6 +361,52 @@ function AjouterProduit() {
                 })}
               </div>
             )}
+          </div>
+
+          {/* Images supplémentaires */}
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Images supplémentaires</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Uploadées immédiatement dans la médiathèque WordPress et ajoutées au produit.
+            </p>
+
+            {/* Aperçus */}
+            {extraImages.length > 0 && (
+              <div className="flex flex-wrap gap-3 mb-3">
+                {extraImages.map(img => (
+                  <div key={img.id} className="relative group">
+                    <img src={img.src} alt={img.name}
+                      className="w-20 h-24 object-cover rounded shadow border border-gray-200" />
+                    <button
+                      type="button"
+                      onClick={() => retirerExtraImage(img.id)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageUpload}
+                className="hidden"
+                id="extra-images-input"
+              />
+              <label
+                htmlFor="extra-images-input"
+                className={`px-4 py-2 border border-dashed border-gray-300 rounded text-sm text-gray-600 cursor-pointer hover:border-indigo-400 hover:text-indigo-600 transition-colors ${uploadingImg ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                {uploadingImg ? 'Upload en cours…' : '+ Ajouter des images'}
+              </label>
+              {extraImages.length > 0 && (
+                <span className="text-xs text-gray-400">{extraImages.length} image{extraImages.length > 1 ? 's' : ''} ajoutée{extraImages.length > 1 ? 's' : ''}</span>
+              )}
+            </div>
           </div>
 
           {/* Accroche */}

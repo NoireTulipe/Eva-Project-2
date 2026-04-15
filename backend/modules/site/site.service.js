@@ -18,19 +18,25 @@ function getWpAuth() {
   ).toString('base64')
 }
 
+// ─── Slugification ────────────────────────────────────────────────────────────
+
+function slugify(text) {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 // ─── WooCommerce REST ─────────────────────────────────────────────────────────
 
 async function wcRequest(method, endpoint, body = null) {
   const url = `${WP_BASE}/wp-json/wc/v3${endpoint}`
   const options = {
     method,
-    headers: {
-      'Authorization': getWcAuth(),
-      'Content-Type': 'application/json'
-    }
+    headers: { 'Authorization': getWcAuth(), 'Content-Type': 'application/json' }
   }
   if (body) options.body = JSON.stringify(body)
-
   const res = await fetch(url, options)
   const json = await res.json()
   if (!res.ok) {
@@ -40,14 +46,20 @@ async function wcRequest(method, endpoint, body = null) {
 }
 
 // ─── Upload image vers la médiathèque WordPress ───────────────────────────────
+// Retourne { id, src } — on passe l'ID à WooCommerce pour éviter le double upload
 
-async function uploadWPImage(source, filename = 'cover.jpg') {
+export async function uploadWPImage(source, filename, metadata = {}) {
   logAction(`Upload image WP : ${filename}`)
 
   let imageBuffer
   let mimeType = 'image/jpeg'
 
-  if (source.startsWith('http')) {
+  if (Buffer.isBuffer(source)) {
+    // Buffer direct (upload utilisateur)
+    imageBuffer = source
+    if (filename.endsWith('.png')) mimeType = 'image/png'
+    else if (filename.endsWith('.webp')) mimeType = 'image/webp'
+  } else if (source.startsWith('http')) {
     const res = await fetch(source)
     if (!res.ok) throw new Error(`Impossible de télécharger l'image : ${source}`)
     imageBuffer = Buffer.from(await res.arrayBuffer())
@@ -59,8 +71,8 @@ async function uploadWPImage(source, filename = 'cover.jpg') {
     if (filename.endsWith('.png')) mimeType = 'image/png'
   }
 
-  const url = `${WP_BASE}/wp-json/wp/v2/media`
-  const res = await fetch(url, {
+  // 1. Upload binaire
+  const uploadRes = await fetch(`${WP_BASE}/wp-json/wp/v2/media`, {
     method: 'POST',
     headers: {
       'Authorization': getWpAuth(),
@@ -69,14 +81,30 @@ async function uploadWPImage(source, filename = 'cover.jpg') {
     },
     body: imageBuffer
   })
-
-  const json = await res.json()
-  if (!res.ok) {
-    throw new Error(`Upload média échoué : ${json.message || JSON.stringify(json)}`)
+  const uploadJson = await uploadRes.json()
+  if (!uploadRes.ok) {
+    throw new Error(`Upload média échoué : ${uploadJson.message || JSON.stringify(uploadJson)}`)
   }
 
-  logAction(`Image uploadée : ${json.source_url}`)
-  return json.source_url
+  const mediaId  = uploadJson.id
+  const mediaSrc = uploadJson.source_url
+
+  // 2. Patch métadonnées SEO si fournies
+  if (metadata.altText || metadata.title || metadata.caption || metadata.description) {
+    await fetch(`${WP_BASE}/wp-json/wp/v2/media/${mediaId}`, {
+      method: 'POST',  // WP REST utilise POST pour mettre à jour un média existant
+      headers: { 'Authorization': getWpAuth(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alt_text:    metadata.altText    || '',
+        title:       metadata.title      || '',
+        caption:     metadata.caption    || '',
+        description: metadata.description || ''
+      })
+    })
+  }
+
+  logAction(`Image WP uploadée : ${mediaSrc} (ID: ${mediaId})`)
+  return { id: mediaId, src: mediaSrc }
 }
 
 // ─── Scraper Amazon (Puppeteer) ───────────────────────────────────────────────
@@ -88,15 +116,12 @@ export async function scrapeAmazon(url) {
   if (lastScrapeTime) {
     const elapsed = Date.now() - lastScrapeTime
     const remaining = MIN_DELAY_MS - elapsed
-    if (remaining > 0) {
-      await new Promise(resolve => setTimeout(resolve, remaining))
-    }
+    if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining))
   }
 
   let browser
   try {
     logAction(`Scraping Amazon : ${url}`)
-
     browser = await puppeteer.launch({
       headless: 'new',
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
@@ -123,12 +148,10 @@ export async function scrapeAmazon(url) {
       document.querySelectorAll('.author.notFaded').forEach(authorEl => {
         const link = authorEl.querySelector('a.a-link-normal')
         const roleSpan = authorEl.querySelector('.contribution .a-color-secondary')
-        if (link) {
-          authors.push({
-            name: cleanText(link.textContent),
-            role: cleanText(roleSpan?.textContent.replace(/[()]/g, ''))
-          })
-        }
+        if (link) authors.push({
+          name: cleanText(link.textContent),
+          role: cleanText(roleSpan?.textContent.replace(/[()]/g, ''))
+        })
       })
 
       let priceAmount = null
@@ -141,17 +164,13 @@ export async function scrapeAmazon(url) {
         } catch {}
       }
 
-      let coverImage = null
-      let backCoverImage = null
-      const scripts = document.querySelectorAll('script[type="text/javascript"]')
-      for (const script of scripts) {
+      let coverImage = null, backCoverImage = null
+      for (const script of document.querySelectorAll('script[type="text/javascript"]')) {
         const content = script.textContent
         if (!content.includes("'colorImages'") || !content.includes("'initial'")) continue
         const startIdx = content.indexOf("'initial': [")
         if (startIdx === -1) continue
-        let depth = 0
-        let arrayStart = content.indexOf('[', startIdx)
-        let arrayEnd = -1
+        let depth = 0, arrayStart = content.indexOf('[', startIdx), arrayEnd = -1
         for (let i = arrayStart; i < content.length; i++) {
           if (content[i] === '[') depth++
           else if (content[i] === ']') { depth--; if (depth === 0) { arrayEnd = i; break } }
@@ -251,7 +270,7 @@ export async function generateShortDescription(description) {
 
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
   const result = await model.generateContent(
     `Tu es un libraire passionné. À partir de cette description de livre, rédige une accroche commerciale courte de 3 à 4 phrases maximum, en français, sans spoiler, qui donne envie d'acheter. Pas de titre, pas de "Découvrez", juste l'accroche.\n\nDescription : ${description}`
   )
@@ -274,35 +293,58 @@ export async function getWcCategories() {
 export async function createWooProduct(bookData, options = {}) {
   logAction(`Création produit WooCommerce : ${bookData.title}`)
 
-  const price     = options.price ?? (bookData.priceAmount ? String(bookData.priceAmount) : '0.00')
+  const price       = options.price ?? (bookData.priceAmount ? String(bookData.priceAmount) : '0.00')
   const autoPublish = options.autoPublish ?? false
 
-  // 1. Upload couverture
+  const titleSlug  = slugify(bookData.title)
+  const authorSlug = slugify((bookData.authors?.[0]?.name) || '')
+  const authorLabel = (bookData.authors || []).map(a => a.name).filter(Boolean).join(', ') || ''
+
+  // 1. Upload couverture → ID WP (évite le double upload par WooCommerce)
   const images = []
+
   if (bookData.coverImage) {
     try {
-      const coverUrl = await uploadWPImage(bookData.coverImage, 'cover.jpg')
-      images.push({ src: coverUrl, position: 0 })
+      const filename = `${titleSlug}-${authorSlug}-recto.jpg`
+      const media = await uploadWPImage(bookData.coverImage, filename, {
+        altText:     `Couverture recto de ${bookData.title}. Un livre écrit par ${authorLabel}`,
+        title:       `${bookData.title} - recto`,
+        caption:     `Couverture de « ${bookData.title} » par ${authorLabel}`,
+        description: `Couverture recto de ${bookData.title}. Un livre écrit par ${authorLabel}`
+      })
+      images.push({ id: media.id, position: 0 })
     } catch (e) {
       logError(`Impossible d'uploader la couverture : ${e.message}`)
     }
   }
+
   if (bookData.backCoverImage) {
     try {
-      const backUrl = await uploadWPImage(bookData.backCoverImage, 'back-cover.jpg')
-      images.push({ src: backUrl, position: 1 })
+      const filename = `${titleSlug}-${authorSlug}-verso.jpg`
+      const media = await uploadWPImage(bookData.backCoverImage, filename, {
+        altText:     `Couverture verso de ${bookData.title}. Un livre écrit par ${authorLabel}`,
+        title:       `${bookData.title} - verso`,
+        caption:     `Quatrième de couverture de « ${bookData.title} » par ${authorLabel}`,
+        description: `Couverture verso de ${bookData.title}. Un livre écrit par ${authorLabel}`
+      })
+      images.push({ id: media.id, position: 1 })
     } catch (e) {
       logError(`Impossible d'uploader le verso : ${e.message}`)
     }
   }
 
-  // 2. Catégories — IDs passés directement depuis l'UI
+  // Images supplémentaires déjà uploadées (IDs WP passés depuis l'UI)
+  const extraIds = options.extraImageIds || []
+  extraIds.forEach((id, i) => {
+    images.push({ id, position: images.length + i })
+  })
+
+  // 2. Catégories
   const categoryIds = (options.categoryIds || []).map(id => ({ id }))
 
   // 3. Attributs
   const attrs = []
 
-  // Auteurs
   const authorNames = bookData.authors?.map(a => a.name).filter(Boolean) || []
   if (authorNames.length) {
     attrs.push({
@@ -312,7 +354,6 @@ export async function createWooProduct(bookData, options = {}) {
     })
   }
 
-  // Nombre de pages
   if (bookData.details?.pages) {
     attrs.push({
       name: 'Nombre de pages', slug: 'pa_nombre-de-pages',
@@ -321,7 +362,6 @@ export async function createWooProduct(bookData, options = {}) {
     })
   }
 
-  // Impression des pages intérieures
   if (options.impression) {
     attrs.push({
       name: 'Impression des pages intérieures', slug: 'pa_impression-des-pages',
@@ -330,7 +370,6 @@ export async function createWooProduct(bookData, options = {}) {
     })
   }
 
-  // ISBN
   const isbn = bookData.details?.isbn13 || bookData.details?.isbn10 || null
   if (isbn) {
     attrs.push({

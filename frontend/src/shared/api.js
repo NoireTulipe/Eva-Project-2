@@ -410,6 +410,28 @@ export const site = {
   genererAccroche: (description) => request('POST', '/site/generer-accroche', { description }),
   // Récupère les catégories WooCommerce
   getCategories: () => request('GET', '/site/categories'),
+  // Upload une image vers la médiathèque WordPress
+  // file : File object, meta : { altText, title, caption }
+  uploadMedia: async (file, meta = {}) => {
+    const formData = new FormData()
+    formData.append('image', file)
+    if (meta.altText)     formData.append('altText', meta.altText)
+    if (meta.title)       formData.append('title', meta.title)
+    if (meta.caption)     formData.append('caption', meta.caption)
+    if (meta.description) formData.append('description', meta.description)
+
+    const token = getToken()
+    const res = await fetch(`${BASE}/site/media`, {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body: formData
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || `Erreur ${res.status}`)
+    }
+    return res.json() // { id, src }
+  },
   // Publie un produit sur WooCommerce
   publierProduit: (bookData, options) => request('POST', '/site/produit', { bookData, options }),
   // Liste les produits WooCommerce
