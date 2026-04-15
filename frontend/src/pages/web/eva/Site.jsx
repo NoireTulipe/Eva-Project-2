@@ -136,15 +136,33 @@ function AjouterProduit() {
     if (!files.length) return
     setUploadingImg(true)
     setError(null)
+
+    // Pré-aperçu local immédiat (objectURL) avant même l'upload
+    const previews = files.map(file => ({
+      id: null,
+      src: URL.createObjectURL(file),
+      name: file.name,
+      pending: true
+    }))
+    setExtraImages(imgs => [...imgs, ...previews])
+
     try {
-      for (const file of files) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
         const media = await site.uploadMedia(file, {
           altText: `Image de ${form.title || bookData?.title || ''}`,
           title:   form.title || bookData?.title || file.name
         })
-        setExtraImages(imgs => [...imgs, { id: media.id, src: media.src, name: file.name }])
+        // Remplace le preview local par l'URL WP définitive
+        setExtraImages(imgs => imgs.map(img =>
+          img.name === file.name && img.pending
+            ? { id: media.id, src: media.src, name: file.name, pending: false }
+            : img
+        ))
       }
     } catch (e) {
+      // Retire les previews pending en cas d'erreur
+      setExtraImages(imgs => imgs.filter(img => !img.pending))
       setError(e.message)
     } finally {
       setUploadingImg(false)
@@ -153,7 +171,11 @@ function AjouterProduit() {
   }
 
   function retirerExtraImage(id) {
-    setExtraImages(imgs => imgs.filter(i => i.id !== id))
+    setExtraImages(imgs => {
+      const img = imgs.find(i => i.id === id)
+      if (img?.src?.startsWith('blob:')) URL.revokeObjectURL(img.src)
+      return imgs.filter(i => i.id !== id)
+    })
   }
 
   function ajouterUpsell() {
@@ -373,15 +395,27 @@ function AjouterProduit() {
             {/* Aperçus */}
             {extraImages.length > 0 && (
               <div className="flex flex-wrap gap-3 mb-3">
-                {extraImages.map(img => (
-                  <div key={img.id} className="relative group">
-                    <img src={img.src} alt={img.name}
-                      className="w-20 h-24 object-cover rounded shadow border border-gray-200" />
-                    <button
-                      type="button"
-                      onClick={() => retirerExtraImage(img.id)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >×</button>
+                {extraImages.map((img, idx) => (
+                  <div key={img.id ?? `pending-${idx}`} className="relative group flex flex-col items-center gap-1">
+                    <div className="relative">
+                      <img src={img.src} alt={img.name}
+                        className={`w-20 h-24 object-cover rounded shadow border ${img.pending ? 'border-yellow-300 opacity-60' : 'border-green-300'}`} />
+                      {img.pending && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded">
+                          <span className="text-xs text-yellow-600 font-medium">Upload…</span>
+                        </div>
+                      )}
+                      {!img.pending && (
+                        <button
+                          type="button"
+                          onClick={() => retirerExtraImage(img.id)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >×</button>
+                      )}
+                    </div>
+                    <span className={`text-xs ${img.pending ? 'text-yellow-500' : 'text-green-600'}`}>
+                      {img.pending ? '…' : '✓'}
+                    </span>
                   </div>
                 ))}
               </div>
