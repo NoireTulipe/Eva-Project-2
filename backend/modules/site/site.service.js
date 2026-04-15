@@ -79,78 +79,12 @@ async function uploadWPImage(source, filename = 'cover.jpg') {
   return json.source_url
 }
 
-// ─── Mode 1 : Google Books API (par ISBN ou titre) ────────────────────────────
-
-export async function fetchFromGoogleBooks(query) {
-  // Détecter si c'est un ISBN (10 ou 13 chiffres, éventuellement tirets)
-  const isbnClean = query.replace(/[-\s]/g, '')
-  const isISBN = /^(\d{10}|\d{13})$/.test(isbnClean)
-
-  const searchQuery = isISBN ? `isbn:${isbnClean}` : encodeURIComponent(query)
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${searchQuery}&maxResults=5&langRestrict=fr`
-
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`Google Books API : ${res.status}`)
-  const json = await res.json()
-
-  if (!json.items || json.items.length === 0) {
-    throw new Error('Aucun résultat trouvé pour cette recherche.')
-  }
-
-  // Si ISBN → on prend le premier résultat direct
-  // Si titre → on retourne les 5 premiers pour que l'UI propose un choix
-  const results = json.items.slice(0, isISBN ? 1 : 5).map(item => {
-    const info = item.volumeInfo
-    const isbn13 = info.industryIdentifiers?.find(i => i.type === 'ISBN_13')?.identifier || null
-    const isbn10 = info.industryIdentifiers?.find(i => i.type === 'ISBN_10')?.identifier || null
-
-    // Thumbnail en haute résolution (remplace zoom=1 par zoom=0 pour la meilleure qualité)
-    let coverImage = info.imageLinks?.extraLarge
-      || info.imageLinks?.large
-      || info.imageLinks?.medium
-      || info.imageLinks?.thumbnail
-      || null
-    if (coverImage) {
-      // Forcer HTTPS et désactiver le filtre de taille Google
-      coverImage = coverImage.replace('http://', 'https://').replace('&zoom=1', '').replace('zoom=1&', '')
-    }
-
-    return {
-      source: 'google_books',
-      googleBooksId: item.id,
-      title: info.title || '',
-      subtitle: info.subtitle || null,
-      authors: (info.authors || []).map(name => ({ name, role: 'Auteur' })),
-      description: info.description || '',
-      coverImage,
-      backCoverImage: null,
-      priceAmount: null,
-      currency: '€',
-      series: null,
-      details: {
-        isbn13,
-        isbn10,
-        asin: null,
-        publisher: info.publisher || null,
-        publicationDate: info.publishedDate || null,
-        language: info.language || null,
-        pages: info.pageCount || null,
-        weight: null,
-        dimensions: null
-      }
-    }
-  })
-
-  return isISBN ? results[0] : results
-}
-
-// ─── Mode 2 : Scraper Amazon (Puppeteer) ─────────────────────────────────────
+// ─── Scraper Amazon (Puppeteer) ───────────────────────────────────────────────
 
 let lastScrapeTime = null
 const MIN_DELAY_MS = 30000
 
 export async function scrapeAmazon(url) {
-  // Respect du délai anti-bot
   if (lastScrapeTime) {
     const elapsed = Date.now() - lastScrapeTime
     const remaining = MIN_DELAY_MS - elapsed
@@ -256,10 +190,10 @@ export async function scrapeAmazon(url) {
         const listItem = li.querySelector('.a-list-item')
         const labelEl = listItem?.querySelector('.a-text-bold')
         if (labelEl) {
-          const label = labelEl.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/[:\s\u200E\u200F]+$/g, '').trim()
+          const label = labelEl.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/[:\s‎‏]+$/g, '').trim()
           const tempNode = listItem.cloneNode(true)
           tempNode.querySelector('.a-text-bold')?.remove()
-          const value = tempNode.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/[:\s\u200E\u200F]+/g, ' ').trim()
+          const value = tempNode.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/[:\s‎‏]+/g, ' ').trim()
           if (label && value) details[label] = value
         }
       })
@@ -311,29 +245,26 @@ export async function scrapeAmazon(url) {
 
 // ─── Génération description courte via Gemini ─────────────────────────────────
 
-async function generateShortDescription(description) {
-  if (!description || !process.env.GEMINI_API_KEY) return ''
-  try {
-    const { GoogleGenerativeAI } = await import('@google/generative-ai')
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-    const result = await model.generateContent(
-      `Tu es un libraire passionné. À partir de cette description de livre, rédige une accroche commerciale courte de 3 à 4 phrases maximum, en français, sans spoiler, qui donne envie d'acheter. Pas de titre, pas de "Découvrez", juste l'accroche.\n\nDescription : ${description}`
-    )
-    return `<p>${result.response.text().trim()}</p>`
-  } catch (e) {
-    logError(`Génération description courte échouée : ${e.message}`)
-    return ''
-  }
+export async function generateShortDescription(description) {
+  if (!description) throw new Error('Description vide.')
+  if (!process.env.GEMINI_API_KEY) throw new Error('Clé Gemini manquante.')
+
+  const { GoogleGenerativeAI } = await import('@google/generative-ai')
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const result = await model.generateContent(
+    `Tu es un libraire passionné. À partir de cette description de livre, rédige une accroche commerciale courte de 3 à 4 phrases maximum, en français, sans spoiler, qui donne envie d'acheter. Pas de titre, pas de "Découvrez", juste l'accroche.\n\nDescription : ${description}`
+  )
+  return result.response.text().trim()
 }
 
-// ─── Catégories WooCommerce (cache en mémoire) ────────────────────────────────
+// ─── Catégories WooCommerce ───────────────────────────────────────────────────
 
 let _categoriesCache = null
 
-async function getWcCategories() {
+export async function getWcCategories() {
   if (!_categoriesCache) {
-    _categoriesCache = await wcRequest('GET', '/products/categories?per_page=100')
+    _categoriesCache = await wcRequest('GET', '/products/categories?per_page=100&orderby=name&order=asc')
   }
   return _categoriesCache
 }
@@ -343,10 +274,8 @@ async function getWcCategories() {
 export async function createWooProduct(bookData, options = {}) {
   logAction(`Création produit WooCommerce : ${bookData.title}`)
 
+  const price     = options.price ?? (bookData.priceAmount ? String(bookData.priceAmount) : '0.00')
   const autoPublish = options.autoPublish ?? false
-  const price = options.price ?? (bookData.priceAmount ? String(bookData.priceAmount) : '0.00')
-  const stock = options.stock ?? 0
-  const shortDescriptionOverride = options.shortDescription ?? null
 
   // 1. Upload couverture
   const images = []
@@ -358,8 +287,6 @@ export async function createWooProduct(bookData, options = {}) {
       logError(`Impossible d'uploader la couverture : ${e.message}`)
     }
   }
-
-  // 2. Upload verso si disponible
   if (bookData.backCoverImage) {
     try {
       const backUrl = await uploadWPImage(bookData.backCoverImage, 'back-cover.jpg')
@@ -369,26 +296,13 @@ export async function createWooProduct(bookData, options = {}) {
     }
   }
 
-  // 3. Catégorie WooCommerce
-  const GENRE_MAP = {
-    'jeunesse': 'Jeunesse', 'enfant': 'Jeunesse',
-    'ado': 'Adolescent', 'adolescent': 'Adolescent', 'young adult': 'Adolescent',
-    'romance': 'Romance', 'amour': 'Romance',
-    'fantastique': 'Fantastique', 'fantasy': 'Fantastique',
-    'science-fiction': 'Science-Fiction', 'sf': 'Science-Fiction', 'sci-fi': 'Science-Fiction',
-    'roman': 'Roman', 'nouvelle': 'Nouvelle', 'poesie': 'Poésie', 'poésie': 'Poésie',
-    'essai': 'Essai', 'goodie': 'Goodie'
-  }
-  const categories = await getWcCategories()
-  const genreKey = (options.genre || '').toLowerCase()
-  const genreLabel = GENRE_MAP[genreKey] || null
-  const cat = genreLabel
-    ? categories.find(c => c.name === genreLabel) || categories.find(c => c.name === 'Autres')
-    : categories.find(c => c.name === 'Autres')
-  const categoryIds = cat ? [{ id: cat.id }] : []
+  // 2. Catégories — IDs passés directement depuis l'UI
+  const categoryIds = (options.categoryIds || []).map(id => ({ id }))
 
-  // 4. Attributs (auteurs, pages)
+  // 3. Attributs
   const attrs = []
+
+  // Auteurs
   const authorNames = bookData.authors?.map(a => a.name).filter(Boolean) || []
   if (authorNames.length) {
     attrs.push({
@@ -397,6 +311,8 @@ export async function createWooProduct(bookData, options = {}) {
       options: authorNames
     })
   }
+
+  // Nombre de pages
   if (bookData.details?.pages) {
     attrs.push({
       name: 'Nombre de pages', slug: 'pa_nombre-de-pages',
@@ -405,12 +321,26 @@ export async function createWooProduct(bookData, options = {}) {
     })
   }
 
-  // 5. Description courte (override UI > Gemini > vide)
-  const shortDescription = shortDescriptionOverride !== null
-    ? shortDescriptionOverride
-    : await generateShortDescription(bookData.description)
+  // Impression des pages intérieures
+  if (options.impression) {
+    attrs.push({
+      name: 'Impression des pages intérieures', slug: 'pa_impression-des-pages',
+      visible: true, variation: false,
+      options: [options.impression]
+    })
+  }
 
-  // 6. Dimensions
+  // ISBN
+  const isbn = bookData.details?.isbn13 || bookData.details?.isbn10 || null
+  if (isbn) {
+    attrs.push({
+      name: 'ISBN', slug: 'pa_isbn',
+      visible: true, variation: false,
+      options: [isbn]
+    })
+  }
+
+  // 4. Dimensions
   let dimensions
   if (bookData.details?.dimensions) {
     const parts = bookData.details.dimensions
@@ -425,14 +355,14 @@ export async function createWooProduct(bookData, options = {}) {
     type: 'simple',
     status: autoPublish ? 'publish' : 'draft',
     description: bookData.description || '',
-    short_description: shortDescription,
+    short_description: options.shortDescription || '',
     regular_price: price,
-    manage_stock: true,
-    stock_quantity: stock,
-    stock_status: stock > 0 ? 'instock' : 'outofstock',
+    manage_stock: false,
+    stock_status: 'instock',
     categories: categoryIds,
     images,
     attributes: attrs,
+    upsell_ids: options.upsellIds || [],
     ...(bookData.details?.weight && {
       weight: bookData.details.weight.replace(/[^\d,.]/, '').replace(',', '.').split(' ')[0]
     }),
@@ -454,7 +384,7 @@ export async function createWooProduct(bookData, options = {}) {
 // ─── Lister les produits WooCommerce ─────────────────────────────────────────
 
 export async function listWooProducts(filters = {}) {
-  const limit = filters.limit || 20
+  const limit  = filters.limit  || 20
   const status = filters.status || 'any'
   const products = await wcRequest('GET', `/products?per_page=${limit}&status=${status}&orderby=date&order=desc`)
   return products.map(p => ({

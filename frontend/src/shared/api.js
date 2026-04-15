@@ -404,10 +404,12 @@ export const mail = {
 // --- Site ME ---
 
 export const site = {
-  // Recherche par ISBN ou titre (Google Books)
-  rechercherISBN: (query) => request('POST', '/site/isbn', { query }),
-  // Scrape une page Amazon
+  // Scrape une page Amazon (Puppeteer)
   scraperAmazon: (url) => request('POST', '/site/scrape', { url }),
+  // Génère une accroche courte via Gemini
+  genererAccroche: (description) => request('POST', '/site/generer-accroche', { description }),
+  // Récupère les catégories WooCommerce
+  getCategories: () => request('GET', '/site/categories'),
   // Publie un produit sur WooCommerce
   publierProduit: (bookData, options) => request('POST', '/site/produit', { bookData, options }),
   // Liste les produits WooCommerce
