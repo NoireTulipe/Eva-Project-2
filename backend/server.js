@@ -15,6 +15,7 @@ import memoireRoutes from './routes/memoire.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import mailRoutes from './routes/mail.routes.js'
 import instagramRoutes, { webhookRouter as instagramWebhookRouter } from './routes/instagram.routes.js'
+import siteRoutes from './routes/site.routes.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
 import { startInstagramPlanifCron } from './crons/instagram-planif.cron.js'
@@ -78,6 +79,7 @@ app.use('/api/memoire', memoireRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/mail', mailRoutes)
 app.use('/api/instagram', instagramRoutes)
+app.use('/api/site', siteRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -401,6 +401,24 @@ export const mail = {
   corrigerLog: (id, action, raison, dossierCible) => request('POST', `/mail/journal/${id}/corriger`, { action, raison, dossierCible })
 }
 
+// --- Site ME ---
+
+export const site = {
+  // Recherche par ISBN ou titre (Google Books)
+  rechercherISBN: (query) => request('POST', '/site/isbn', { query }),
+  // Scrape une page Amazon
+  scraperAmazon: (url) => request('POST', '/site/scrape', { url }),
+  // Publie un produit sur WooCommerce
+  publierProduit: (bookData, options) => request('POST', '/site/produit', { bookData, options }),
+  // Liste les produits WooCommerce
+  getProduits: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.limit) qs.set('limit', params.limit)
+    if (params.status) qs.set('status', params.status)
+    return request('GET', `/site/produits${qs.toString() ? `?${qs}` : ''}`)
+  }
+}
+
 // --- Instagram ---
 
 async function uploadRequest(method, path, formData) {
