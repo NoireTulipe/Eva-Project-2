@@ -634,12 +634,17 @@ function NouvelArticle() {
   const [succes, setSucces]                 = useState(null)
 
   // Résultat généré
-  const [title, setTitle]   = useState('')
+  const [title, setTitle]     = useState('')
   const [content, setContent] = useState('')
 
   // Options publication
-  const [date, setDate]         = useState(todayISO())
+  const [date, setDate]           = useState(todayISO())
   const [autoPublish, setAutoPublish] = useState(false)
+
+  // Image à la une
+  const [featuredImage, setFeaturedImage]   = useState(null)  // { id, src, pending }
+  const [uploadingFeatured, setUploadingFeatured] = useState(false)
+  const featuredInputRef = useRef(null)
 
   // Chargement du prompt général au montage
   useEffect(() => {
@@ -677,14 +682,46 @@ function NouvelArticle() {
     }
   }
 
+  async function handleFeaturedUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError(null)
+    setUploadingFeatured(true)
+    // Aperçu local immédiat
+    const preview = URL.createObjectURL(file)
+    setFeaturedImage({ id: null, src: preview, pending: true })
+    try {
+      const articleTitle = title || instruction.split('\n')[0] || 'article'
+      const media = await site.uploadMedia(file, {
+        altText:     `Image d'illustration pour l'article : ${articleTitle}`,
+        title:       articleTitle,
+        caption:     `Illustration de l'article « ${articleTitle} » — Éditions Écho de Plumes`,
+        description: `Image d'illustration pour l'article : ${articleTitle}`
+      })
+      URL.revokeObjectURL(preview)
+      setFeaturedImage({ id: media.id, src: media.src, pending: false })
+    } catch (e) {
+      setFeaturedImage(null)
+      setError(e.message)
+    } finally {
+      setUploadingFeatured(false)
+      if (featuredInputRef.current) featuredInputRef.current.value = ''
+    }
+  }
+
   async function handlePublier(status) {
     if (!title.trim() || !content.trim()) return
     setError(null)
     setPublishing(true)
     try {
-      // Construire la date ISO complète si seulement la date est fournie
       const isoDate = date ? (date.includes('T') ? date : `${date}T08:00:00`) : undefined
-      const result = await site.publierArticle({ title, content, date: isoDate, status })
+      const result = await site.publierArticle({
+        title,
+        content,
+        date: isoDate,
+        status,
+        featuredMediaId: featuredImage?.id || null
+      })
       setSucces(result)
     } catch (e) {
       setError(e.message)
@@ -701,6 +738,7 @@ function NouvelArticle() {
     setError(null)
     setDate(todayISO())
     setAutoPublish(false)
+    setFeaturedImage(null)
   }
 
   // ── Succès ──
@@ -792,7 +830,7 @@ function NouvelArticle() {
       {/* Zone résultat — visible seulement si contenu généré */}
       {(title || content || generating) && (
         <>
-          {/* Titre + date */}
+          {/* Titre + date + image à la une */}
           <div className="bg-white rounded-lg shadow p-5">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
@@ -815,6 +853,63 @@ function NouvelArticle() {
                     className="w-4 h-4 rounded accent-indigo-600" />
                   <span className="text-sm text-gray-700">Publier directement</span>
                 </label>
+              </div>
+
+              {/* Image à la une */}
+              <div className="col-span-2">
+                <p className="text-xs font-medium text-gray-600 mb-2">Image à la une</p>
+                <div className="flex items-start gap-4">
+                  {/* Aperçu */}
+                  {featuredImage ? (
+                    <div className="relative group flex-shrink-0">
+                      <img
+                        src={featuredImage.src}
+                        alt="Image à la une"
+                        className={`w-32 h-20 object-cover rounded shadow border ${
+                          featuredImage.pending ? 'border-yellow-300 opacity-60' : 'border-green-300'
+                        }`}
+                      />
+                      {featuredImage.pending && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded">
+                          <span className="text-xs text-yellow-600 font-medium">Upload…</span>
+                        </div>
+                      )}
+                      {!featuredImage.pending && (
+                        <button
+                          type="button"
+                          onClick={() => { URL.revokeObjectURL(featuredImage.src); setFeaturedImage(null) }}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >×</button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-32 h-20 bg-gray-100 rounded border border-dashed border-gray-300 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs text-gray-400">Aucune</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <input
+                      ref={featuredInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFeaturedUpload}
+                      className="hidden"
+                      id="featured-image-input"
+                    />
+                    <label
+                      htmlFor="featured-image-input"
+                      className={`px-3 py-1.5 border border-dashed border-gray-300 rounded text-sm text-gray-600 cursor-pointer hover:border-indigo-400 hover:text-indigo-600 transition-colors text-center ${
+                        uploadingFeatured ? 'opacity-50 pointer-events-none' : ''
+                      }`}
+                    >
+                      {uploadingFeatured ? 'Upload en cours…' : featuredImage && !featuredImage.pending ? '↺ Changer' : '+ Choisir une image'}
+                    </label>
+                    {featuredImage && !featuredImage.pending && (
+                      <span className="text-xs text-green-600">✓ Uploadée sur WordPress</span>
+                    )}
+                    <p className="text-xs text-gray-400">Alt text, titre et légende SEO générés automatiquement.</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

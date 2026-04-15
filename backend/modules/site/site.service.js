@@ -492,11 +492,12 @@ export async function generateArticle(generalPrompt, instruction) {
 
 // ─── Publier un article WordPress ────────────────────────────────────────────
 
-export async function publishWPArticle({ title, content, date, status = 'draft' }) {
+export async function publishWPArticle({ title, content, date, status = 'draft', featuredMediaId = null }) {
   logAction(`Publication article WP : ${title} (${status})`)
 
   const body = { title, content, status }
-  if (date) body.date = date  // format ISO 8601 : "2025-04-15T10:00:00"
+  if (date) body.date = date
+  if (featuredMediaId) body.featured_media = featuredMediaId
 
   const url = `${WP_BASE}/wp-json/wp/v2/posts`
   const res = await fetch(url, {

@@ -133,12 +133,12 @@ router.post('/article/generer', async (req, res) => {
 })
 
 // POST /api/site/article
-// Corps : { title, content, date, status }
+// Corps : { title, content, date, status, featuredMediaId }
 router.post('/article', async (req, res) => {
-  const { title, content, date, status } = req.body
+  const { title, content, date, status, featuredMediaId } = req.body
   if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: 'Titre et contenu requis.' })
   try {
-    res.json(await publishWPArticle({ title, content, date, status }))
+    res.json(await publishWPArticle({ title, content, date, status, featuredMediaId }))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
