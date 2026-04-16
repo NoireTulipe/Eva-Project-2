@@ -19,6 +19,19 @@ function getWpAuth() {
   ).toString('base64')
 }
 
+// ─── Conversion poids → kg ───────────────────────────────────────────────────
+// Amazon retourne parfois "250 g" ou "1.2 kg" — on normalise en kg pour WooCommerce
+
+function parseWeightToKg(weightStr) {
+  if (!weightStr) return null
+  const match = weightStr.match(/([\d,\.]+)\s*(g|kg|grammes?|kilogrammes?)/i)
+  if (!match) return null
+  const value = parseFloat(match[1].replace(',', '.'))
+  const unit  = match[2].toLowerCase()
+  const kg    = (unit === 'g' || unit.startsWith('gramme')) ? value / 1000 : value
+  return String(Math.round(kg * 1000) / 1000) // ex: "0.25"
+}
+
 // ─── Slugification ────────────────────────────────────────────────────────────
 
 function slugify(text) {
@@ -404,7 +417,7 @@ export async function createWooProduct(bookData, options = {}) {
     attributes: attrs,
     upsell_ids: options.upsellIds || [],
     ...(bookData.details?.weight && {
-      weight: bookData.details.weight.replace(/[^\d,.]/, '').replace(',', '.').split(' ')[0]
+      weight: parseWeightToKg(bookData.details.weight)
     }),
     ...(dimensions && { dimensions })
   }
@@ -550,6 +563,12 @@ export async function listWooProductsLite() {
     name: p.name,
     weight: p.weight || ''
   }))
+}
+
+// ─── Mettre à jour le poids d'un produit WooCommerce ─────────────────────────
+
+export async function updateProductWeight(productId, weightKg) {
+  return wcRequest('PUT', `/products/${productId}`, { weight: String(weightKg) })
 }
 
 // ─── Livraison — Zones & méthodes ────────────────────────────────────────────

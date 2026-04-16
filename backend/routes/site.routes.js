@@ -19,7 +19,8 @@ import {
   deleteShippingMethod,
   getShippingClasses,
   seedShipping,
-  setProductsShippingClass
+  setProductsShippingClass,
+  updateProductWeight
 } from '../modules/site/site.service.js'
 
 const router = Router()
@@ -230,6 +231,18 @@ router.delete('/shipping/:zoneId/methods/:instanceId', async (req, res) => {
   try {
     await deleteShippingMethod(req.params.zoneId, req.params.instanceId)
     res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// PUT /api/site/produits/:id/poids — convertit le poids d'un produit (g → kg)
+router.put('/produits/:id/poids', async (req, res) => {
+  const { weight } = req.body
+  if (weight === undefined || weight === null) return res.status(400).json({ error: 'weight requis.' })
+  try {
+    const p = await updateProductWeight(req.params.id, weight)
+    res.json({ id: p.id, name: p.name, weight: p.weight })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

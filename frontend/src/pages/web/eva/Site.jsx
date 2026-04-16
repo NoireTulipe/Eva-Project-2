@@ -1083,7 +1083,24 @@ function Livraison() {
   if (loading) return <div className="text-center py-12 text-gray-400 text-sm">Chargement des zones de livraison…</div>
 
   const hasSeedButton = !zones.some(z => z.name === 'France métropolitaine')
-  const sansPoids = produits.filter(p => !p.weight || p.weight === '0' || p.weight === '')
+  const sansPoids    = produits.filter(p => !p.weight || p.weight === '0' || p.weight === '')
+  const poidsSuspect = produits.filter(p => p.weight && parseFloat(p.weight) > 1)
+
+  async function convertirPoidsGrammesEnKg(productId, weightG) {
+    const weightKg = Math.round((parseFloat(weightG) / 1000) * 1000) / 1000
+    try {
+      const updated = await site.updateProductWeight(productId, weightKg)
+      setProduits(ps => ps.map(p => p.id === productId ? { ...p, weight: updated.weight } : p))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  async function convertirTous() {
+    for (const p of poidsSuspect) {
+      await convertirPoidsGrammesEnKg(p.id, p.weight)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -1200,33 +1217,77 @@ function Livraison() {
 
       {/* Vérification des poids produits */}
       {produits.length > 0 && (
-        sansPoids.length > 0 ? (
-          <div className="bg-white rounded-lg shadow p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-1">
-              {sansPoids.length} produit{sansPoids.length > 1 ? 's' : ''} sans poids renseigné
-            </h3>
-            <p className="text-xs text-gray-400 mb-3">
-              Echo Shipping calcule les frais à partir du poids de chaque produit. Ces produits ne seront pas proposés à la livraison.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {sansPoids.map(p => (
-                <span key={p.id} className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded">
-                  {p.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-            <span className="text-green-500 text-lg font-bold">✓</span>
-            <div>
-              <p className="text-sm font-medium text-green-800">Tous les produits ont un poids renseigné</p>
-              <p className="text-xs text-green-600">
-                {produits.length} produit{produits.length > 1 ? 's' : ''} — Echo Shipping calculera les frais automatiquement.
+        <div className="space-y-3">
+          {sansPoids.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-1">
+                {sansPoids.length} produit{sansPoids.length > 1 ? 's' : ''} sans poids renseigné
+              </h3>
+              <p className="text-xs text-gray-400 mb-3">
+                Echo Shipping calcule les frais à partir du poids de chaque produit. Ces produits ne seront pas proposés à la livraison.
               </p>
+              <div className="flex flex-wrap gap-2">
+                {sansPoids.map(p => (
+                  <span key={p.id} className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded">
+                    {p.name}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-        )
+          )}
+
+          {poidsSuspect.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-5">
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-orange-700">
+                    {poidsSuspect.length} produit{poidsSuspect.length > 1 ? 's' : ''} avec un poids suspect (&gt; 1 kg)
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Probablement renseigné en grammes. WooCommerce attend des kilogrammes.
+                  </p>
+                </div>
+                <button
+                  onClick={convertirTous}
+                  className="flex-shrink-0 px-3 py-1.5 text-xs bg-orange-600 text-white rounded hover:bg-orange-700"
+                >
+                  Tout convertir g → kg
+                </button>
+              </div>
+              <div className="space-y-2">
+                {poidsSuspect.map(p => {
+                  const kg = Math.round((parseFloat(p.weight) / 1000) * 1000) / 1000
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-3 text-xs bg-orange-50 border border-orange-200 rounded px-3 py-2">
+                      <span className="text-orange-800 font-medium">{p.name}</span>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-orange-600">{p.weight} kg → <strong>{kg} kg</strong></span>
+                        <button
+                          onClick={() => convertirPoidsGrammesEnKg(p.id, p.weight)}
+                          className="px-2 py-1 bg-orange-600 text-white rounded hover:bg-orange-700"
+                        >
+                          Convertir
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {sansPoids.length === 0 && poidsSuspect.length === 0 && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+              <span className="text-green-500 text-lg font-bold">✓</span>
+              <div>
+                <p className="text-sm font-medium text-green-800">Tous les produits ont un poids renseigné</p>
+                <p className="text-xs text-green-600">
+                  {produits.length} produit{produits.length > 1 ? 's' : ''} — Echo Shipping calculera les frais automatiquement.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {editModal && (

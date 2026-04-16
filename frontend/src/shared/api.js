@@ -467,7 +467,8 @@ export const site = {
   addShippingMethod:      (zoneId, methodId)           => request('POST', `/site/shipping/${zoneId}/methods`, { methodId }),
   updateShippingMethod:   (zoneId, instanceId, data)   => request('PUT',  `/site/shipping/${zoneId}/methods/${instanceId}`, data),
   deleteShippingMethod:   (zoneId, instanceId)         => request('DELETE', `/site/shipping/${zoneId}/methods/${instanceId}`),
-  setProductsShippingClass: (productIds, classSlug)    => request('PUT', '/site/shipping/products', { productIds, classSlug })
+  setProductsShippingClass: (productIds, classSlug)    => request('PUT', '/site/shipping/products', { productIds, classSlug }),
+  updateProductWeight:      (id, weight)               => request('PUT', `/site/produits/${id}/poids`, { weight })
 }
 
 // --- Instagram ---
