@@ -579,14 +579,14 @@ export async function deleteShippingMethod(zoneId, instanceId) {
 // ─── Livraison — Classes d'expédition (tranches de poids) ────────────────────
 
 export async function getShippingClasses() {
-  return wcRequest('GET', '/shipping/classes?per_page=100')
+  return wcRequest('GET', '/products/shipping_classes?per_page=100')
 }
 
 async function getOrCreateShippingClass(tier) {
-  const existing = await wcRequest('GET', '/shipping/classes')
+  const existing = await wcRequest('GET', '/products/shipping_classes?per_page=100')
   const found = existing.find(c => c.slug === tier.slug)
   if (found) return found
-  return wcRequest('POST', '/shipping/classes', {
+  return wcRequest('POST', '/products/shipping_classes', {
     name:        tier.name,
     slug:        tier.slug,
     description: `Tranche de poids : ${tier.name}`
