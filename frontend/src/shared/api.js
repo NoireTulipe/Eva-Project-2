@@ -457,7 +457,17 @@ export const site = {
     if (params.limit) qs.set('limit', params.limit)
     if (params.status) qs.set('status', params.status)
     return request('GET', `/site/produits${qs.toString() ? `?${qs}` : ''}`)
-  }
+  },
+  // Liste légère pour combobox (id + nom + classe)
+  getProduitsLite: () => request('GET', '/site/produits-lite'),
+  // Livraison
+  getShipping:            ()                           => request('GET', '/site/shipping'),
+  getShippingClasses:     ()                           => request('GET', '/site/shipping/classes'),
+  seedShipping:           ()                           => request('POST', '/site/shipping/seed'),
+  addShippingMethod:      (zoneId, methodId)           => request('POST', `/site/shipping/${zoneId}/methods`, { methodId }),
+  updateShippingMethod:   (zoneId, instanceId, data)   => request('PUT',  `/site/shipping/${zoneId}/methods/${instanceId}`, data),
+  deleteShippingMethod:   (zoneId, instanceId)         => request('DELETE', `/site/shipping/${zoneId}/methods/${instanceId}`),
+  setProductsShippingClass: (productIds, classSlug)    => request('PUT', '/site/shipping/products', { productIds, classSlug })
 }
 
 // --- Instagram ---

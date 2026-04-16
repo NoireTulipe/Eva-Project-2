@@ -541,3 +541,132 @@ export async function listWooProducts(filters = {}) {
     image: p.images?.[0]?.src || null
   }))
 }
+
+// Liste légère pour le combobox (id + nom + classe d'expédition actuelle)
+export async function listWooProductsLite() {
+  const products = await wcRequest('GET', '/products?per_page=100&status=any&orderby=title&order=asc')
+  return products.map(p => ({
+    id: p.id,
+    name: p.name,
+    shippingClass: p.shipping_class || ''
+  }))
+}
+
+// ─── Livraison — Zones & méthodes ────────────────────────────────────────────
+
+export async function getShippingZonesWithMethods() {
+  const zones = await wcRequest('GET', '/shipping/zones')
+  return Promise.all(
+    zones.map(async zone => {
+      const methods = await wcRequest('GET', `/shipping/zones/${zone.id}/methods`)
+      return { id: zone.id, name: zone.name, order: zone.order, methods }
+    })
+  )
+}
+
+export async function addShippingMethod(zoneId, methodId) {
+  return wcRequest('POST', `/shipping/zones/${zoneId}/methods`, { method_id: methodId })
+}
+
+export async function updateShippingMethod(zoneId, instanceId, data) {
+  return wcRequest('PUT', `/shipping/zones/${zoneId}/methods/${instanceId}`, data)
+}
+
+export async function deleteShippingMethod(zoneId, instanceId) {
+  return wcRequest('DELETE', `/shipping/zones/${zoneId}/methods/${instanceId}?force=true`)
+}
+
+// ─── Livraison — Classes d'expédition (tranches de poids) ────────────────────
+
+export async function getShippingClasses() {
+  return wcRequest('GET', '/shipping/classes?per_page=100')
+}
+
+async function getOrCreateShippingClass(tier) {
+  const existing = await wcRequest('GET', '/shipping/classes')
+  const found = existing.find(c => c.slug === tier.slug)
+  if (found) return found
+  return wcRequest('POST', '/shipping/classes', {
+    name:        tier.name,
+    slug:        tier.slug,
+    description: `Tranche de poids : ${tier.name}`
+  })
+}
+
+// ─── Seed livraison — Tarifs La Poste France métropolitaine ──────────────────
+
+const SHIPPING_TIERS = [
+  { name: 'Moins de 100 g', slug: 'moins-100g' },
+  { name: '101 à 250 g',    slug: '101-250g'   },
+  { name: '251 à 500 g',    slug: '251-500g'   },
+  { name: '501 g à 1 kg',   slug: '501g-1kg'   },
+  { name: 'Plus de 1 kg',   slug: 'plus-1kg'   },
+]
+const TARIFS_SIMPLE = ['2.32', '4.00', '6.00', '7.25', '8.85']
+const TARIFS_SUIVI  = ['2.82', '4.50', '6.50', '7.75', '9.35']
+
+export async function seedShipping() {
+  const existingZones = await wcRequest('GET', '/shipping/zones')
+  if (existingZones.find(z => z.name === 'France métropolitaine')) {
+    throw new Error('La zone "France métropolitaine" existe déjà — seed annulé.')
+  }
+
+  // 1. Créer (ou récupérer) les classes d'expédition par tranche de poids
+  const classes = []
+  for (const tier of SHIPPING_TIERS) {
+    classes.push(await getOrCreateShippingClass(tier))
+  }
+
+  // 2. Créer la zone + affecter la France
+  const zone = await wcRequest('POST', '/shipping/zones', { name: 'France métropolitaine', order: 0 })
+  await wcRequest('PUT', `/shipping/zones/${zone.id}/locations`, [{ code: 'FR', type: 'country' }])
+
+  // Helper pour construire les settings par classe
+  const buildSettings = (tarifs, baseIndex = 0) => ({
+    cost: { value: tarifs[baseIndex] },
+    ...Object.fromEntries(classes.map((cls, i) => [
+      `class_cost_${cls.id}`, { value: tarifs[i] }
+    ]))
+  })
+
+  // 3. Expédition simple par la Poste
+  const simple = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'flat_rate' })
+  await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${simple.instance_id}`, {
+    title:    'Expédition simple par la Poste',
+    settings: buildSettings(TARIFS_SIMPLE)
+  })
+
+  // 4. Expédition avec suivie par la Poste
+  const suivi = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'flat_rate' })
+  await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${suivi.instance_id}`, {
+    title:    'Expédition avec suivie par la Poste',
+    settings: buildSettings(TARIFS_SUIVI)
+  })
+
+  logAction(`Seed livraison : zone ${zone.id}, ${classes.length} classes, 2 méthodes`)
+  return { ok: true, zoneId: zone.id, classes: classes.length }
+}
+
+// ─── Livraison — Affecter une classe aux produits ────────────────────────────
+
+export async function setProductsShippingClass(productIds, classSlug) {
+  let ids = productIds
+  if (productIds === 'all') {
+    const products = await wcRequest('GET', '/products?per_page=100&status=any')
+    ids = products.map(p => p.id)
+  }
+  if (!ids.length) return { ok: true, updated: 0 }
+
+  // Batch update par tranches de 100 (limite WC)
+  const CHUNK = 100
+  let updated = 0
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK)
+    await wcRequest('POST', '/products/batch', {
+      update: chunk.map(id => ({ id, shipping_class: classSlug }))
+    })
+    updated += chunk.length
+  }
+  logAction(`Classe d'expédition "${classSlug}" appliquée à ${updated} produit(s)`)
+  return { ok: true, updated }
+}

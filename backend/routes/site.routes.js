@@ -7,11 +7,19 @@ import {
   getWcCategories,
   createWooProduct,
   listWooProducts,
+  listWooProductsLite,
   uploadWPImage,
   getNewsPrompt,
   saveNewsPrompt,
   generateArticle,
-  publishWPArticle
+  publishWPArticle,
+  getShippingZonesWithMethods,
+  addShippingMethod,
+  updateShippingMethod,
+  deleteShippingMethod,
+  getShippingClasses,
+  seedShipping,
+  setProductsShippingClass
 } from '../modules/site/site.service.js'
 
 const router = Router()
@@ -150,6 +158,87 @@ router.get('/produits', async (req, res) => {
   const status = req.query.status || 'any'
   try {
     res.json(await listWooProducts({ limit, status }))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Livraison — Zones & méthodes ────────────────────────────────────────────
+
+// GET /api/site/shipping — zones + méthodes
+router.get('/shipping', async (req, res) => {
+  try {
+    res.json(await getShippingZonesWithMethods())
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// GET /api/site/shipping/classes — classes d'expédition (tranches de poids)
+router.get('/shipping/classes', async (req, res) => {
+  try {
+    res.json(await getShippingClasses())
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/site/shipping/seed — initialise les tarifs La Poste
+router.post('/shipping/seed', async (req, res) => {
+  try {
+    res.json(await seedShipping())
+  } catch (e) {
+    const status = e.message.includes('existe déjà') ? 409 : 500
+    res.status(status).json({ error: e.message })
+  }
+})
+
+// PUT /api/site/shipping/products — affecte une classe d'expédition à des produits
+router.put('/shipping/products', async (req, res) => {
+  const { productIds, classSlug } = req.body
+  if (!classSlug) return res.status(400).json({ error: 'classSlug requis.' })
+  if (!productIds) return res.status(400).json({ error: 'productIds requis (tableau ou "all").' })
+  try {
+    res.json(await setProductsShippingClass(productIds, classSlug))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/site/shipping/:zoneId/methods — ajouter une méthode à une zone
+router.post('/shipping/:zoneId/methods', async (req, res) => {
+  const { methodId } = req.body
+  if (!methodId) return res.status(400).json({ error: 'methodId requis.' })
+  try {
+    res.json(await addShippingMethod(req.params.zoneId, methodId))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// PUT /api/site/shipping/:zoneId/methods/:instanceId — modifier une méthode
+router.put('/shipping/:zoneId/methods/:instanceId', async (req, res) => {
+  try {
+    res.json(await updateShippingMethod(req.params.zoneId, req.params.instanceId, req.body))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// DELETE /api/site/shipping/:zoneId/methods/:instanceId — supprimer une méthode
+router.delete('/shipping/:zoneId/methods/:instanceId', async (req, res) => {
+  try {
+    await deleteShippingMethod(req.params.zoneId, req.params.instanceId)
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// GET /api/site/produits-lite — liste légère pour combobox (id + nom + classe)
+router.get('/produits-lite', async (req, res) => {
+  try {
+    res.json(await listWooProductsLite())
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
