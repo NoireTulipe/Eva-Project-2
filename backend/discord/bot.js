@@ -3,6 +3,7 @@ import { processMessage, processConversation } from '../llm/orchestrateur.js'
 import { getCanalConfig } from './canal.service.js'
 import { logAction, logError } from '../logs/logger.js'
 import { setDiscordClient } from './instagram.discord.js'
+import { setNotesDiscordClient } from '../crons/notes.cron.js'
 import prisma from '../config/db.js'
 
 const DISCORD_LIMIT = 2000
@@ -19,6 +20,7 @@ const client = new Client({
 client.once('ready', () => {
   logAction(`Discord : bot connecté en tant que ${client.user.tag}`)
   setDiscordClient(client)
+  setNotesDiscordClient(client)
 })
 
 // ── Interactions boutons Instagram ────────────────────────────────────────────

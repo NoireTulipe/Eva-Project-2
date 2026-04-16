@@ -315,11 +315,15 @@ model EmailLog {
 // ─── NOTES ET RAPPELS ─────────────────────────────────────────────────────────
 
 model Note {
-  id        Int      @id @default(autoincrement())
-  titre     String?
-  contenu   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            Int       @id @default(autoincrement())
+  contenu       String
+  couleurFond   String    @default("#fef08a")
+  couleurTexte  String    @default("#1f2937")
+  rappelAt      DateTime?
+  rappelEnvoye  Boolean   @default(false)
+  expirationAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Rappel {

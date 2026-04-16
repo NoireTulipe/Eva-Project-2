@@ -281,6 +281,15 @@ export const admin = {
   restart: () => request('POST', '/admin/systeme/restart')
 }
 
+// --- Notes & Rappels ---
+
+export const notes = {
+  getAll: () => request('GET', '/notes'),
+  create: (data) => request('POST', '/notes', data),
+  update: (id, data) => request('PUT', `/notes/${id}`, data),
+  remove: (id) => request('DELETE', `/notes/${id}`)
+}
+
 // --- EVA ---
 
 export const eva = {

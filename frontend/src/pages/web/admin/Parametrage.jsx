@@ -17,6 +17,7 @@ export default function Parametrage() {
           { id: 'config',     label: 'Config LLM' },
           { id: 'discord',    label: 'Discord' },
           { id: 'instagram',  label: '📸 Instagram' },
+          { id: 'notes',      label: '📌 Notes' },
         ].map(o => (
           <button
             key={o.id}
@@ -36,6 +37,7 @@ export default function Parametrage() {
       {onglet === 'config'    && <OngletConfig />}
       {onglet === 'discord'   && <OngletDiscord />}
       {onglet === 'instagram' && <OngletInstagram />}
+      {onglet === 'notes'     && <OngletNotes />}
     </div>
   )
 }
@@ -743,6 +745,159 @@ function OngletInstagram() {
 
         {prompts.filter(p => p.role === 'texte_image').length === 0 && (
           <p className="text-xs text-orange-600">Prompt introuvable — relancez le seed.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Onglet Notes ─────────────────────────────────────────────────────────────
+
+function OngletNotes() {
+  const [params, setParams]         = useState({})       // { cle: { id, valeur } }
+  const [edits, setEdits]           = useState({})
+  const [saving, setSaving]         = useState(null)
+  const [saved, setSaved]           = useState(null)
+  const [error, setError]           = useState('')
+  const [preview, setPreview]       = useState(null)     // aperçu live de la font
+
+  const CLES = ['notes.police', 'notes.discord.channel_id']
+
+  useEffect(() => {
+    admin.getConfig().then(all => {
+      const map = {}
+      CLES.forEach(cle => {
+        const p = all.find(x => x.cle === cle)
+        if (p) map[cle] = p
+      })
+      setParams(map)
+      setEdits(Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v.valeur ?? ''])))
+      setPreview(map['notes.police']?.valeur || 'Caveat')
+    }).catch(() => setError('Erreur chargement'))
+  }, [])
+
+  async function save(cle) {
+    const p = params[cle]
+    if (!p) return
+    setSaving(cle)
+    try {
+      await admin.updateConfig(p.id, edits[cle])
+      setParams(prev => ({ ...prev, [cle]: { ...p, valeur: edits[cle] } }))
+      if (cle === 'notes.police') setPreview(edits[cle])
+      setSaved(cle)
+      setTimeout(() => setSaved(null), 2000)
+    } catch {
+      setError('Erreur sauvegarde')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  if (error) return <p className="text-red-600 text-sm">{error}</p>
+
+  // Injecter la Google Font pour le preview live
+  useEffect(() => {
+    if (!preview) return
+    const id = 'google-font-admin-notes-preview'
+    const ex = document.getElementById(id)
+    if (ex) ex.remove()
+    const link = document.createElement('link')
+    link.id = id
+    link.rel = 'stylesheet'
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(preview)}:wght@400;700&display=swap`
+    document.head.appendChild(link)
+  }, [preview])
+
+  return (
+    <div className="space-y-6 max-w-xl">
+
+      {/* ── Police Google Fonts ───────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="font-semibold text-sm text-gray-800">Police des post-its</h3>
+        <p className="text-xs text-gray-400">
+          Nom exact d'une Google Font (ex : Caveat, Patrick Hand, Kalam, Indie Flower, Satisfy…).
+          La police sera chargée automatiquement dans l'interface.
+        </p>
+
+        {!params['notes.police'] ? (
+          <p className="text-xs text-orange-600">
+            Paramètre <code>notes.police</code> introuvable — relancez le seed.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                value={edits['notes.police'] ?? ''}
+                onChange={e => {
+                  setEdits(p => ({ ...p, 'notes.police': e.target.value }))
+                  setPreview(e.target.value)
+                }}
+                placeholder="ex: Caveat"
+                className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <button
+                onClick={() => save('notes.police')}
+                disabled={saving === 'notes.police' || edits['notes.police'] === params['notes.police']?.valeur}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+              >
+                {saving === 'notes.police' ? '…' : 'OK'}
+              </button>
+              {saved === 'notes.police' && <span className="text-sm text-green-600">✓</span>}
+            </div>
+
+            {/* Aperçu live */}
+            {preview && (
+              <div
+                className="rounded-xl p-4 shadow-inner"
+                style={{ backgroundColor: '#fef08a' }}
+              >
+                <p
+                  className="text-base leading-relaxed"
+                  style={{ fontFamily: `'${preview}', cursive`, color: '#1f2937' }}
+                >
+                  Voici à quoi ressemblent tes notes avec la police "{preview}". ✨
+                </p>
+              </div>
+            )}
+
+            <p className="text-xs text-gray-400">
+              Suggestions : <span className="font-medium">Caveat · Patrick Hand · Kalam · Indie Flower · Satisfy · Nothing You Could Do · Architects Daughter</span>
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Salon Discord rappels ────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <h3 className="font-semibold text-sm text-gray-800">Salon Discord — rappels de notes</h3>
+        <p className="text-xs text-gray-400">
+          EVA enverra les rappels de notes dans ce salon Discord.
+          Copiez l'ID du salon (clic droit sur le salon → Copier l'identifiant).
+        </p>
+
+        {!params['notes.discord.channel_id'] ? (
+          <p className="text-xs text-orange-600">
+            Paramètre <code>notes.discord.channel_id</code> introuvable — relancez le seed.
+          </p>
+        ) : (
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={edits['notes.discord.channel_id'] ?? ''}
+              onChange={e => setEdits(p => ({ ...p, 'notes.discord.channel_id': e.target.value }))}
+              placeholder="ex: 1234567890123456789"
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <button
+              onClick={() => save('notes.discord.channel_id')}
+              disabled={saving === 'notes.discord.channel_id' || edits['notes.discord.channel_id'] === params['notes.discord.channel_id']?.valeur}
+              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+            >
+              {saving === 'notes.discord.channel_id' ? '…' : 'OK'}
+            </button>
+            {saved === 'notes.discord.channel_id' && <span className="text-sm text-green-600">✓</span>}
+          </div>
         )}
       </div>
     </div>

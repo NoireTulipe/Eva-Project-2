@@ -96,6 +96,8 @@ async function main() {
     { cle: 'discord.instagram.channel_id', valeur: '',         description: 'Salon Discord pour validation des vignettes Instafacile' },
     { cle: 'backup.path',                  valeur: './prisma/', description: 'Dossier de destination des sauvegardes SQLite (chemin relatif à backend/)' },
     { cle: 'backup.keep',      valeur: '10',               description: 'Nombre de sauvegardes à conserver (rotation automatique)' },
+    { cle: 'notes.police',               valeur: 'Caveat',   description: 'Google Font utilisée pour les post-its (nom exact Google Fonts)' },
+    { cle: 'notes.discord.channel_id',   valeur: '',         description: 'Salon Discord pour les rappels de notes' },
   ]
 
   for (const { cle, valeur, description } of configParams) {
@@ -107,6 +109,22 @@ async function main() {
   }
 
   console.log('Config LLM seedée')
+
+  // ─── Crons ────────────────────────────────────────────────────────────────────
+
+  const crons = [
+    { nom: 'notes.rappels', expression: '* * * * *', actif: true, description: 'Rappels et expiration automatique des notes (chaque minute)' },
+  ]
+
+  for (const { nom, expression, actif, description } of crons) {
+    await prisma.cronConfig.upsert({
+      where: { nom },
+      update: {},
+      create: { nom, expression, actif, description }
+    })
+  }
+
+  console.log('Crons seedés')
 
   // ─── Prompts EVA ──────────────────────────────────────────────────────────────
 
