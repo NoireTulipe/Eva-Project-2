@@ -6,6 +6,7 @@ import { site } from '../../../shared/api.js'
 const IMPRESSION_OPTIONS = ['Noir & blanc', 'Couleurs']
 
 const METHOD_LABELS = {
+  echo_shipping: 'Echo Shipping (poids)',
   flat_rate:     'Tarif fixe',
   free_shipping: 'Livraison gratuite',
   local_pickup:  'Retrait en magasin'
@@ -993,23 +994,20 @@ function NouvelArticle() {
 
 // ─── Onglet : Livraison ──────────────────────────────────────────────────────
 
-function Livraison() {
-  const [zones, setZones]                     = useState([])
-  const [shippingClasses, setShippingClasses] = useState([])
-  const [produits, setProduits]               = useState([])
-  const [loading, setLoading]                 = useState(true)
-  const [error, setError]                     = useState(null)
-  const [editModal, setEditModal]             = useState(null) // { zoneId, method }
-  const [addModal, setAddModal]               = useState(null) // { zoneId }
-  const [saving, setSaving]                   = useState(false)
-  const [seeding, setSeeding]                 = useState(false)
+function parseRates(method) {
+  if (method.method_id !== 'echo_shipping') return null
+  try { return JSON.parse(method.settings?.rates?.value || '[]') } catch { return [] }
+}
 
-  // Affecter aux produits
-  const [selectedClass, setSelectedClass]         = useState('')
-  const [selectedProductIds, setSelectedProductIds] = useState([])
-  const [comboValue, setComboValue]               = useState('')
-  const [applying, setApplying]                   = useState(false)
-  const [applyResult, setApplyResult]             = useState(null)
+function Livraison() {
+  const [zones, setZones]         = useState([])
+  const [produits, setProduits]   = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState(null)
+  const [editModal, setEditModal] = useState(null) // { zoneId, method }
+  const [addModal, setAddModal]   = useState(null) // { zoneId }
+  const [saving, setSaving]       = useState(false)
+  const [seeding, setSeeding]     = useState(false)
 
   useEffect(() => { charger() }, [])
 
@@ -1017,15 +1015,12 @@ function Livraison() {
     setLoading(true)
     setError(null)
     try {
-      const [zonesData, classesData, produitsData] = await Promise.all([
+      const [zonesData, produitsData] = await Promise.all([
         site.getShipping(),
-        site.getShippingClasses(),
         site.getProduitsLite()
       ])
       setZones(zonesData)
-      setShippingClasses(classesData)
       setProduits(produitsData)
-      setSelectedClass(c => c || (classesData[0]?.slug ?? ''))
     } catch (e) {
       setError(e.message)
     } finally {
@@ -1034,7 +1029,7 @@ function Livraison() {
   }
 
   async function handleSeed() {
-    if (!confirm('Créer la zone "France métropolitaine" avec les tarifs La Poste (simple + suivie) ?')) return
+    if (!confirm('Créer la zone "France métropolitaine" avec La Poste simple, La Poste avec suivi et Retrait sur place ?')) return
     setSeeding(true)
     setError(null)
     try {
@@ -1085,33 +1080,10 @@ function Livraison() {
     }
   }
 
-  function ajouterProduit() {
-    const id = parseInt(comboValue)
-    if (!id || selectedProductIds.includes(id)) return
-    setSelectedProductIds(ids => [...ids, id])
-    setComboValue('')
-  }
-
-  async function handleApplier(mode) {
-    if (!selectedClass) return
-    if (mode === 'selection' && !selectedProductIds.length) return
-    setApplying(true)
-    setApplyResult(null)
-    try {
-      const ids = mode === 'all' ? 'all' : selectedProductIds
-      const result = await site.setProductsShippingClass(ids, selectedClass)
-      setApplyResult(`${result.updated} produit${result.updated > 1 ? 's' : ''} mis à jour.`)
-      if (mode === 'selection') setSelectedProductIds([])
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setApplying(false)
-    }
-  }
-
   if (loading) return <div className="text-center py-12 text-gray-400 text-sm">Chargement des zones de livraison…</div>
 
   const hasSeedButton = !zones.some(z => z.name === 'France métropolitaine')
+  const sansPoids = produits.filter(p => !p.weight || p.weight === '0' || p.weight === '')
 
   return (
     <div className="space-y-6">
@@ -1128,7 +1100,7 @@ function Livraison() {
           <div>
             <p className="text-sm font-medium text-blue-800">Aucune zone "France métropolitaine" détectée</p>
             <p className="text-xs text-blue-600 mt-0.5">
-              Crée la zone, les 5 classes de poids et les 2 méthodes. Les tarifs par tranche sont à saisir ensuite dans WC Admin → Expédition.
+              Crée la zone avec 3 méthodes préconfigurées : La Poste simple, La Poste avec suivi (grilles tarifaires La Poste) et Retrait sur place (gratuit).
             </p>
           </div>
           <button
@@ -1156,9 +1128,7 @@ function Livraison() {
             <button
               onClick={() => setAddModal({ zoneId: zone.id })}
               className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
-            >
-              + Ajouter
-            </button>
+            >+ Ajouter</button>
           </div>
 
           {zone.methods.length === 0 ? (
@@ -1169,158 +1139,110 @@ function Livraison() {
                 <tr>
                   <th className="text-left px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide w-2/5">Méthode</th>
                   <th className="text-left px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Type</th>
-                  <th className="text-left px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Tarif de base</th>
+                  <th className="text-left px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Tarif</th>
                   <th className="text-left px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Statut</th>
                   <th className="px-5 py-2 w-28"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {zone.methods.map(method => (
-                  <tr key={method.instance_id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-800">{method.title}</td>
-                    <td className="px-5 py-3 text-gray-500 text-xs">{METHOD_LABELS[method.method_id] || method.method_id}</td>
-                    <td className="px-5 py-3 text-gray-600">
-                      {method.method_id === 'free_shipping'
-                        ? <span className="text-green-600 text-xs font-medium">Gratuit</span>
-                        : method.settings?.cost?.value
-                          ? `${method.settings.cost.value} €`
-                          : '—'}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        method.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {method.enabled ? 'Activé' : 'Désactivé'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex justify-end gap-3">
-                        <button
-                          onClick={() => setEditModal({ zoneId: zone.id, method })}
-                          className="text-xs text-indigo-600 hover:underline"
-                        >Modifier</button>
-                        <button
-                          onClick={() => handleSupprimer(zone.id, method.instance_id)}
-                          className="text-xs text-red-500 hover:underline"
-                        >Supprimer</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {zone.methods.map(method => {
+                  const rates = parseRates(method)
+                  return (
+                    <tr key={method.instance_id} className="hover:bg-gray-50">
+                      <td className="px-5 py-3 font-medium text-gray-800">{method.title}</td>
+                      <td className="px-5 py-3 text-gray-500 text-xs">{METHOD_LABELS[method.method_id] || method.method_id}</td>
+                      <td className="px-5 py-3">
+                        {rates !== null
+                          ? rates.length === 0
+                            ? <span className="text-xs text-gray-400 italic">Aucune grille</span>
+                            : <span className="text-xs text-gray-600">
+                                {Math.min(...rates.map(r => r.price)).toFixed(2)}€
+                                {' → '}
+                                {Math.max(...rates.map(r => r.price)).toFixed(2)}€
+                                <span className="text-gray-400 ml-1">({rates.length} tranches)</span>
+                              </span>
+                          : method.method_id === 'free_shipping'
+                            ? <span className="text-green-600 text-xs font-medium">Gratuit</span>
+                            : method.method_id === 'local_pickup' && (!method.settings?.cost?.value || method.settings.cost.value === '0')
+                              ? <span className="text-green-600 text-xs font-medium">Gratuit</span>
+                              : method.settings?.cost?.value
+                                ? <span className="text-xs text-gray-600">{method.settings.cost.value} €</span>
+                                : <span className="text-xs text-gray-400">—</span>
+                        }
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          method.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {method.enabled ? 'Activé' : 'Désactivé'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex justify-end gap-3">
+                          <button
+                            onClick={() => setEditModal({ zoneId: zone.id, method })}
+                            className="text-xs text-indigo-600 hover:underline"
+                          >Modifier</button>
+                          <button
+                            onClick={() => handleSupprimer(zone.id, method.instance_id)}
+                            className="text-xs text-red-500 hover:underline"
+                          >Supprimer</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}
         </div>
       ))}
 
-      {/* Affecter une classe aux produits */}
-      {shippingClasses.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-1">Affecter une classe d'expédition aux produits</h3>
-          <p className="text-xs text-gray-400 mb-4">
-            La classe détermine la tranche de poids — WooCommerce calcule le tarif correspondant selon la zone du client.
-          </p>
-
-          <Field label="Classe (tranche de poids)">
-            <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} className={`${inputCls} max-w-xs`}>
-              {shippingClasses.map(cls => (
-                <option key={cls.id} value={cls.slug}>{cls.name}</option>
+      {/* Vérification des poids produits */}
+      {produits.length > 0 && (
+        sansPoids.length > 0 ? (
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-1">
+              {sansPoids.length} produit{sansPoids.length > 1 ? 's' : ''} sans poids renseigné
+            </h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Echo Shipping calcule les frais à partir du poids de chaque produit. Ces produits ne seront pas proposés à la livraison.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {sansPoids.map(p => (
+                <span key={p.id} className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded">
+                  {p.name}
+                </span>
               ))}
-            </select>
-          </Field>
-
-          <div className="mt-4 space-y-4">
-            {/* Appliquer à tous */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => handleApplier('all')}
-                disabled={applying || !selectedClass}
-                className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {applying ? 'Application…' : 'Appliquer à tous les produits'}
-              </button>
-              <span className="text-xs text-gray-400">
-                {produits.length} produit{produits.length !== 1 ? 's' : ''} sur WooCommerce
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 text-xs text-gray-400">
-              <div className="flex-1 border-t border-gray-200" />
-              <span>ou sélectionner</span>
-              <div className="flex-1 border-t border-gray-200" />
-            </div>
-
-            {/* Sélection par produit */}
-            <div>
-              <div className="flex gap-2 mb-3">
-                <select
-                  value={comboValue}
-                  onChange={e => setComboValue(e.target.value)}
-                  className={`${inputCls} flex-1`}
-                >
-                  <option value="">— Choisir un produit —</option>
-                  {produits
-                    .filter(p => !selectedProductIds.includes(p.id))
-                    .map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                </select>
-                <button
-                  onClick={ajouterProduit}
-                  disabled={!comboValue}
-                  className="px-3 py-1.5 bg-gray-700 text-white rounded text-sm hover:bg-gray-800 disabled:opacity-40"
-                >
-                  + Ajouter
-                </button>
-              </div>
-
-              {selectedProductIds.length > 0 && (
-                <>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {selectedProductIds.map(id => {
-                      const p = produits.find(p => p.id === id)
-                      return (
-                        <span key={id} className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs px-2 py-1 rounded">
-                          {p?.name || `#${id}`}
-                          <button
-                            onClick={() => setSelectedProductIds(ids => ids.filter(i => i !== id))}
-                            className="ml-1 text-indigo-400 hover:text-indigo-700 font-bold"
-                          >×</button>
-                        </span>
-                      )
-                    })}
-                  </div>
-                  <button
-                    onClick={() => handleApplier('selection')}
-                    disabled={applying || !selectedClass}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                    {applying
-                      ? 'Application…'
-                      : `Appliquer aux ${selectedProductIds.length} produit${selectedProductIds.length > 1 ? 's' : ''} sélectionné${selectedProductIds.length > 1 ? 's' : ''}`}
-                  </button>
-                </>
-              )}
             </div>
           </div>
-
-          {applyResult && (
-            <div className="mt-4 bg-green-50 border border-green-200 rounded p-3 text-sm text-green-700 flex items-center justify-between">
-              <span>✓ {applyResult}</span>
-              <button onClick={() => setApplyResult(null)} className="text-green-400 hover:text-green-600 text-xs font-bold">×</button>
+        ) : (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+            <span className="text-green-500 text-lg font-bold">✓</span>
+            <div>
+              <p className="text-sm font-medium text-green-800">Tous les produits ont un poids renseigné</p>
+              <p className="text-xs text-green-600">
+                {produits.length} produit{produits.length > 1 ? 's' : ''} — Echo Shipping calculera les frais automatiquement.
+              </p>
             </div>
-          )}
-        </div>
+          </div>
+        )
       )}
 
       {editModal && (
-        <EditMethodModal
-          zoneId={editModal.zoneId}
-          method={editModal.method}
-          saving={saving}
-          onClose={() => setEditModal(null)}
-          onSave={handleSauvegarder}
-        />
+        editModal.method.method_id === 'echo_shipping'
+          ? <EditEchoShippingModal
+              method={editModal.method}
+              saving={saving}
+              onClose={() => setEditModal(null)}
+              onSave={handleSauvegarder}
+            />
+          : <EditMethodModal
+              method={editModal.method}
+              saving={saving}
+              onClose={() => setEditModal(null)}
+              onSave={handleSauvegarder}
+            />
       )}
       {addModal && (
         <AddMethodModal
@@ -1329,6 +1251,123 @@ function Livraison() {
           onAdd={handleAjouter}
         />
       )}
+    </div>
+  )
+}
+
+function EditEchoShippingModal({ method, saving, onClose, onSave }) {
+  const [title, setTitle]     = useState(method.title || '')
+  const [enabled, setEnabled] = useState(method.enabled ?? true)
+  const [rates, setRates]     = useState(() => {
+    try { return JSON.parse(method.settings?.rates?.value || '[]') } catch { return [] }
+  })
+
+  const cellCls = 'w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300'
+
+  function updateRate(idx, field, value) {
+    setRates(r => r.map((row, i) => i === idx ? { ...row, [field]: value } : row))
+  }
+
+  function addRate() {
+    const last = rates[rates.length - 1]
+    setRates(r => [...r, { min: last?.max ?? 0, max: 0, price: 0 }])
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const normalized = rates.map(r => ({
+      min:   parseFloat(r.min)   || 0,
+      max:   parseFloat(r.max)   || 0,
+      price: parseFloat(r.price) || 0
+    }))
+    onSave({
+      title,
+      enabled,
+      settings: {
+        title: { value: title },
+        rates: { value: JSON.stringify(normalized) }
+      }
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+          <h3 className="text-sm font-semibold text-gray-800">Modifier — {method.title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+          <Field label="Nom affiché au client">
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} required className={inputCls} />
+          </Field>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-gray-600">Grille tarifaire (en kg)</label>
+              <button type="button" onClick={addRate} className="text-xs text-indigo-600 hover:underline">
+                + Ajouter une tranche
+              </button>
+            </div>
+            <div className="border border-gray-200 rounded overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-3 py-2 text-xs font-medium text-gray-500 text-left">Min (kg)</th>
+                    <th className="px-3 py-2 text-xs font-medium text-gray-500 text-left">Max (kg)</th>
+                    <th className="px-3 py-2 text-xs font-medium text-gray-500 text-left">Prix (€)</th>
+                    <th className="w-8 px-2 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rates.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-3 text-center text-xs text-gray-400 italic">
+                        Aucune tranche — méthode non proposée aux clients
+                      </td>
+                    </tr>
+                  )}
+                  {rates.map((rate, idx) => (
+                    <tr key={idx}>
+                      <td className="px-3 py-1.5">
+                        <input type="number" step="0.001" min="0" value={rate.min}
+                          onChange={e => updateRate(idx, 'min', e.target.value)} className={cellCls} />
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <input type="number" step="0.001" min="0" value={rate.max}
+                          onChange={e => updateRate(idx, 'max', e.target.value)} className={cellCls} />
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <input type="number" step="0.01" min="0" value={rate.price}
+                          onChange={e => updateRate(idx, 'price', e.target.value)} className={cellCls} />
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <button type="button" onClick={() => setRates(r => r.filter((_, i) => i !== idx))}
+                          className="text-red-400 hover:text-red-600 text-lg leading-none font-bold">×</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}
+              className="w-4 h-4 rounded accent-indigo-600" />
+            <span className="text-sm text-gray-700">Méthode activée</span>
+          </label>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">Annuler</button>
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50">
+              {saving ? 'Sauvegarde…' : 'Sauvegarder'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
@@ -1359,7 +1398,7 @@ function EditMethodModal({ method, saving, onClose, onSave }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-800">Modifier la méthode</h3>
+          <h3 className="text-sm font-semibold text-gray-800">Modifier — {method.title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -1368,9 +1407,9 @@ function EditMethodModal({ method, saving, onClose, onSave }) {
           </Field>
 
           {hasCost && (
-            <Field label="Tarif de base (€) — sans classe de poids">
+            <Field label="Coût (€)">
               <input type="number" step="0.01" min="0" value={cost}
-                onChange={e => setCost(e.target.value)} className={inputCls} placeholder="Ex : 5.00" />
+                onChange={e => setCost(e.target.value)} className={inputCls} placeholder="0 = gratuit" />
             </Field>
           )}
 
@@ -1400,9 +1439,7 @@ function EditMethodModal({ method, saving, onClose, onSave }) {
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
-              Annuler
-            </button>
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">Annuler</button>
             <button type="submit" disabled={saving}
               className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50">
               {saving ? 'Sauvegarde…' : 'Sauvegarder'}
@@ -1415,7 +1452,7 @@ function EditMethodModal({ method, saving, onClose, onSave }) {
 }
 
 function AddMethodModal({ saving, onClose, onAdd }) {
-  const [methodId, setMethodId] = useState('flat_rate')
+  const [methodId, setMethodId] = useState('echo_shipping')
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -1437,9 +1474,7 @@ function AddMethodModal({ saving, onClose, onAdd }) {
           </p>
           <div className="flex justify-end gap-2">
             <button onClick={onClose}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
-              Annuler
-            </button>
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">Annuler</button>
             <button onClick={() => onAdd(methodId)} disabled={saving}
               className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50">
               {saving ? 'Création…' : 'Créer'}

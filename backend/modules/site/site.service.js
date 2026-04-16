@@ -542,13 +542,13 @@ export async function listWooProducts(filters = {}) {
   }))
 }
 
-// Liste légère pour le combobox (id + nom + classe d'expédition actuelle)
+// Liste légère pour le combobox (id + nom + poids)
 export async function listWooProductsLite() {
   const products = await wcRequest('GET', '/products?per_page=100&status=any&orderby=title&order=asc')
   return products.map(p => ({
     id: p.id,
     name: p.name,
-    shippingClass: p.shipping_class || ''
+    weight: p.weight || ''
   }))
 }
 
@@ -582,28 +582,23 @@ export async function getShippingClasses() {
   return wcRequest('GET', '/products/shipping_classes?per_page=100')
 }
 
-async function getOrCreateShippingClass(tier) {
-  const existing = await wcRequest('GET', '/products/shipping_classes?per_page=100')
-  const found = existing.find(c => c.slug === tier.slug)
-  if (found) return found
-  return wcRequest('POST', '/products/shipping_classes', {
-    name:        tier.name,
-    slug:        tier.slug,
-    description: `Tranche de poids : ${tier.name}`
-  })
-}
+// ─── Seed livraison — Tarifs La Poste via Echo Shipping ──────────────────────
 
-// ─── Seed livraison — Tarifs La Poste France métropolitaine ──────────────────
-
-const SHIPPING_TIERS = [
-  { name: 'Moins de 100 g', slug: 'moins-100g' },
-  { name: '101 à 250 g',    slug: '101-250g'   },
-  { name: '251 à 500 g',    slug: '251-500g'   },
-  { name: '501 g à 1 kg',   slug: '501g-1kg'   },
-  { name: 'Plus de 1 kg',   slug: 'plus-1kg'   },
+const RATES_SIMPLE = [
+  { min: 0,    max: 0.1,  price: 2.32 },
+  { min: 0.1,  max: 0.25, price: 4.00 },
+  { min: 0.25, max: 0.5,  price: 6.00 },
+  { min: 0.5,  max: 1.0,  price: 7.25 },
+  { min: 1.0,  max: 999,  price: 8.85 },
 ]
-const TARIFS_SIMPLE = ['2.32', '4.00', '6.00', '7.25', '8.85']
-const TARIFS_SUIVI  = ['2.82', '4.50', '6.50', '7.75', '9.35']
+
+const RATES_SUIVI = [
+  { min: 0,    max: 0.1,  price: 2.82 },
+  { min: 0.1,  max: 0.25, price: 4.50 },
+  { min: 0.25, max: 0.5,  price: 6.50 },
+  { min: 0.5,  max: 1.0,  price: 7.75 },
+  { min: 1.0,  max: 999,  price: 9.35 },
+]
 
 export async function seedShipping() {
   const existingZones = await wcRequest('GET', '/shipping/zones')
@@ -611,35 +606,36 @@ export async function seedShipping() {
     throw new Error('La zone "France métropolitaine" existe déjà — seed annulé.')
   }
 
-  // 1. Créer (ou récupérer) les classes d'expédition par tranche de poids
-  const classes = []
-  for (const tier of SHIPPING_TIERS) {
-    classes.push(await getOrCreateShippingClass(tier))
-  }
-
-  // 2. Créer la zone + affecter la France
+  // 1. Zone France
   const zone = await wcRequest('POST', '/shipping/zones', { name: 'France métropolitaine', order: 0 })
   await wcRequest('PUT', `/shipping/zones/${zone.id}/locations`, [{ code: 'FR', type: 'country' }])
 
-  // 3. Expédition simple par la Poste — titre + tarif de base (< 100g)
-  // Note : les tarifs par tranche de poids (class_cost_X) doivent être saisis
-  // dans WC Admin > Expédition après création (le REST API WC ne les accepte
-  // pas à la création avant que la méthode ait été sauvegardée une 1ère fois).
-  const simple = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'flat_rate' })
-  await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${simple.instance_id}`, {
-    title:    'Expédition simple par la Poste',
-    settings: { cost: { value: TARIFS_SIMPLE[0] } }
+  // Helper : crée une instance echo_shipping + configure titre et grille
+  // On fait un GET après le POST pour s'assurer que les settings sont enregistrés
+  async function addEchoMethod(title, rates) {
+    const method = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'echo_shipping' })
+    const fresh  = await wcRequest('GET', `/shipping/zones/${zone.id}/methods/${method.instance_id}`)
+    const settings = {}
+    if ('title' in (fresh.settings || {})) settings.title = { value: title }
+    if ('rates' in (fresh.settings || {})) settings.rates = { value: JSON.stringify(rates) }
+    await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${method.instance_id}`, { title, settings })
+  }
+
+  // 2. La Poste simple
+  await addEchoMethod('La Poste simple', RATES_SIMPLE)
+
+  // 3. La Poste avec suivi
+  await addEchoMethod('La Poste avec suivi', RATES_SUIVI)
+
+  // 4. Retrait sur place (local_pickup natif WC — gratuit)
+  const pickup = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'local_pickup' })
+  await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${pickup.instance_id}`, {
+    title:    'Retrait sur place',
+    settings: { cost: { value: '0' } }
   })
 
-  // 4. Expédition avec suivie par la Poste — titre + tarif de base (< 100g)
-  const suivi = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'flat_rate' })
-  await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${suivi.instance_id}`, {
-    title:    'Expédition avec suivie par la Poste',
-    settings: { cost: { value: TARIFS_SUIVI[0] } }
-  })
-
-  logAction(`Seed livraison : zone ${zone.id}, ${classes.length} classes, 2 méthodes`)
-  return { ok: true, zoneId: zone.id, classes: classes.length }
+  logAction(`Seed livraison : zone ${zone.id}, 3 méthodes (echo_shipping x2 + local_pickup)`)
+  return { ok: true, zoneId: zone.id }
 }
 
 // ─── Livraison — Affecter une classe aux produits ────────────────────────────
