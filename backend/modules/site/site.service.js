@@ -621,26 +621,21 @@ export async function seedShipping() {
   const zone = await wcRequest('POST', '/shipping/zones', { name: 'France métropolitaine', order: 0 })
   await wcRequest('PUT', `/shipping/zones/${zone.id}/locations`, [{ code: 'FR', type: 'country' }])
 
-  // Helper pour construire les settings par classe
-  const buildSettings = (tarifs, baseIndex = 0) => ({
-    cost: { value: tarifs[baseIndex] },
-    ...Object.fromEntries(classes.map((cls, i) => [
-      `class_cost_${cls.id}`, { value: tarifs[i] }
-    ]))
-  })
-
-  // 3. Expédition simple par la Poste
+  // 3. Expédition simple par la Poste — titre + tarif de base (< 100g)
+  // Note : les tarifs par tranche de poids (class_cost_X) doivent être saisis
+  // dans WC Admin > Expédition après création (le REST API WC ne les accepte
+  // pas à la création avant que la méthode ait été sauvegardée une 1ère fois).
   const simple = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'flat_rate' })
   await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${simple.instance_id}`, {
     title:    'Expédition simple par la Poste',
-    settings: buildSettings(TARIFS_SIMPLE)
+    settings: { cost: { value: TARIFS_SIMPLE[0] } }
   })
 
-  // 4. Expédition avec suivie par la Poste
+  // 4. Expédition avec suivie par la Poste — titre + tarif de base (< 100g)
   const suivi = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'flat_rate' })
   await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${suivi.instance_id}`, {
     title:    'Expédition avec suivie par la Poste',
-    settings: buildSettings(TARIFS_SUIVI)
+    settings: { cost: { value: TARIFS_SUIVI[0] } }
   })
 
   logAction(`Seed livraison : zone ${zone.id}, ${classes.length} classes, 2 méthodes`)

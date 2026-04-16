@@ -1128,7 +1128,7 @@ function Livraison() {
           <div>
             <p className="text-sm font-medium text-blue-800">Aucune zone "France métropolitaine" détectée</p>
             <p className="text-xs text-blue-600 mt-0.5">
-              Initialise automatiquement les tarifs La Poste avec les tranches de poids (5 classes, 2 méthodes).
+              Crée la zone, les 5 classes de poids et les 2 méthodes. Les tarifs par tranche sont à saisir ensuite dans WC Admin → Expédition.
             </p>
           </div>
           <button
