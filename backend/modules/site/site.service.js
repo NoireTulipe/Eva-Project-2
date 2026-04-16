@@ -568,7 +568,35 @@ export async function addShippingMethod(zoneId, methodId) {
   return wcRequest('POST', `/shipping/zones/${zoneId}/methods`, { method_id: methodId })
 }
 
+// Met à jour les rates d'une instance echo_shipping via l'endpoint REST custom du plugin
+// (contourne validate_rates_table_field qui lit $_POST et échoue via REST)
+async function updateEchoShippingRates(instanceId, ratesJson) {
+  const url = `${WP_BASE}/wp-json/echo-shipping/v1/instances/${instanceId}/rates`
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Authorization': getWcAuth(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rates: ratesJson })
+  })
+  const json = await res.json()
+  if (!res.ok) {
+    throw new Error(`Echo Shipping REST → ${res.status} : ${json.message || JSON.stringify(json)}`)
+  }
+  return json
+}
+
 export async function updateShippingMethod(zoneId, instanceId, data) {
+  // Pour echo_shipping : mettre à jour titre/enabled via WC, rates via endpoint custom
+  const ratesValue = data?.settings?.rates?.value
+  if (ratesValue !== undefined) {
+    // 1. Mise à jour titre + enabled sans les settings (évite la 500 sur validate_rates_table_field)
+    const wcPayload = {}
+    if (data.title   !== undefined) wcPayload.title   = data.title
+    if (data.enabled !== undefined) wcPayload.enabled = data.enabled
+    const result = await wcRequest('PUT', `/shipping/zones/${zoneId}/methods/${instanceId}`, wcPayload)
+    // 2. Mise à jour des rates via l'endpoint REST du plugin
+    await updateEchoShippingRates(instanceId, ratesValue)
+    return result
+  }
   return wcRequest('PUT', `/shipping/zones/${zoneId}/methods/${instanceId}`, data)
 }
 
@@ -611,14 +639,11 @@ export async function seedShipping() {
   await wcRequest('PUT', `/shipping/zones/${zone.id}/locations`, [{ code: 'FR', type: 'country' }])
 
   // Helper : crée une instance echo_shipping + configure titre et grille
-  // On fait un GET après le POST pour s'assurer que les settings sont enregistrés
+  // Le titre passe par WC REST, les rates via l'endpoint REST custom du plugin
   async function addEchoMethod(title, rates) {
     const method = await wcRequest('POST', `/shipping/zones/${zone.id}/methods`, { method_id: 'echo_shipping' })
-    const fresh  = await wcRequest('GET', `/shipping/zones/${zone.id}/methods/${method.instance_id}`)
-    const settings = {}
-    if ('title' in (fresh.settings || {})) settings.title = { value: title }
-    if ('rates' in (fresh.settings || {})) settings.rates = { value: JSON.stringify(rates) }
-    await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${method.instance_id}`, { title, settings })
+    await wcRequest('PUT', `/shipping/zones/${zone.id}/methods/${method.instance_id}`, { title })
+    await updateEchoShippingRates(method.instance_id, JSON.stringify(rates))
   }
 
   // 2. La Poste simple
