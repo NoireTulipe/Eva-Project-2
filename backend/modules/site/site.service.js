@@ -574,7 +574,7 @@ async function updateEchoShippingRates(instanceId, ratesJson) {
   const url = `${WP_BASE}/wp-json/echo-shipping/v1/instances/${instanceId}/rates`
   const res = await fetch(url, {
     method: 'PUT',
-    headers: { 'Authorization': getWcAuth(), 'Content-Type': 'application/json' },
+    headers: { 'Authorization': getWpAuth(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ rates: ratesJson })
   })
   const json = await res.json()
