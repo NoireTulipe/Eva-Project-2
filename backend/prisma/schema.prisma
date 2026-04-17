@@ -250,8 +250,17 @@ model User {
   actif        Boolean       @default(true)
   discordId    String?       @unique
   memRelations MemRelation[]
+  deviceTokens DeviceToken[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+}
+
+model DeviceToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  createdAt DateTime @default(now())
 }
 
 // ─── MAIL ─────────────────────────────────────────────────────────────────────

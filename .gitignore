@@ -9,3 +9,4 @@ dist/
 Thumbs.db
 logs/*.log
 archives-eva1/
+backend/config/firebase-service-account.json

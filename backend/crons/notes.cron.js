@@ -8,6 +8,7 @@
 
 import prisma from '../config/db.js'
 import { logAction, logError } from '../logs/logger.js'
+import { sendPush, getAllTokens } from '../notifications/push.js'
 
 // Client Discord injecté depuis bot.js via setNotesDiscordClient()
 let _discordClient = null
@@ -71,6 +72,14 @@ async function envoyerRappel(note) {
     logError(`Notes rappel Discord (note #${note.id}) : ${err.message}`)
   }
 
-  // ── Android push — préparé, à brancher quand le module push sera actif ───────
-  // await envoyerPushAndroid({ titre: 'Rappel', corps: note.contenu })
+  // ── Android push ─────────────────────────────────────────────────────────────
+  try {
+    const tokens = await getAllTokens(prisma)
+    if (tokens.length > 0) {
+      const extrait = note.contenu.length > 100 ? note.contenu.slice(0, 100) + '…' : note.contenu
+      await sendPush(tokens, { title: '📌 Rappel', body: extrait })
+    }
+  } catch (err) {
+    logError(`Notes rappel push (note #${note.id}) : ${err.message}`)
+  }
 }
