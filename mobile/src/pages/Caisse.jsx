@@ -85,6 +85,7 @@ function CaisseActive({ session }) {
   const [produits, setProduits] = useState([])
   const [methodes, setMethodes] = useState([])
   const [categorieActive, setCategorieActive] = useState('__tous__')
+  const [recherche, setRecherche] = useState('')
   const [panier, setPanier] = useState([])
   const [showCart, setShowCart] = useState(false)
   const [showPaiement, setShowPaiement] = useState(false)
@@ -163,9 +164,9 @@ function CaisseActive({ session }) {
     return !r || r === rayonActif
   })
 
-  const produitsFiltres = categorieActive === '__tous__'
-    ? produitsDuRayon
-    : produitsDuRayon.filter(p => p.categorieId === parseInt(categorieActive))
+  const produitsFiltres = produitsDuRayon
+    .filter(p => categorieActive === '__tous__' || p.categorieId === parseInt(categorieActive))
+    .filter(p => !recherche || p.nom.toLowerCase().includes(recherche.toLowerCase()))
 
   const totalPanier = panier.reduce((s, l) => s + l.prixFinal * l.quantite, 0)
   const nbArticles = panier.reduce((s, l) => s + l.quantite, 0)
@@ -261,6 +262,22 @@ function CaisseActive({ session }) {
               </svg>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Recherche */}
+      <div className="flex-shrink-0 px-4 pt-3 pb-0 bg-white">
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="search"
+            value={recherche}
+            onChange={e => setRecherche(e.target.value)}
+            placeholder="Rechercher un produit…"
+            className="w-full bg-gray-100 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
         </div>
       </div>
 

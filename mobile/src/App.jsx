@@ -7,12 +7,14 @@ import Compta from './pages/Compta.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import Toast from './components/Toast.jsx'
 import { auth } from './shared/api.js'
+import { usePushNotifications } from './shared/usePushNotifications.js'
 
 function PrivateRoute({ children }) {
   return auth.isLoggedIn() ? children : <Navigate to="/login" replace />
 }
 
 function AppLayout() {
+  usePushNotifications()
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-hidden">

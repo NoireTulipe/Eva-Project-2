@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "712448024155",
+    "project_id": "com-echodeplumes-eva",
+    "storage_bucket": "com-echodeplumes-eva.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:712448024155:android:d007ddbe4e6a2192d9e97e",
+        "android_client_info": {
+          "package_name": "com.echodeplumes.eva"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyATkjF6LtvnwfhmzHBY-D7QgNz_O2DfJpw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

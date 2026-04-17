@@ -176,6 +176,13 @@ export const frais = {
   supprimer:      (id)              => request('DELETE', `/ventes/frais/${id}`),
 }
 
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+export const notifications = {
+  enregistrerToken: (token) => request('POST', '/notifications/token', { token }),
+  supprimerToken:   (token) => request('DELETE', '/notifications/token', { token }),
+}
+
 // ─── Référentiels ─────────────────────────────────────────────────────────────
 
 export const ref = {

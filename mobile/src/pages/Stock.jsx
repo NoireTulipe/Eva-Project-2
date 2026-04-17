@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
-import { produits as produitsApi, ref as refApi, getImageUrl } from '../shared/api.js'
+import { produits as produitsApi, ref as refApi, getThumbUrl } from '../shared/api.js'
 import { useToast } from '../shared/toast.jsx'
 
 function eur(v) {
@@ -200,7 +200,7 @@ function ProduitLigne({ produit, categorie, onEdit, onImage }) {
     : stockAlerte ? 'bg-amber-400'
     : 'bg-emerald-400'
 
-  const imgUrl = getImageUrl(produit.imageUrl)
+  const imgUrl = getThumbUrl(produit.imageUrl)
 
   return (
     <div className={`w-full bg-white rounded-2xl shadow-sm flex items-center gap-3 overflow-hidden ${inactif ? 'opacity-50' : ''}`}>
@@ -256,7 +256,7 @@ function ImageProduitSheet({ produit, onUpdate, onClose }) {
   const [blob, setBlob] = useState(null)          // Blob à envoyer
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const imgUrl = getImageUrl(produit.imageUrl)
+  const imgUrl = getThumbUrl(produit.imageUrl)
 
   async function prendrePhoto(source) {
     try {
