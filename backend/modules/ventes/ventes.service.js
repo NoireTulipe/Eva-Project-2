@@ -295,6 +295,18 @@ export async function ajouterFraisLibre(data) {
   })
 }
 
+export async function modifierFrais(id, data) {
+  return prisma.frais.update({
+    where: { id },
+    data: {
+      typeFraisId: data.typeFraisId,
+      libelle: data.libelle,
+      montant: data.montant,
+    },
+    include: { typeFrais: true },
+  })
+}
+
 export async function supprimerFrais(id) {
   return prisma.frais.delete({ where: { id } })
 }

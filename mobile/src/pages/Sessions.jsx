@@ -33,6 +33,7 @@ export default function Sessions() {
   const [loading, setLoading] = useState(true)
   const [showCloture, setShowCloture] = useState(false)
   const [showFrais, setShowFrais] = useState(false)
+  const [fraisAModifier, setFraisAModifier] = useState(null)
   const [showOuvrir, setShowOuvrir] = useState(false)
   const [limite, setLimite] = useState(() => {
     const saved = parseInt(localStorage.getItem(STORAGE_LIMIT_KEY))
@@ -150,6 +151,14 @@ export default function Sessions() {
                     onAnnulerVente={annulerVente}
                     onCloture={() => setShowCloture(true)}
                     onAjouterFrais={() => setShowFrais(true)}
+                    onModifierFrais={(f) => setFraisAModifier(f)}
+                    onSupprimerFrais={async (id) => {
+                      try {
+                        await fraisApi.supprimer(id)
+                        show('Frais supprimé', 'success')
+                        charger()
+                      } catch (err) { show(err.message, 'error') }
+                    }}
                   />
                 )
               }
@@ -212,6 +221,21 @@ export default function Sessions() {
         />
       )}
 
+      {fraisAModifier && (
+        <ModifierFraisSheet
+          frais={fraisAModifier}
+          onSave={async (data) => {
+            try {
+              await fraisApi.modifier(fraisAModifier.id, data)
+              show('Frais modifié ✓', 'success')
+              setFraisAModifier(null)
+              charger()
+            } catch (err) { show(err.message, 'error') }
+          }}
+          onClose={() => setFraisAModifier(null)}
+        />
+      )}
+
       {showOuvrir && (
         <OuvrirSessionSheet
           onOuverte={(s) => {
@@ -229,8 +253,9 @@ export default function Sessions() {
 
 // ─── Card session active ──────────────────────────────────────────────────────
 
-function SessionActiveCard({ session, onAnnulerVente, onCloture, onAjouterFrais }) {
+function SessionActiveCard({ session, onAnnulerVente, onCloture, onAjouterFrais, onModifierFrais, onSupprimerFrais }) {
   const [expanded, setExpanded] = useState(false)
+  const [showProduits, setShowProduits] = useState(false)
   const caTotal = session.ventes?.filter(v => !v.annulee).reduce((s, v) => s + calcMontantVente(v), 0) || 0
   const nbVentes = session.ventes?.filter(v => !v.annulee).length || 0
   const totalFrais = session.frais?.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0) || 0
@@ -257,20 +282,34 @@ function SessionActiveCard({ session, onAnnulerVente, onCloture, onAjouterFrais 
         </div>
       </div>
 
-      <div className="flex gap-2 px-4 py-3 border-b border-gray-100">
+      <div className="grid grid-cols-2 gap-2 px-4 py-3 border-b border-gray-100">
         <button onClick={() => setExpanded(!expanded)}
-          className="flex-1 py-3 bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 active:scale-95 transition-transform">
-          {expanded ? 'Masquer' : `Détail (${session.ventes?.length || 0})`}
+          className="py-3 bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 active:scale-95 transition-transform">
+          {expanded ? 'Masquer paniers' : `Paniers (${session.ventes?.length || 0})`}
+        </button>
+        <button onClick={() => setShowProduits(true)}
+          className="py-3 bg-indigo-50 rounded-xl text-sm font-semibold text-indigo-600 active:scale-95 transition-transform">
+          Produits vendus
         </button>
         <button onClick={onAjouterFrais}
-          className="flex-1 py-3 bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 active:scale-95 transition-transform">
+          className="py-3 bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 active:scale-95 transition-transform">
           + Frais
         </button>
         <button onClick={onCloture}
-          className="flex-1 py-3 bg-red-50 rounded-xl text-sm font-bold text-red-600 active:scale-95 transition-transform">
+          className="py-3 bg-red-50 rounded-xl text-sm font-bold text-red-600 active:scale-95 transition-transform">
           Clôturer
         </button>
       </div>
+
+      {/* Frais de session */}
+      {session.frais?.length > 0 && (
+        <div className="border-b border-gray-100">
+          <p className="px-5 pt-3 pb-1 text-xs font-bold text-gray-400 uppercase tracking-widest">Frais</p>
+          {session.frais.map(f => (
+            <FraisLigne key={f.id} frais={f} onModifier={() => onModifierFrais(f)} onSupprimer={() => onSupprimerFrais(f.id)} />
+          ))}
+        </div>
+      )}
 
       {expanded && session.ventes?.length > 0 && (
         <div className="divide-y divide-gray-50">
@@ -279,6 +318,47 @@ function SessionActiveCard({ session, onAnnulerVente, onCloture, onAjouterFrais 
           ))}
         </div>
       )}
+
+      {showProduits && (
+        <ProduitsVendusSheet
+          ventes={session.ventes || []}
+          onClose={() => setShowProduits(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function FraisLigne({ frais, onModifier, onSupprimer }) {
+  const [confirm, setConfirm] = useState(false)
+  return (
+    <div className="flex items-center justify-between px-5 py-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-700 truncate">{frais.libelle}</p>
+        <p className="text-xs text-gray-400">{frais.typeFrais?.nom}</p>
+      </div>
+      <div className="flex items-center gap-2 ml-3">
+        <span className="text-sm font-bold text-red-500">−{eur(frais.montant)}</span>
+        {confirm ? (
+          <>
+            <button onClick={onSupprimer} className="px-2.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold">Oui</button>
+            <button onClick={() => setConfirm(false)} className="px-2.5 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-xs">Non</button>
+          </>
+        ) : (
+          <>
+            <button onClick={onModifier} className="p-1.5 bg-gray-100 rounded-lg active:scale-95 transition-transform">
+              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+              </svg>
+            </button>
+            <button onClick={() => setConfirm(true)} className="p-1.5 bg-red-50 rounded-lg active:scale-95 transition-transform">
+              <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -534,6 +614,131 @@ function AjouterFraisSheet({ sessionId, onSave, onClose }) {
         <button onClick={handleSave} disabled={saving || !typeFraisId || !libelle.trim() || !montant}
           className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl font-bold text-base active:scale-95 transition-transform disabled:opacity-40 shadow-lg shadow-indigo-200">
           {saving ? 'Ajout…' : 'Ajouter le frais'}
+        </button>
+      </div>
+    </>
+  )
+}
+
+// ─── Sheet produits vendus ────────────────────────────────────────────────────
+
+function ProduitsVendusSheet({ ventes, onClose }) {
+  const ventesValides = ventes.filter(v => !v.annulee)
+
+  // Agrège les lignes par produit
+  const parProduit = {}
+  for (const v of ventesValides) {
+    for (const l of (v.lignes || [])) {
+      const key = l.produit?.id ?? l.produitId
+      if (!parProduit[key]) {
+        parProduit[key] = { nom: l.produit?.nom || `#${key}`, qte: 0, total: 0 }
+      }
+      const pu = parseFloat(l.prixUnitaire) || 0
+      const remise = parseFloat(l.remise) || 0
+      parProduit[key].qte += l.quantite
+      parProduit[key].total += pu * l.quantite * (1 - remise / 100)
+    }
+  }
+
+  const lignes = Object.values(parProduit).sort((a, b) => b.qte - a.qte)
+  const totalGlobal = lignes.reduce((s, l) => s + l.total, 0)
+  const qteGlobale = lignes.reduce((s, l) => s + l.qte, 0)
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-30" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-40 shadow-2xl flex flex-col max-h-[80vh]">
+        <div className="flex-shrink-0 px-6 pt-5 pb-3">
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+          </div>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-gray-800">Produits vendus</h3>
+            <span className="text-sm text-gray-400">{qteGlobale} ex. · {eur(totalGlobal)}</span>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 pb-safe">
+          {lignes.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-8">Aucune vente</p>
+          ) : (
+            <div className="space-y-1 pb-4">
+              {lignes.map((l, i) => (
+                <div key={i} className="flex items-center justify-between py-3 border-b border-gray-50">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{l.nom}</p>
+                  </div>
+                  <div className="flex items-center gap-4 ml-3 flex-shrink-0">
+                    <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full">×{l.qte}</span>
+                    <span className="text-sm font-bold text-gray-700 w-20 text-right">{eur(l.total)}</span>
+                  </div>
+                </div>
+              ))}
+              <div className="flex justify-between items-center pt-3">
+                <span className="text-sm font-bold text-indigo-600">Total</span>
+                <span className="text-base font-extrabold text-indigo-700">{eur(totalGlobal)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── Sheet modifier un frais ──────────────────────────────────────────────────
+
+function ModifierFraisSheet({ frais, onSave, onClose }) {
+  const [typesFrais, setTypesFrais] = useState([])
+  const [typeFraisId, setTypeFraisId] = useState(String(frais.typeFraisId))
+  const [libelle, setLibelle] = useState(frais.libelle)
+  const [montant, setMontant] = useState(String(frais.montant))
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    refApi.getAll('types-frais').then(t => setTypesFrais(t))
+  }, [])
+
+  async function handleSave() {
+    if (!typeFraisId || !libelle.trim() || !montant) return
+    setSaving(true)
+    await onSave({ typeFraisId: parseInt(typeFraisId), libelle: libelle.trim(), montant: parseFloat(String(montant).replace(',', '.')) })
+    setSaving(false)
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-30" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-40 shadow-2xl px-6 pt-5 pb-safe">
+        <div className="flex justify-center mb-5">
+          <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-800 mb-5">Modifier le frais</h3>
+
+        <div className="space-y-4 mb-5">
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Type</label>
+            <select value={typeFraisId} onChange={e => setTypeFraisId(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-base bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              {typesFrais.map(t => <option key={t.id} value={t.id}>{t.nom}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Libellé</label>
+            <input type="text" value={libelle} onChange={e => setLibelle(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-base bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Montant (€)</label>
+            <input type="text" value={montant} onChange={e => setMontant(e.target.value)}
+              inputMode="decimal"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-base bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white" />
+          </div>
+        </div>
+
+        <button onClick={handleSave} disabled={saving || !typeFraisId || !libelle.trim() || !montant}
+          className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl font-bold text-base active:scale-95 transition-transform disabled:opacity-40 shadow-lg shadow-indigo-200">
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
         </button>
       </div>
     </>

@@ -27,6 +27,7 @@ import {
   getFrais,
   ajouterFraisSession,
   ajouterFraisLibre,
+  modifierFrais,
   supprimerFrais,
   getPertes,
   creerPerte,
@@ -322,6 +323,19 @@ router.post('/sessions/:id/frais', async (req, res) => {
   if (montant == null) return res.status(400).json({ error: 'Le montant est requis' })
   try {
     res.status(201).json(await ajouterFraisSession(Number(req.params.id), req.body))
+  } catch (err) {
+    logError(err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.put('/frais/:id', async (req, res) => {
+  const { typeFraisId, libelle, montant } = req.body
+  if (!typeFraisId) return res.status(400).json({ error: 'Le type de frais est requis' })
+  if (!libelle?.trim()) return res.status(400).json({ error: 'Le libellé est requis' })
+  if (montant == null) return res.status(400).json({ error: 'Le montant est requis' })
+  try {
+    res.json(await modifierFrais(Number(req.params.id), req.body))
   } catch (err) {
     logError(err.message)
     res.status(500).json({ error: err.message })

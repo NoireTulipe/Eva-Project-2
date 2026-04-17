@@ -172,6 +172,8 @@ export const frais = {
     return request('GET', `/ventes/frais${qs ? '?' + qs : ''}`)
   },
   ajouterSession: (sessionId, data) => request('POST', `/ventes/sessions/${sessionId}/frais`, data),
+  modifier:       (id, data)        => request('PUT',  `/ventes/frais/${id}`, data),
+  supprimer:      (id)              => request('DELETE', `/ventes/frais/${id}`),
 }
 
 // ─── Référentiels ─────────────────────────────────────────────────────────────
