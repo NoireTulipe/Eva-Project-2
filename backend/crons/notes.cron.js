@@ -55,11 +55,10 @@ export async function traiterNotes() {
 async function envoyerRappel(note) {
   // ── Discord ──────────────────────────────────────────────────────────────────
   try {
-    const param = await prisma.configParam.findUnique({
-      where: { cle: 'notes.discord.channel_id' }
-    })
+    const discordCanal = await prisma.configParam.findUnique({ where: { cle: 'notif.notes.discord' } })
+    const param = await prisma.configParam.findUnique({ where: { cle: 'notes.discord.channel_id' } })
 
-    if (param?.valeur && _discordClient?.isReady()) {
+    if (discordCanal?.valeur !== 'false' && param?.valeur && _discordClient?.isReady()) {
       const channel = await _discordClient.channels.fetch(param.valeur)
       if (channel) {
         const extrait = note.contenu.length > 200
@@ -74,10 +73,13 @@ async function envoyerRappel(note) {
 
   // ── Android push ─────────────────────────────────────────────────────────────
   try {
-    const tokens = await getAllTokens(prisma)
-    if (tokens.length > 0) {
-      const extrait = note.contenu.length > 100 ? note.contenu.slice(0, 100) + '…' : note.contenu
-      await sendPush(tokens, { title: '📌 Rappel', body: extrait })
+    const pushParam = await prisma.configParam.findUnique({ where: { cle: 'notif.notes.push' } })
+    if (pushParam?.valeur !== 'false') {
+      const tokens = await getAllTokens(prisma)
+      if (tokens.length > 0) {
+        const extrait = note.contenu.length > 100 ? note.contenu.slice(0, 100) + '…' : note.contenu
+        await sendPush(tokens, { title: '📌 Rappel', body: extrait })
+      }
     }
   } catch (err) {
     logError(`Notes rappel push (note #${note.id}) : ${err.message}`)

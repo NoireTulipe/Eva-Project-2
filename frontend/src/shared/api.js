@@ -276,6 +276,13 @@ export const admin = {
   getSauvegardeListe: () => request('GET', '/admin/sauvegardes/liste'),
   restoreSauvegarde: (fichier) => request('POST', `/admin/sauvegardes/restore/${encodeURIComponent(fichier)}`),
 
+  // Notifications
+  getNotifTokens: () => request('GET', '/admin/notifications/tokens'),
+  deleteNotifToken: (id) => request('DELETE', `/admin/notifications/tokens/${id}`),
+  testPush: (data = {}) => request('POST', '/admin/notifications/test', data),
+  getNotifConfig: () => request('GET', '/admin/notifications/config'),
+  setNotifConfig: (cle, valeur) => request('PUT', '/admin/notifications/config', { cle, valeur }),
+
   // Système
   getSystemeStatus: () => request('GET', '/admin/systeme/status'),
   restart: () => request('POST', '/admin/systeme/restart')

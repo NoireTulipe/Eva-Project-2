@@ -392,6 +392,67 @@ router.post('/sauvegardes/restore/:fichier', async (req, res) => {
   res.json({ ok: true, fichier, sauvegardeAvant: safetyName })
 })
 
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+// GET /admin/notifications/tokens — liste les appareils enregistrés
+router.get('/notifications/tokens', async (req, res) => {
+  const tokens = await prisma.deviceToken.findMany({
+    include: { user: { select: { id: true, nom: true, prenom: true, email: true } } },
+    orderBy: { createdAt: 'desc' }
+  })
+  res.json(tokens)
+})
+
+// DELETE /admin/notifications/tokens/:id
+router.delete('/notifications/tokens/:id', async (req, res) => {
+  const id = parseInt(req.params.id)
+  await prisma.deviceToken.delete({ where: { id } })
+  logAction(`Admin: device token ${id} supprimé`)
+  res.status(204).end()
+})
+
+// POST /admin/notifications/test — envoie une notification de test
+router.post('/notifications/test', async (req, res) => {
+  const { titre = 'Test EVA 🔔', corps = 'Les notifications fonctionnent ✓' } = req.body
+  const { getAllTokens, sendPush } = await import('../notifications/push.js')
+  const tokens = await getAllTokens(prisma)
+  if (!tokens.length) {
+    return res.status(400).json({ error: 'Aucun appareil enregistré — recompiler et réinstaller l\'APK' })
+  }
+  try {
+    const result = await sendPush(tokens, { title: titre, body: corps })
+    logAction(`Admin: test push envoyé — ${result.successCount}/${tokens.length} succès`)
+    res.json({ ok: true, envoyes: tokens.length, succes: result.successCount, echecs: result.failureCount })
+  } catch (err) {
+    logError(`Admin: test push échoué — ${err.message}`)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /admin/notifications/config — config canaux (clés préfixées notif.)
+router.get('/notifications/config', async (req, res) => {
+  const params = await prisma.configParam.findMany({
+    where: { cle: { startsWith: 'notif.' } },
+    orderBy: { cle: 'asc' }
+  })
+  res.json(params)
+})
+
+// PUT /admin/notifications/config — upsert un param de canal
+router.put('/notifications/config', async (req, res) => {
+  const { cle, valeur } = req.body
+  if (!cle || !cle.startsWith('notif.')) {
+    return res.status(400).json({ error: 'La clé doit commencer par notif.' })
+  }
+  const param = await prisma.configParam.upsert({
+    where: { cle },
+    create: { cle, valeur: String(valeur), description: `Canal notification — ${cle}` },
+    update: { valeur: String(valeur) }
+  })
+  logAction(`Admin: notif config ${cle} → ${valeur}`)
+  res.json(param)
+})
+
 // ─── SYSTÈME ──────────────────────────────────────────────────────────────────
 
 // POST /admin/systeme/restart — redémarrage du processus
