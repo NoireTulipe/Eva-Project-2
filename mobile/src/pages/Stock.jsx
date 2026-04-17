@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
 import { produits as produitsApi, ref as refApi, getThumbUrl } from '../shared/api.js'
 import { useToast } from '../shared/toast.jsx'
+import SwipeableRow from '../components/SwipeableRow.jsx'
 
 function eur(v) {
   const n = parseFloat(v)
@@ -203,49 +204,53 @@ function ProduitLigne({ produit, categorie, onEdit, onImage }) {
   const imgUrl = getThumbUrl(produit.imageUrl)
 
   return (
-    <div className={`w-full bg-white rounded-2xl shadow-sm flex items-center gap-3 overflow-hidden ${inactif ? 'opacity-50' : ''}`}>
-      {/* Tap principal → édition stock */}
-      <button onClick={onEdit} className="flex items-center gap-3 flex-1 min-w-0 px-4 py-3.5 text-left active:bg-gray-50 transition-colors">
-        <div className={`w-1.5 self-stretch rounded-full flex-shrink-0 ${barColor}`} />
-
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-800 text-sm truncate">{produit.nom}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{categorie?.nom || '—'} · {eur(produit.prixVenteTTC)}</p>
-        </div>
-
-        <div className={`flex-shrink-0 rounded-2xl px-3 py-2 text-center min-w-[56px] ${stockInconnu ? 'bg-gray-100' : stockColor}`}>
-          {stockInconnu ? (
-            <p className="text-gray-400 text-xs font-medium leading-tight">Sans<br/>suivi</p>
-          ) : stockNul ? (
-            <p className="text-red-600 text-xs font-bold leading-tight">Rupture</p>
-          ) : (
-            <>
-              <p className={`font-extrabold text-xl leading-none ${stockAlerte ? 'text-amber-700' : 'text-emerald-700'}`}>{produit.stock}</p>
-              <p className={`text-xs font-semibold mt-0.5 ${stockAlerte ? 'text-amber-500' : 'text-emerald-500'}`}>ex.</p>
-            </>
-          )}
-        </div>
-
-        <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-
-      {/* Icône caméra discrète */}
-      <button
-        onClick={onImage}
-        className="flex-shrink-0 pr-3 pl-1 py-3.5 flex items-center justify-center active:scale-90 transition-transform"
-        aria-label="Image produit"
+    <div className={`rounded-2xl shadow-sm overflow-hidden ${inactif ? 'opacity-50' : ''}`}>
+      <SwipeableRow
+        actionsWidth={80}
+        rightActions={
+          <button
+            onClick={onImage}
+            className="flex-1 flex flex-col items-center justify-center bg-indigo-500 active:bg-indigo-600 text-white gap-1"
+          >
+            <span className="text-2xl">📷</span>
+            <span className="text-xs font-bold">Photo</span>
+          </button>
+        }
       >
-        {imgUrl ? (
-          <img src={imgUrl} className="w-8 h-8 rounded-lg object-cover border border-gray-100" alt="" />
-        ) : (
-          <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        )}
-      </button>
+        <button
+          onClick={onEdit}
+          className="w-full bg-white flex items-center gap-3 px-4 py-3.5 text-left active:bg-gray-50 transition-colors"
+        >
+          <div className={`w-1.5 self-stretch rounded-full flex-shrink-0 ${barColor}`} />
+
+          {/* Thumbnail */}
+          <div className="flex-shrink-0 w-9 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+            {imgUrl ? (
+              <img src={imgUrl} className="w-full h-full object-cover" alt="" />
+            ) : (
+              <span className="text-lg">📚</span>
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-800 text-sm truncate">{produit.nom}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{categorie?.nom || '—'} · {eur(produit.prixVenteTTC)}</p>
+          </div>
+
+          <div className={`flex-shrink-0 rounded-2xl px-3 py-2 text-center min-w-[56px] ${stockInconnu ? 'bg-gray-100' : stockColor}`}>
+            {stockInconnu ? (
+              <p className="text-gray-400 text-xs font-medium leading-tight">Sans<br/>suivi</p>
+            ) : stockNul ? (
+              <p className="text-red-600 text-xs font-bold leading-tight">Rupture</p>
+            ) : (
+              <>
+                <p className={`font-extrabold text-xl leading-none ${stockAlerte ? 'text-amber-700' : 'text-emerald-700'}`}>{produit.stock}</p>
+                <p className={`text-xs font-semibold mt-0.5 ${stockAlerte ? 'text-amber-500' : 'text-emerald-500'}`}>ex.</p>
+              </>
+            )}
+          </div>
+        </button>
+      </SwipeableRow>
     </div>
   )
 }
