@@ -568,82 +568,12 @@ export const vocal = {
 
   deleteSession: (sessionId) => request('DELETE', `/vocal/session/${sessionId}`),
 
-  /**
-   * Génération SSE — POST le texte et les paramètres, lit le stream d'événements.
-   *
-   * @param {string} text    - Texte à synthétiser
-   * @param {object} params  - { mode, size, format, speed }
-   * @param {function} onEvent - callback appelé pour chaque événement parsé
-   * @returns {function} cancel() — annuler la génération
-   */
-  generate: (text, params, onEvent) => {
-    const controller = new AbortController()
+  /** Lance la génération, retourne { sessionId, chunkCount, ... } */
+  generate: (text, params) =>
+    request('POST', '/vocal/generate', { text, ...params }),
 
-    fetch('/api/vocal/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getToken()}`
-      },
-      body: JSON.stringify({ text, ...params }),
-      signal: controller.signal
-    }).then(async (response) => {
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        onEvent({ type: 'error', message: err.error || `Erreur ${response.status}` })
-        return
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let currentEvent = null
-      let currentData = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        // Traiter ligne par ligne (format SSE standard)
-        while (buffer.includes('\n')) {
-          const idx = buffer.indexOf('\n')
-          const line = buffer.slice(0, idx).trimEnd()
-          buffer = buffer.slice(idx + 1)
-
-          if (line === '') {
-            // Ligne vide = fin de l'événement
-            if (currentEvent && currentData) {
-              try {
-                const data = JSON.parse(currentData)
-                onEvent({ type: currentEvent, ...data })
-              } catch { /* malformed */ }
-            }
-            currentEvent = null
-            currentData = ''
-          } else if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7)
-          } else if (line.startsWith('data: ')) {
-            currentData += (currentData ? '\n' : '') + line.slice(6)
-          }
-        }
-      }
-
-      // Traiter le dernier événement s'il n'est pas suivi de ligne vide
-      if (currentEvent && currentData) {
-        try {
-          const data = JSON.parse(currentData)
-          onEvent({ type: currentEvent, ...data })
-        } catch { /* malformed */ }
-      }
-    }).catch(err => {
-      if (err.name !== 'AbortError') {
-        onEvent({ type: 'error', message: err.message })
-      }
-    })
-
-    return () => controller.abort()
-  }
+  /** Polling : récupère les nouveaux chunks depuis `since` */
+  getStatus: (sessionId, since = 0) =>
+    request('GET', `/vocal/status/${sessionId}?since=${since}`)
 }
 

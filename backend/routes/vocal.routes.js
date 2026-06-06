@@ -2,7 +2,8 @@
  * vocal.routes.js — Routes TTS / Vocal
  *
  * Endpoints :
- *   POST   /api/vocal/generate      — SSE : génération streaming des chunks audio
+ *   POST   /api/vocal/generate      — Lance la génération en arrière-plan, retourne sessionId
+ *   GET    /api/vocal/status/:id    — État d'avancement (chunks prêts, progression)
  *   GET    /api/vocal/audio/:file   — Servir un fichier audio
  *   GET    /api/vocal/download/:id  — Télécharger la session fusionnée
  *   GET    /api/vocal/config        — Récupérer la config TTS
@@ -23,32 +24,21 @@ import prisma from '../config/db.js'
 
 const router = Router()
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function sse(res, event, data) {
-  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-}
-
-function sendSSE(res, event, data) {
-  if (!res.writable) return
-  try {
-    sse(res, event, data)
-  } catch { /* connexion fermée */ }
-}
+// Stocke les sessions de génération en cours (en mémoire)
+// Map<sessionId, { chunks, results, status, error }>
+const sessions = new Map()
 
 function generateSessionId() {
-  return crypto.randomBytes(6).toString('hex') // 12 caractères
+  return crypto.randomBytes(6).toString('hex')
 }
 
 // ─── POST /api/vocal/generate ────────────────────────────────────────────────
-// Endpoint SSE de génération streaming.
-// Reçoit le texte et les paramètres, stream les événements au fur et à mesure
-// que les chunks audio sont générés.
+// Lance la génération en arrière-plan. Retourne immédiatement un sessionId.
+// Le frontend interroge ensuite GET /status/:id pour suivre la progression.
 
 router.post('/generate', authMiddleware, async (req, res) => {
   const { text, mode, size, format, speed } = req.body
 
-  // Validation
   if (!text || typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({ error: 'Texte requis' })
   }
@@ -58,103 +48,126 @@ router.post('/generate', authMiddleware, async (req, res) => {
   const audioFormat = ['wav', 'mp3'].includes(format) ? format : 'wav'
   const audioSpeed = Math.min(2.0, Math.max(0.5, Number(speed) || 1.0))
 
-  // Configurer SSE
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no'
-  })
-  res.flushHeaders()
+  const { chunks, chunkCount, totalChars, estimatedMinutes } = chunkText(
+    text.trim(), chunkMode, chunkSize
+  )
 
-  // Désactiver le timeout — la génération peut être longue
-  req.socket.setTimeout(0)
-  req.socket.setNoDelay(true)
-  req.socket.setKeepAlive(true)
-
-  let aborted = false
-
-  req.on('close', () => {
-    aborted = true
-    logAction('Vocal SSE : connexion fermée par le client')
-  })
+  if (chunkCount === 0) {
+    return res.status(400).json({ error: 'Aucun contenu à synthétiser après découpage.' })
+  }
 
   const sessionId = generateSessionId()
 
-  try {
-    // Découpage du texte
-    const { chunks, chunkCount, totalChars, estimatedMinutes } = chunkText(
-      text.trim(), chunkMode, chunkSize
-    )
+  // Initialiser la session
+  sessions.set(sessionId, {
+    chunks,
+    chunkCount,
+    totalChars,
+    estimatedMinutes,
+    format: audioFormat,
+    speed: audioSpeed,
+    results: new Array(chunkCount).fill(null),
+    currentIndex: 0,
+    status: 'generating',
+    error: null,
+    createdAt: Date.now()
+  })
 
-    if (chunkCount === 0) {
-      sendSSE(res, 'error', { message: 'Aucun contenu à synthétiser après découpage.' })
-      sendSSE(res, 'done', { sessionId, chunkCount: 0 })
-      return res.end()
-    }
+  logAction(`Vocal : session ${sessionId} démarrée — ${chunkCount} chunks, ~${estimatedMinutes} min`)
 
-    logAction(`Vocal SSE : session ${sessionId} — ${chunkCount} chunks, ~${estimatedMinutes} min d'audio`)
+  // Répondre immédiatement avec le sessionId
+  res.json({
+    sessionId,
+    chunkCount,
+    totalChars,
+    estimatedMinutes,
+    format: audioFormat,
+    speed: audioSpeed
+  })
 
-    // Événement de début
-    sendSSE(res, 'start', {
-      sessionId,
-      chunkCount,
-      totalChars,
-      estimatedMinutes,
-      format: audioFormat,
-      speed: audioSpeed
-    })
+  // Génération en arrière-plan (après avoir envoyé la réponse)
+  generateInBackground(sessionId)
+})
 
-    // Génération séquentielle
-    const generated = []
+async function generateInBackground(sessionId) {
+  const session = sessions.get(sessionId)
+  if (!session) return
 
-    for (let i = 0; i < chunkCount; i++) {
-      if (aborted) break
+  const { chunks, chunkCount, format, speed } = session
 
-      // Heartbeat avant le chunk (tient la connexion active)
-      sendSSE(res, 'progress', { current: i, total: chunkCount })
+  for (let i = 0; i < chunkCount; i++) {
+    session.currentIndex = i
 
-      try {
-        const result = await generateChunk(
-          chunks[i], i, sessionId, audioFormat, audioSpeed
-        )
-        generated.push(result)
-
-        sendSSE(res, 'chunk', {
-          index: i,
-          url: result.url,
-          filename: result.filename,
-          duration: result.duration,
-          size: result.size,
-          text: chunks[i].slice(0, 200).replace(/\n/g, ' ') // Début du texte pour affichage (sans sauts de ligne)
-        })
-      } catch (err) {
-        logError(`Vocal SSE : échec chunk ${i} — ${err.message}`)
-        sendSSE(res, 'chunk_error', {
-          index: i,
-          message: err.message
-        })
-        // Continuer avec les chunks suivants
+    try {
+      const result = await generateChunk(chunks[i], i, sessionId, format, speed)
+      session.results[i] = {
+        index: i,
+        url: result.url,
+        filename: result.filename,
+        duration: result.duration,
+        size: result.size,
+        text: chunks[i].slice(0, 200).replace(/\n/g, ' '),
+        status: 'generated'
+      }
+      logAction(`Vocal : chunk ${i + 1}/${chunkCount} généré (${sessionId})`)
+    } catch (err) {
+      logError(`Vocal : échec chunk ${i} (${sessionId}) — ${err.message}`)
+      session.results[i] = {
+        index: i,
+        url: null,
+        filename: null,
+        duration: 0,
+        size: 0,
+        text: chunks[i].slice(0, 200).replace(/\n/g, ' '),
+        status: 'error',
+        error: err.message
       }
     }
-
-    if (!aborted) {
-      sendSSE(res, 'done', {
-        sessionId,
-        chunkCount: generated.length,
-        mergeUrl: `/api/vocal/download/${sessionId}`,
-        generatedCount: generated.length
-      })
-    }
-
-    res.end()
-  } catch (err) {
-    logError(`Vocal SSE : erreur fatale — ${err.message}`)
-    if (!aborted) {
-      sendSSE(res, 'error', { message: err.message })
-    }
-    res.end()
   }
+
+  session.status = 'done'
+  session.currentIndex = chunkCount
+  logAction(`Vocal : session ${sessionId} terminée — ${session.results.filter(r => r?.status === 'generated').length}/${chunkCount} chunks OK`)
+
+  // Nettoyer après 1 heure
+  setTimeout(() => {
+    sessions.delete(sessionId)
+  }, 3_600_000)
+}
+
+// ─── GET /api/vocal/status/:sessionId ────────────────────────────────────────
+// Le frontend appelle cette route toutes les ~1.5 secondes pour récupérer
+// les nouveaux chunks générés.
+
+router.get('/status/:sessionId', authMiddleware, async (req, res) => {
+  const { sessionId } = req.params
+  const session = sessions.get(sessionId)
+
+  if (!session) {
+    return res.status(404).json({ error: 'Session introuvable ou expirée.' })
+  }
+
+  // Ne renvoyer que les chunks non encore envoyés au client
+  const since = parseInt(req.query.since) || 0
+
+  const newChunks = []
+  for (let i = since; i < session.results.length; i++) {
+    if (session.results[i] !== null) {
+      newChunks.push(session.results[i])
+    } else {
+      break // Ne pas sauter les chunks pas encore générés
+    }
+  }
+
+  res.json({
+    sessionId,
+    chunkCount: session.chunkCount,
+    status: session.status,
+    currentIndex: session.currentIndex,
+    estimatedMinutes: session.estimatedMinutes,
+    mergeUrl: session.status === 'done' ? `/api/vocal/download/${sessionId}` : null,
+    newChunks
+  })
 })
 
 // ─── GET /api/vocal/audio/:filename ──────────────────────────────────────────
@@ -165,10 +178,9 @@ router.post('/generate', authMiddleware, async (req, res) => {
 router.get('/audio/:filename', async (req, res) => {
   try {
     const audioDir = getAudioCacheDir()
-    const filename = basename(req.params.filename) // Sécurité : strip path
+    const filename = basename(req.params.filename)
     const filePath = resolve(audioDir, filename)
 
-    // Vérifier que le fichier est bien dans audio_cache (protection path traversal)
     if (!filePath.startsWith(audioDir)) {
       return res.status(403).json({ error: 'Accès interdit' })
     }
@@ -181,7 +193,7 @@ router.get('/audio/:filename', async (req, res) => {
     const contentType = ext === '.mp3' ? 'audio/mpeg' : 'audio/wav'
 
     res.setHeader('Content-Type', contentType)
-    res.setHeader('Cache-Control', 'public, max-age=86400') // 24h
+    res.setHeader('Cache-Control', 'public, max-age=86400')
     res.setHeader('Accept-Ranges', 'bytes')
 
     const stat = statSync(filePath)
@@ -196,20 +208,16 @@ router.get('/audio/:filename', async (req, res) => {
 })
 
 // ─── GET /api/vocal/download/:sessionId ──────────────────────────────────────
-// Fusionne et télécharge tous les chunks d'une session.
 
 router.get('/download/:sessionId', authMiddleware, async (req, res) => {
   try {
     const { sessionId } = req.params
 
-    // SessionId = 12 caractères hex — valider le format
     if (!/^[a-f0-9]{12}$/.test(sessionId)) {
       return res.status(400).json({ error: 'ID de session invalide' })
     }
 
     const audioDir = getAudioCacheDir()
-
-    // Vérifier si déjà fusionné
     const mergedWav = resolve(audioDir, `${sessionId}-merged.wav`)
     const mergedMp3 = resolve(audioDir, `${sessionId}-merged.mp3`)
 
@@ -221,30 +229,22 @@ router.get('/download/:sessionId', authMiddleware, async (req, res) => {
     }
 
     if (!merged) {
-      // Pas de fichier fusionné, essayer de fusionner à la volée
-      // Détecter le format à partir des fichiers existants
       let files = []
       try {
         files = readdirSync(audioDir)
           .filter(f => f.includes(sessionId) && (f.endsWith('.wav') || f.endsWith('.mp3')))
           .sort()
-      } catch { /* audioDir pas encore créé */ }
+      } catch { /* dir pas encore créé */ }
 
       if (files.length === 0) {
-        return res.status(404).json({ error: 'Aucun fichier trouvé pour cette session. Les fichiers ont peut-être expiré.' })
+        return res.status(404).json({ error: 'Aucun fichier trouvé pour cette session.' })
       }
 
-      // Déterminer le format majoritaire
       const mp3Count = files.filter(f => f.endsWith('.mp3')).length
       const fmt = mp3Count > 0 ? 'mp3' : 'wav'
-
       const result = await mergeChunks(sessionId, fmt)
       const ext = result.filename.endsWith('.mp3') ? 'mp3' : 'wav'
-      merged = {
-        path: result.path,
-        ext,
-        type: ext === 'mp3' ? 'audio/mpeg' : 'audio/wav'
-      }
+      merged = { path: result.path, ext, type: ext === 'mp3' ? 'audio/mpeg' : 'audio/wav' }
     }
 
     const filename = `eva-tts-${sessionId}.${merged.ext}`
@@ -253,10 +253,8 @@ router.get('/download/:sessionId', authMiddleware, async (req, res) => {
     res.setHeader('Content-Length', statSync(merged.path).size)
     res.setHeader('Cache-Control', 'private, max-age=3600')
 
-    const stream = createReadStream(merged.path)
-    stream.pipe(res)
-
-    logAction(`Vocal : téléchargement session ${sessionId} → ${filename}`)
+    createReadStream(merged.path).pipe(res)
+    logAction(`Vocal : téléchargement session ${sessionId}`)
   } catch (err) {
     logError(`GET /vocal/download : ${err.message}`)
     res.status(500).json({ error: 'Erreur lors de la fusion : ' + err.message })
@@ -264,7 +262,6 @@ router.get('/download/:sessionId', authMiddleware, async (req, res) => {
 })
 
 // ─── GET /api/vocal/config ───────────────────────────────────────────────────
-// Retourne la configuration TTS lisible par le frontend.
 
 router.get('/config', authMiddleware, async (req, res) => {
   try {
@@ -273,8 +270,7 @@ router.get('/config', authMiddleware, async (req, res) => {
     })
     const config = {}
     for (const p of params) {
-      const key = p.cle.replace('vocal.', '')
-      config[key] = p.valeur
+      config[p.cle.replace('vocal.', '')] = p.valeur
     }
     res.json(config)
   } catch (err) {
@@ -284,11 +280,11 @@ router.get('/config', authMiddleware, async (req, res) => {
 })
 
 // ─── DELETE /api/vocal/session/:sessionId ────────────────────────────────────
-// Nettoie les fichiers d'une session spécifique.
 
 router.delete('/session/:sessionId', authMiddleware, async (req, res) => {
   try {
     const { sessionId } = req.params
+    sessions.delete(sessionId)
     const deleted = await cleanupSession(sessionId)
     res.json({ deleted, sessionId })
   } catch (err) {
