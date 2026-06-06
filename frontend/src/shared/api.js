@@ -597,26 +597,45 @@ export const vocal = {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let currentEvent = null
+      let currentData = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
         buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n\n')
-        buffer = lines.pop() || ''
 
-        for (const line of lines) {
-          // Format SSE : "event: nom\ndata: {...json...}\n"
-          const eventMatch = line.match(/^event:\s*(\w+)\ndata:\s*(.+)$/s)
-          if (eventMatch) {
-            try {
-              const eventName = eventMatch[1]
-              const data = JSON.parse(eventMatch[2])
-              onEvent({ type: eventName, ...data })
-            } catch { /* skip malformed */ }
+        // Traiter ligne par ligne (format SSE standard)
+        while (buffer.includes('\n')) {
+          const idx = buffer.indexOf('\n')
+          const line = buffer.slice(0, idx).trimEnd()
+          buffer = buffer.slice(idx + 1)
+
+          if (line === '') {
+            // Ligne vide = fin de l'événement
+            if (currentEvent && currentData) {
+              try {
+                const data = JSON.parse(currentData)
+                onEvent({ type: currentEvent, ...data })
+              } catch { /* malformed */ }
+            }
+            currentEvent = null
+            currentData = ''
+          } else if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7)
+          } else if (line.startsWith('data: ')) {
+            currentData += (currentData ? '\n' : '') + line.slice(6)
           }
         }
+      }
+
+      // Traiter le dernier événement s'il n'est pas suivi de ligne vide
+      if (currentEvent && currentData) {
+        try {
+          const data = JSON.parse(currentData)
+          onEvent({ type: currentEvent, ...data })
+        } catch { /* malformed */ }
       }
     }).catch(err => {
       if (err.name !== 'AbortError') {

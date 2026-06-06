@@ -126,7 +126,7 @@ router.post('/generate', authMiddleware, async (req, res) => {
           filename: result.filename,
           duration: result.duration,
           size: result.size,
-          text: chunks[i].slice(0, 200) // Début du texte pour affichage
+          text: chunks[i].slice(0, 200).replace(/\n/g, ' ') // Début du texte pour affichage (sans sauts de ligne)
         })
       } catch (err) {
         logError(`Vocal SSE : échec chunk ${i} — ${err.message}`)
