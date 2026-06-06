@@ -10,3 +10,4 @@ Thumbs.db
 logs/*.log
 archives-eva1/
 backend/config/firebase-service-account.json
+backend/audio_cache/

@@ -18,9 +18,11 @@ import instagramRoutes, { webhookRouter as instagramWebhookRouter } from './rout
 import siteRoutes from './routes/site.routes.js'
 import notesRoutes from './routes/notes.routes.js'
 import notificationsRoutes from './routes/notifications.routes.js'
+import vocalRoutes from './routes/vocal.routes.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
 import { startInstagramPlanifCron } from './crons/instagram-planif.cron.js'
+import { startAudioCleanupCron } from './crons/audio-cleanup.cron.js'
 import prisma from './config/db.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -84,6 +86,7 @@ app.use('/api/instagram', instagramRoutes)
 app.use('/api/site', siteRoutes)
 app.use('/api/notes', notesRoutes)
 app.use('/api/notifications', notificationsRoutes)
+app.use('/api/vocal', vocalRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -110,6 +113,7 @@ app.listen(PORT, async () => {
   // Démarrer les crons
   startAllCrons().catch(err => logError(`Crons: échec démarrage — ${err.message}`))
   startInstagramPlanifCron()
+  startAudioCleanupCron()
 
   // Démarrer le bot Discord si activé
   const discordParam = await prisma.configParam.findUnique({ where: { cle: 'discord.enabled' } })

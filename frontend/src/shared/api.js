@@ -557,3 +557,74 @@ export const instagram = {
   getOauthStatus: () => request('GET', '/instagram/oauth/status'),
 }
 
+// --- Vocal / TTS ---
+
+export const vocal = {
+  getConfig: () => request('GET', '/vocal/config'),
+
+  getAudioUrl: (filename) => `/api/vocal/audio/${filename}`,
+
+  getDownloadUrl: (sessionId) => `/api/vocal/download/${sessionId}`,
+
+  deleteSession: (sessionId) => request('DELETE', `/vocal/session/${sessionId}`),
+
+  /**
+   * Génération SSE — POST le texte et les paramètres, lit le stream d'événements.
+   *
+   * @param {string} text    - Texte à synthétiser
+   * @param {object} params  - { mode, size, format, speed }
+   * @param {function} onEvent - callback appelé pour chaque événement parsé
+   * @returns {function} cancel() — annuler la génération
+   */
+  generate: (text, params, onEvent) => {
+    const controller = new AbortController()
+
+    fetch('/api/vocal/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getToken()}`
+      },
+      body: JSON.stringify({ text, ...params }),
+      signal: controller.signal
+    }).then(async (response) => {
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        onEvent({ type: 'error', message: err.error || `Erreur ${response.status}` })
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          // Format SSE : "event: nom\ndata: {...json...}\n"
+          const eventMatch = line.match(/^event:\s*(\w+)\ndata:\s*(.+)$/s)
+          if (eventMatch) {
+            try {
+              const eventName = eventMatch[1]
+              const data = JSON.parse(eventMatch[2])
+              onEvent({ type: eventName, ...data })
+            } catch { /* skip malformed */ }
+          }
+        }
+      }
+    }).catch(err => {
+      if (err.name !== 'AbortError') {
+        onEvent({ type: 'error', message: err.message })
+      }
+    })
+
+    return () => controller.abort()
+  }
+}
+

@@ -98,6 +98,13 @@ async function main() {
     { cle: 'backup.keep',      valeur: '10',               description: 'Nombre de sauvegardes à conserver (rotation automatique)' },
     { cle: 'notes.police',               valeur: 'Caveat',   description: 'Google Font utilisée pour les post-its (nom exact Google Fonts)' },
     { cle: 'notes.discord.channel_id',   valeur: '',         description: 'Salon Discord pour les rappels de notes' },
+    { cle: 'vocal.piper_path',           valeur: 'vendor/piper/piper',                      description: 'Chemin du binaire Piper TTS (relatif à backend/)' },
+    { cle: 'vocal.model_path',           valeur: 'vendor/models/fr_FR-siwis-medium.onnx',    description: 'Chemin du modèle vocal Piper (relatif à backend/)' },
+    { cle: 'vocal.audio_cache',          valeur: './audio_cache/',                           description: 'Dossier de cache audio TTS (relatif à backend/)' },
+    { cle: 'vocal.retention_days',       valeur: '7',                                        description: 'Jours de rétention des fichiers audio générés' },
+    { cle: 'vocal.default_speed',        valeur: '1.0',                                      description: 'Vitesse de lecture TTS par défaut (0.5 à 2.0)' },
+    { cle: 'vocal.default_format',       valeur: 'wav',                                      description: 'Format audio par défaut : wav ou mp3' },
+    { cle: 'vocal.ffmpeg_path',          valeur: 'ffmpeg',                                   description: 'Chemin du binaire ffmpeg (ou "ffmpeg" si dans le PATH)' },
   ]
 
   for (const { cle, valeur, description } of configParams) {
@@ -113,7 +120,8 @@ async function main() {
   // ─── Crons ────────────────────────────────────────────────────────────────────
 
   const crons = [
-    { nom: 'notes.rappels', expression: '* * * * *', actif: true, description: 'Rappels et expiration automatique des notes (chaque minute)' },
+    { nom: 'notes.rappels',  expression: '* * * * *', actif: true, description: 'Rappels et expiration automatique des notes (chaque minute)' },
+    { nom: 'audio.cleanup',  expression: '7 3 * * *', actif: true, description: 'Nettoyage quotidien des fichiers audio TTS (> 7 jours)' },
   ]
 
   for (const { nom, expression, actif, description } of crons) {
