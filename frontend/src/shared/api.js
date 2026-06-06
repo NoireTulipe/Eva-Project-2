@@ -574,6 +574,12 @@ export const vocal = {
 
   /** Polling : récupère les nouveaux chunks depuis `since` */
   getStatus: (sessionId, since = 0) =>
-    request('GET', `/vocal/status/${sessionId}?since=${since}`)
+    request('GET', `/vocal/status/${sessionId}?since=${since}`),
+
+  /** Liste les sessions passées (depuis les manifests) */
+  getSessions: () => request('GET', '/vocal/sessions'),
+
+  /** Charge le manifest complet d'une session */
+  getManifest: (sessionId) => request('GET', `/vocal/manifest/${sessionId}`)
 }
 

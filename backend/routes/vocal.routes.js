@@ -11,7 +11,7 @@
  */
 
 import { Router } from 'express'
-import { existsSync, createReadStream, statSync, readdirSync } from 'fs'
+import { existsSync, createReadStream, statSync, readdirSync, writeFileSync, readFileSync, unlinkSync, mkdirSync } from 'fs'
 import { resolve, basename, extname } from 'path'
 import crypto from 'crypto'
 import { authMiddleware } from '../middleware/auth.js'
@@ -129,11 +129,95 @@ async function generateInBackground(sessionId) {
   session.currentIndex = chunkCount
   logAction(`Vocal : session ${sessionId} terminée — ${session.results.filter(r => r?.status === 'generated').length}/${chunkCount} chunks OK`)
 
-  // Nettoyer après 1 heure
+  // Sauvegarder le manifest sur disque
+  try {
+    const audioDir = getAudioCacheDir()
+    if (!existsSync(audioDir)) mkdirSync(audioDir, { recursive: true })
+    const manifest = {
+      sessionId,
+      createdAt: new Date().toISOString(),
+      format: session.format,
+      speed: session.speed,
+      chunkCount: session.chunkCount,
+      estimatedMinutes: session.estimatedMinutes,
+      chunks: session.results.filter(r => r !== null)
+    }
+    writeFileSync(resolve(audioDir, `${sessionId}-manifest.json`), JSON.stringify(manifest, null, 2), 'utf-8')
+  } catch (e) { logError(`Vocal : échec sauvegarde manifest ${sessionId} — ${e.message}`) }
+
+  // Nettoyer la session mémoire après 1 heure
   setTimeout(() => {
     sessions.delete(sessionId)
   }, 3_600_000)
 }
+
+// ─── GET /api/vocal/sessions ─────────────────────────────────────────────────
+// Liste les sessions passées (lit les manifests sur disque)
+
+router.get('/sessions', authMiddleware, async (req, res) => {
+  try {
+    const audioDir = getAudioCacheDir()
+    if (!existsSync(audioDir)) return res.json([])
+
+    const files = readdirSync(audioDir).filter(f => f.endsWith('-manifest.json'))
+    const sessions = []
+    for (const f of files) {
+      try {
+        const content = JSON.parse(readFileSync(resolve(audioDir, f), 'utf-8'))
+        sessions.push({
+          sessionId: content.sessionId,
+          createdAt: content.createdAt,
+          format: content.format,
+          chunkCount: content.chunkCount,
+          estimatedMinutes: content.estimatedMinutes,
+          generatedCount: content.chunks?.length || 0
+        })
+      } catch { /* manifest corrompu, on ignore */ }
+    }
+    sessions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    res.json(sessions)
+  } catch (err) {
+    logError(`GET /vocal/sessions : ${err.message}`)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ─── GET /api/vocal/manifest/:sessionId ──────────────────────────────────────
+// Retourne le manifest complet d'une session (pour replay)
+
+router.get('/manifest/:sessionId', authMiddleware, async (req, res) => {
+  try {
+    const audioDir = getAudioCacheDir()
+    const manifestPath = resolve(audioDir, `${req.params.sessionId}-manifest.json`)
+    if (!existsSync(manifestPath)) return res.status(404).json({ error: 'Session introuvable' })
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    // Vérifier que les fichiers existent encore
+    manifest.chunks = manifest.chunks.filter(c => c.filename && existsSync(resolve(audioDir, c.filename)))
+    res.json(manifest)
+  } catch (err) {
+    logError(`GET /vocal/manifest : ${err.message}`)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ─── DELETE /api/vocal/session/:sessionId ────────────────────────────────────
+// Supprime tous les fichiers d'une session + manifest
+
+router.delete('/session/:sessionId', authMiddleware, async (req, res) => {
+  try {
+    const { sessionId } = req.params
+    sessions.delete(sessionId)
+    const deleted = await cleanupSession(sessionId)
+    // Supprimer aussi le manifest
+    const audioDir = getAudioCacheDir()
+    const manifestPath = resolve(audioDir, `${sessionId}-manifest.json`)
+    if (existsSync(manifestPath)) unlinkSync(manifestPath)
+    res.json({ deleted, sessionId })
+  } catch (err) {
+    logError(`DELETE /vocal/session : ${err.message}`)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
 
 // ─── GET /api/vocal/status/:sessionId ────────────────────────────────────────
 // Le frontend appelle cette route toutes les ~1.5 secondes pour récupérer
