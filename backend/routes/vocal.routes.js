@@ -292,8 +292,9 @@ router.get('/audio/:filename', async (req, res) => {
 })
 
 // ─── GET /api/vocal/download/:sessionId ──────────────────────────────────────
+// PAS d'auth — les noms de session sont aléatoires (12 car. hex)
 
-router.get('/download/:sessionId', authMiddleware, async (req, res) => {
+router.get('/download/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params
 

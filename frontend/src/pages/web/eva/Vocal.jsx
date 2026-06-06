@@ -335,7 +335,7 @@ export default function Vocal() {
       )}
 
       {/* Sessions passées */}
-      {pastSessions.length > 0 && status === 'idle' && (
+      {pastSessions.length > 0 && (
         <div className={cardCls}>
           <h2 className="text-sm font-semibold text-gray-700 mb-2">📚 Sessions passées</h2>
           <div className="space-y-1">
@@ -348,7 +348,7 @@ export default function Vocal() {
                 <div className="flex gap-1">
                   <button className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs hover:bg-indigo-200" onClick={() => replaySession(s.sessionId)}>🔁 Rejouer</button>
                   <a href={`/api/vocal/download/${s.sessionId}`} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200">📥</a>
-                  <button className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200" onClick={async () => { await vocal.deleteSession(s.sessionId); loadPastSessions() }}>🗑️</button>
+                  <button className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200" onClick={() => { vocal.deleteSession(s.sessionId).then(loadPastSessions) }}>🗑️</button>
                 </div>
               </div>
             ))}
