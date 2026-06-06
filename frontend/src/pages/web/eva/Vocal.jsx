@@ -71,6 +71,12 @@ export default function Vocal() {
 
     setStatus('generating')
 
+    // Déverrouiller l'audio (politique autoplay navigateur)
+    if (audioRef.current) {
+      audioRef.current.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
+      await audioRef.current.play().then(() => { audioRef.current.pause(); audioRef.current.src = '' }).catch(() => {})
+    }
+
     try {
       const data = await vocal.generate(text, { mode, size: chunkSize, format, speed })
       setSessionId(data.sessionId)
