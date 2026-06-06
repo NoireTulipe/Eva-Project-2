@@ -30,7 +30,10 @@ function sse(res, event, data) {
 }
 
 function sendSSE(res, event, data) {
-  sse(res, event, data)
+  if (!res.writable) return
+  try {
+    sse(res, event, data)
+  } catch { /* connexion fermée */ }
 }
 
 function generateSessionId() {
@@ -60,8 +63,9 @@ router.post('/generate', authMiddleware, async (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no' // Désactiver le buffering nginx/Caddy
+    'X-Accel-Buffering': 'no'
   })
+  res.flushHeaders()
 
   // Désactiver le timeout — la génération peut être longue
   req.socket.setTimeout(0)
@@ -155,8 +159,10 @@ router.post('/generate', authMiddleware, async (req, res) => {
 
 // ─── GET /api/vocal/audio/:filename ──────────────────────────────────────────
 // Sert les fichiers audio générés (WAV ou MP3).
+// PAS d'auth — les noms de fichier sont aléatoires (sessionId hex) et le
+// navigateur ne peut pas envoyer de header Authorization sur <audio src>.
 
-router.get('/audio/:filename', authMiddleware, async (req, res) => {
+router.get('/audio/:filename', async (req, res) => {
   try {
     const audioDir = getAudioCacheDir()
     const filename = basename(req.params.filename) // Sécurité : strip path
