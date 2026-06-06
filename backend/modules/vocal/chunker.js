@@ -106,9 +106,6 @@ function escapeForShell(text) {
     .replace(/</g, '\\<')
     .replace(/>/g, '\\>')
     .replace(/~/g, '\\~')
-    .replace(/#/g, '\\#')
-    .replace(/!/g, '\\!')
-    .replace(/\?/g, '\\?')    // Glob character
     .replace(/\[/g, '\\[')
     .replace(/\]/g, '\\]')
     .replace(/\{/g, '\\{')
@@ -128,6 +125,9 @@ export function sanitizeText(text) {
  */
 function filterArtifacts(text) {
   return text
+    // Supprimer les # de titre Markdown (ex: "# Chapitre 1" → "Chapitre 1")
+    // et les remplacer par un double saut de ligne pour créer une pause naturelle
+    .replace(/^#{1,6}\s+/gm, '\n\n')
     // Supprimer les numéros de page isolés (ligne ne contenant qu'un nombre)
     .replace(/^\d{1,4}\s*$/gm, '')
     // Supprimer les lignes "Page X sur Y"
