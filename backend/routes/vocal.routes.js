@@ -38,32 +38,51 @@ function generateSessionId() {
 // Le frontend interroge ensuite GET /status/:id pour suivre la progression.
 
 router.post('/generate', authMiddleware, async (req, res) => {
-  const { text, mode, size, format, speed, provider, voiceId } = req.body
-
-  if (!text || typeof text !== 'string' || !text.trim()) {
-    return res.status(400).json({ error: 'Texte requis' })
-  }
+  const { text, sections, mode, size, format, speed, provider, voiceId } = req.body
 
   const chunkMode = ['sentences', 'words'].includes(mode) ? mode : 'sentences'
   const chunkSize = Number(size) || (chunkMode === 'sentences' ? 3 : 100)
   const audioFormat = provider === 'mistral' ? 'mp3' : (['wav', 'mp3'].includes(format) ? format : 'wav')
   const audioSpeed = Math.min(2.0, Math.max(0.5, Number(speed) || 1.0))
   const ttsProvider = provider === 'mistral' ? 'mistral' : 'piper'
-  const ttsVoiceId = voiceId || 'fr_female'
+  const ttsVoiceId = voiceId || ''
 
-  const { chunks, chunkCount, totalChars, estimatedMinutes } = chunkText(
-    text.trim(), chunkMode, chunkSize
-  )
+  // Mode multi-voix : sections [{ text, voiceId }]
+  const useSections = ttsProvider === 'mistral' && Array.isArray(sections) && sections.length > 0
 
+  let allChunks = []
+  let totalChars = 0
+
+  if (useSections) {
+    // Découper chaque section, tagger les chunks avec leur voiceId
+    for (const sec of sections) {
+      if (!sec.text?.trim()) continue
+      const { chunks } = chunkText(sec.text.trim(), chunkMode, chunkSize)
+      for (const c of chunks) {
+        allChunks.push({ text: c, voiceId: sec.voiceId || ttsVoiceId })
+      }
+      totalChars += chunks.reduce((s, c) => s + c.length, 0)
+    }
+  } else {
+    // Mode simple : texte uniforme
+    const sourceText = (text || '').trim()
+    if (!sourceText) return res.status(400).json({ error: 'Texte requis' })
+    const { chunks } = chunkText(sourceText, chunkMode, chunkSize)
+    allChunks = chunks.map(c => ({ text: c, voiceId: ttsVoiceId }))
+    totalChars = allChunks.reduce((s, c) => s + c.text.length, 0)
+  }
+
+  const chunkCount = allChunks.length
   if (chunkCount === 0) {
     return res.status(400).json({ error: 'Aucun contenu à synthétiser après découpage.' })
   }
 
+  const estimatedMinutes = Math.ceil(totalChars / 15 / 60)
+
   const sessionId = generateSessionId()
 
-  // Initialiser la session
   sessions.set(sessionId, {
-    chunks,
+    chunks: allChunks,
     chunkCount,
     totalChars,
     estimatedMinutes,
@@ -71,6 +90,7 @@ router.post('/generate', authMiddleware, async (req, res) => {
     speed: audioSpeed,
     provider: ttsProvider,
     voiceId: ttsVoiceId,
+    sections: useSections ? sections : null,
     results: new Array(chunkCount).fill(null),
     currentIndex: 0,
     status: 'generating',
@@ -78,20 +98,10 @@ router.post('/generate', authMiddleware, async (req, res) => {
     createdAt: Date.now()
   })
 
-  logAction(`Vocal : session ${sessionId} démarrée — ${chunkCount} chunks, ~${estimatedMinutes} min, provider: ${ttsProvider}${ttsProvider === 'mistral' ? ', voix: ' + ttsVoiceId : ''}`)
+  logAction(`Vocal : session ${sessionId} démarrée — ${chunkCount} chunks, ~${estimatedMinutes} min, provider: ${ttsProvider}${ttsProvider === 'mistral' ? ', multi-voix' : ''}`)
 
-  // Répondre immédiatement avec le sessionId
-  res.json({
-    sessionId,
-    chunkCount,
-    totalChars,
-    estimatedMinutes,
-    format: audioFormat,
-    speed: audioSpeed,
-    provider: ttsProvider
-  })
+  res.json({ sessionId, chunkCount, totalChars, estimatedMinutes, format: audioFormat, speed: audioSpeed, provider: ttsProvider })
 
-  // Génération en arrière-plan (après avoir envoyé la réponse)
   generateInBackground(sessionId)
 })
 
@@ -99,19 +109,18 @@ async function generateInBackground(sessionId) {
   const session = sessions.get(sessionId)
   if (!session) return
 
-  const { chunks, chunkCount, format, speed, provider, voiceId } = session
-
-  const generateFn = provider === 'mistral' ? generateChunkMistral : generateChunk
+  const { chunks, chunkCount, format, speed, provider } = session
 
   for (let i = 0; i < chunkCount; i++) {
     session.currentIndex = i
 
     try {
-      // Piper : (text, index, sessionId, format, speed)
-      // Mistral : (text, index, sessionId, voiceId)
-      const result = provider === 'mistral'
-        ? await generateFn(chunks[i], i, sessionId, voiceId)
-        : await generateFn(chunks[i], i, sessionId, format, speed)
+      let result
+      if (provider === 'mistral') {
+        result = await generateChunkMistral(chunks[i].text, i, sessionId, chunks[i].voiceId)
+      } else {
+        result = await generateChunk(chunks[i].text, i, sessionId, format, speed)
+      }
 
       session.results[i] = {
         index: i,
@@ -119,7 +128,8 @@ async function generateInBackground(sessionId) {
         filename: result.filename,
         duration: result.duration,
         size: result.size,
-        text: chunks[i].slice(0, 200).replace(/\n/g, ' '),
+        text: chunks[i].text.slice(0, 200).replace(/\n/g, ' '),
+        voiceId: chunks[i].voiceId || null,
         status: 'generated'
       }
       logAction(`Vocal : chunk ${i + 1}/${chunkCount} généré (${sessionId})`)
@@ -131,7 +141,8 @@ async function generateInBackground(sessionId) {
         filename: null,
         duration: 0,
         size: 0,
-        text: chunks[i].slice(0, 200).replace(/\n/g, ' '),
+        text: chunks[i].text.slice(0, 200).replace(/\n/g, ' '),
+        voiceId: chunks[i].voiceId || null,
         status: 'error',
         error: err.message
       }
