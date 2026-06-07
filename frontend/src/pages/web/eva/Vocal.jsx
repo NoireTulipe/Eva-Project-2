@@ -17,6 +17,7 @@ export default function Vocal() {
   const [voiceId, setVoiceId] = useState('')
   const [mistralVoices, setMistralVoices] = useState([])
   const [voicesLoading, setVoicesLoading] = useState(false)
+  const [voicesLoaded, setVoicesLoaded] = useState(false)
 
   // État
   const [status, setStatus]   = useState('idle') // idle|generating|playing|paused|done|error
@@ -61,13 +62,14 @@ export default function Vocal() {
   useEffect(() => {
     if (provider !== 'mistral') return
     setVoicesLoading(true)
+    setVoicesLoaded(false)
     vocal.getMistralVoices().then(voices => {
       setMistralVoices(voices)
       // Sélectionner la première voix FR par défaut, sinon la première
       const frVoice = voices.find(v => v.languages?.some(l => l.startsWith('fr')))
-      if (frVoice) setVoiceId(frVoice.id)
-      else if (voices.length > 0) setVoiceId(voices[0].id)
+      setVoiceId(frVoice ? frVoice.id : (voices[0]?.id || ''))
       setVoicesLoading(false)
+      setVoicesLoaded(true)
     }).catch(() => {
       setVoicesLoading(false)
     })
@@ -264,10 +266,12 @@ export default function Vocal() {
             <div>
               <label className="block text-xs text-gray-500 mb-1">Voix</label>
               {voicesLoading ? (
-                <div className={inputCls + ' text-gray-400 flex items-center gap-2'}>
+                <div className={inputCls + ' text-gray-400 flex items-center gap-2 text-xs'}>
                   <span className="w-3 h-3 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
-                  Chargement…
+                  Chargement des voix…
                 </div>
+              ) : voicesLoaded && mistralVoices.length === 0 ? (
+                <div className="text-xs text-red-500">Aucune voix trouvée. Vérifiez VOXTRAL_API_KEY.</div>
               ) : (
                 <select className={inputCls} value={voiceId} onChange={e => setVoiceId(e.target.value)} disabled={status === 'generating'}>
                   {mistralVoices.map(v => (
@@ -312,7 +316,13 @@ export default function Vocal() {
       {/* Actions */}
       <div className="flex gap-2 flex-wrap items-center">
         {status === 'idle' || status === 'done' || status === 'error' ? (
-          <button className={btnCls} onClick={() => { unlockAudio(); startGeneration() }} disabled={!text.trim()}>🎬 Générer</button>
+          <button className={btnCls} onClick={() => { unlockAudio(); startGeneration() }}
+            disabled={
+              !text.trim() ||
+              (provider === 'mistral' && !voiceId) ||
+              (provider === 'mistral' && voicesLoading)
+            }
+          >🎬 Générer</button>
         ) : (
           <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700" onClick={stopGeneration}>⏹️ Arrêter</button>
         )}
