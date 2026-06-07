@@ -586,3 +586,33 @@ export const vocal = {
   getManifest: (sessionId) => request('GET', `/vocal/manifest/${sessionId}`)
 }
 
+// ─── Montage audio ───────────────────────────────────────────────────────
+
+export const montage = {
+  getSources: () => request('GET', '/montage/sources'),
+
+  uploadFile: async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const token = getToken()
+    const res = await fetch('/api/montage/upload', {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body: formData
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erreur upload')
+    return res.json()
+  },
+
+  getPreview: (file, position) =>
+    request('POST', '/montage/preview', { file, position }),
+
+  exportMontage: (project) =>
+    request('POST', '/montage/export', project),
+
+  getProjects: () => request('GET', '/montage/projects'),
+  getProject: (id) => request('GET', `/montage/projects/${id}`),
+  saveProject: (id, project) => request('POST', `/montage/projects/${id}`, project),
+  deleteProject: (id) => request('DELETE', `/montage/projects/${id}`)
+}
+

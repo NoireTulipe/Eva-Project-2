@@ -29,6 +29,7 @@ export const NAV = [
       { path: '/eva/agenda',      label: 'Agenda' },
       { path: '/eva/notes',       label: 'Notes & Rappels' },
       { path: '/eva/vocal',       label: 'Vocal TTS' },
+      { path: '/eva/montage',    label: 'Montage audio' },
       { path: '/eva/site',        label: 'Site ME' },
       { path: '/eva/instagram',   label: 'Instagram' },
     ],

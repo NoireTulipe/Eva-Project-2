@@ -23,6 +23,7 @@ import EvaMemoire     from './pages/web/eva/Memoire.jsx'
 import EvaAgenda      from './pages/web/eva/Agenda.jsx'
 import EvaNotes       from './pages/web/eva/Notes.jsx'
 import EvaVocal       from './pages/web/eva/Vocal.jsx'
+import EvaMontage     from './pages/web/eva/Montage.jsx'
 import EvaSite        from './pages/web/eva/Site.jsx'
 const EvaInstagram = lazy(() => import('./pages/web/eva/Instagram.jsx'))
 
@@ -76,6 +77,7 @@ export default function App() {
               <Route path="agenda"      element={<EvaAgenda />} />
               <Route path="notes"       element={<EvaNotes />} />
               <Route path="vocal"       element={<EvaVocal />} />
+              <Route path="montage"    element={<EvaMontage />} />
               <Route path="site"        element={<EvaSite />} />
               <Route path="instagram"   element={<Suspense fallback={<div className="p-8 text-gray-400">Chargement…</div>}><EvaInstagram /></Suspense>} />
             </Route>

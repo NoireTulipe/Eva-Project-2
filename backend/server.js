@@ -19,6 +19,7 @@ import siteRoutes from './routes/site.routes.js'
 import notesRoutes from './routes/notes.routes.js'
 import notificationsRoutes from './routes/notifications.routes.js'
 import vocalRoutes from './routes/vocal.routes.js'
+import montageRoutes from './routes/montage.routes.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
 import { startInstagramPlanifCron } from './crons/instagram-planif.cron.js'
@@ -87,6 +88,7 @@ app.use('/api/site', siteRoutes)
 app.use('/api/notes', notesRoutes)
 app.use('/api/notifications', notificationsRoutes)
 app.use('/api/vocal', vocalRoutes)
+app.use('/api/montage', montageRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
