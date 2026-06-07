@@ -14,18 +14,9 @@ export default function Vocal() {
   const [format, setFormat]   = useState('wav')
   const [speed, setSpeed]     = useState(1.0)
   const [provider, setProvider] = useState('piper')
-  const [voiceId, setVoiceId] = useState('fr_female')
-
-  // Voix disponibles pour Voxtral
-  const VOICES = [
-    { id: 'fr_female',      label: '🇫🇷 Féminine' },
-    { id: 'fr_male',        label: '🇫🇷 Masculine' },
-    { id: 'neutral_female', label: '😐 Neutre féminin' },
-    { id: 'neutral_male',   label: '😐 Neutre masculin' },
-    { id: 'casual_female',  label: '💬 Décontracté féminin' },
-    { id: 'casual_male',    label: '💬 Décontracté masculin' },
-    { id: 'cheerful_female', label: '😊 Enjoué féminin' }
-  ]
+  const [voiceId, setVoiceId] = useState('')
+  const [mistralVoices, setMistralVoices] = useState([])
+  const [voicesLoading, setVoicesLoading] = useState(false)
 
   // État
   const [status, setStatus]   = useState('idle') // idle|generating|playing|paused|done|error
@@ -65,6 +56,22 @@ export default function Vocal() {
     }).catch(() => {})
     loadPastSessions()
   }, [])
+
+  // Charger les voix Voxtral quand on sélectionne Mistral
+  useEffect(() => {
+    if (provider !== 'mistral') return
+    setVoicesLoading(true)
+    vocal.getMistralVoices().then(voices => {
+      setMistralVoices(voices)
+      // Sélectionner la première voix FR par défaut, sinon la première
+      const frVoice = voices.find(v => v.languages?.some(l => l.startsWith('fr')))
+      if (frVoice) setVoiceId(frVoice.id)
+      else if (voices.length > 0) setVoiceId(voices[0].id)
+      setVoicesLoading(false)
+    }).catch(() => {
+      setVoicesLoading(false)
+    })
+  }, [provider])
 
   async function loadPastSessions() {
     try { setPastSessions(await vocal.getSessions()) } catch {}
@@ -256,9 +263,20 @@ export default function Vocal() {
           {provider === 'mistral' ? (
             <div>
               <label className="block text-xs text-gray-500 mb-1">Voix</label>
-              <select className={inputCls} value={voiceId} onChange={e => setVoiceId(e.target.value)} disabled={status === 'generating'}>
-                {VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
-              </select>
+              {voicesLoading ? (
+                <div className={inputCls + ' text-gray-400 flex items-center gap-2'}>
+                  <span className="w-3 h-3 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
+                  Chargement…
+                </div>
+              ) : (
+                <select className={inputCls} value={voiceId} onChange={e => setVoiceId(e.target.value)} disabled={status === 'generating'}>
+                  {mistralVoices.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} {v.languages?.length ? `(${v.languages.join(', ')})` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           ) : (
             <div>

@@ -576,6 +576,9 @@ export const vocal = {
   getStatus: (sessionId, since = 0) =>
     request('GET', `/vocal/status/${sessionId}?since=${since}`),
 
+  /** Liste les voix Voxtral disponibles */
+  getMistralVoices: () => request('GET', '/vocal/mistral-voices'),
+
   /** Liste les sessions passées (depuis les manifests) */
   getSessions: () => request('GET', '/vocal/sessions'),
 

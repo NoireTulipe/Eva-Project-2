@@ -20,7 +20,7 @@ import { chunkText } from '../modules/vocal/chunker.js'
 import {
   generateChunk, mergeChunks, getAudioCacheDir, cleanupSession
 } from '../modules/vocal/tts.service.js'
-import { generateChunkMistral } from '../modules/vocal/mistral.service.js'
+import { generateChunkMistral, listMistralVoices } from '../modules/vocal/mistral.service.js'
 import prisma from '../config/db.js'
 
 const router = Router()
@@ -359,6 +359,19 @@ router.get('/download/:sessionId', async (req, res) => {
   } catch (err) {
     logError(`GET /vocal/download : ${err.message}`)
     res.status(500).json({ error: 'Erreur lors de la fusion : ' + err.message })
+  }
+})
+
+// ─── GET /api/vocal/mistral-voices ───────────────────────────────────────────
+// Liste les voix Voxtral disponibles (via l'API Mistral, caché 1h)
+
+router.get('/mistral-voices', authMiddleware, async (req, res) => {
+  try {
+    const voices = await listMistralVoices()
+    res.json(voices)
+  } catch (err) {
+    logError(`GET /vocal/mistral-voices : ${err.message}`)
+    res.status(500).json({ error: err.message })
   }
 })
 

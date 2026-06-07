@@ -10,6 +10,7 @@ import { resolve, basename } from 'path'
 import dotenv from 'dotenv'
 import { resolve as resolvePath, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { Mistral } from '@mistralai/mistralai'
 import { logAction, logError } from '../../logs/logger.js'
 import { getAudioCacheDir } from './tts.service.js'
 
@@ -101,4 +102,52 @@ export async function generateChunkMistral(text, index, sessionId, voiceId = 'fr
     duration,
     size
   }
+}
+
+// ─── Cache des voix ──────────────────────────────────────────────────────────
+
+let _voicesCache = null
+let _voicesCacheTime = 0
+const VOICES_CACHE_TTL = 3_600_000 // 1 heure
+
+/**
+ * Liste toutes les voix Voxtral disponibles via l'API Mistral.
+ * Résultat caché 1 heure (les voix changent rarement).
+ *
+ * @returns {Promise<Array<{ id: string, name: string, languages: string[] }>>}
+ */
+export async function listMistralVoices() {
+  const now = Date.now()
+  if (_voicesCache && (now - _voicesCacheTime) < VOICES_CACHE_TTL) {
+    return _voicesCache
+  }
+
+  const apiKey = getApiKey()
+  if (!apiKey) {
+    throw new Error('Clé API Voxtral absente. Définissez VOXTRAL_API_KEY dans le .env')
+  }
+
+  const client = new Mistral({ apiKey })
+  const allVoices = []
+  let offset = 0
+  const limit = 50
+
+  while (true) {
+    const page = await client.audio.voices.list({ limit, offset })
+    allVoices.push(...(page.items ?? []))
+    if (offset + (page.items?.length ?? 0) >= (page.total ?? 0)) break
+    offset += page.items?.length ?? 0
+  }
+
+  const voices = allVoices.map(v => ({
+    id: v.id,
+    name: v.name,
+    languages: v.languages ?? []
+  }))
+
+  _voicesCache = voices
+  _voicesCacheTime = now
+  logAction(`Voxtral : ${voices.length} voix chargées depuis l'API`)
+
+  return voices
 }
