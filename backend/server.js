@@ -23,7 +23,6 @@ import montageRoutes from './routes/montage.routes.js'
 import { startBot } from './discord/bot.js'
 import { startAllCrons } from './crons/cron.manager.js'
 import { startInstagramPlanifCron } from './crons/instagram-planif.cron.js'
-import { startAudioCleanupCron } from './crons/audio-cleanup.cron.js'
 import prisma from './config/db.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -115,7 +114,6 @@ app.listen(PORT, async () => {
   // Démarrer les crons
   startAllCrons().catch(err => logError(`Crons: échec démarrage — ${err.message}`))
   startInstagramPlanifCron()
-  startAudioCleanupCron()
 
   // Démarrer le bot Discord si activé
   const discordParam = await prisma.configParam.findUnique({ where: { cle: 'discord.enabled' } })

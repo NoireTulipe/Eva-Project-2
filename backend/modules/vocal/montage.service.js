@@ -20,7 +20,7 @@ function getFfmpegPath() {
   return 'ffmpeg'
 }
 
-function getUploadsDir() {
+export function getUploadsDir() {
   const dir = resolve(getAudioCacheDir(), '..', 'uploads', 'montage')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   return dir
