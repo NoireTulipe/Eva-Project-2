@@ -82,7 +82,8 @@ export async function exportMontage(project) {
         filePath,
         start: block.start || 0,
         trimIn,
-        effectiveDuration
+        effectiveDuration,
+        volume: block.volume ?? 1.0
       })
     }
   }
@@ -93,7 +94,8 @@ export async function exportMontage(project) {
   const inputs = allBlocks.map(b => `-i "${b.filePath}"`).join(' ')
   const filters = allBlocks.map((b, i) => {
     const delayMs = Math.round(b.start * 1000)
-    return `[${i}:a]atrim=${b.trimIn}:${b.trimIn + b.effectiveDuration},adelay=${delayMs}|${delayMs}[a${i}]`
+    const vol = b.volume ?? 1.0
+    return `[${i}:a]atrim=${b.trimIn}:${b.trimIn + b.effectiveDuration},volume=${vol},adelay=${delayMs}|${delayMs}[a${i}]`
   }).join('; ')
 
   const amixInputs = allBlocks.map((_, i) => `[a${i}]`).join('')

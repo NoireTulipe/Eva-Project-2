@@ -47,7 +47,7 @@ export default function Montage() {
     if (!track) return
     const lastBlock = track.blocks[track.blocks.length - 1]
     const start = lastBlock ? lastBlock.start + lastBlock.duration - (lastBlock.trimIn || 0) - (lastBlock.trimOut || 0) : 0
-    const block = { id: uid(), file, label: label?.slice(0, 80), start, duration, trimIn: 0, trimOut: 0 }
+    const block = { id: uid(), file, label: label?.slice(0, 80), start, duration, trimIn: 0, trimOut: 0, volume: 1.0 }
     setTracks(prev => prev.map(t => t.id === trackId ? { ...t, blocks: [...t.blocks, block] } : t))
     setSelectedBlock({ trackId, blockId: block.id })
   }
@@ -174,7 +174,9 @@ export default function Montage() {
 
       const node = ctx.createBufferSource()
       node.buffer = buffer
-      node.connect(ctx.destination)
+      const gain = ctx.createGain()
+      gain.gain.value = block.volume ?? 1.0
+      node.connect(gain).connect(ctx.destination)
       node.start(now + Math.max(0, delay), offset, remaining)
       nodes.push(node)
     }
@@ -405,6 +407,11 @@ export default function Montage() {
                 <label className="text-gray-500">Trim fin ({selBlock.trimOut || 0}s)</label>
                 <input type="range" className="w-full" min={0} max={selBlock.duration - (selBlock.trimIn || 0) - 0.3} step={0.1} value={selBlock.trimOut || 0}
                   onChange={e => updateBlock(selectedBlock.trackId, selectedBlock.blockId, { trimOut: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div>
+                <label className="text-gray-500">Volume ({Math.round((selBlock.volume ?? 1) * 100)}%)</label>
+                <input type="range" className="w-full" min={0} max={1.5} step={0.05} value={selBlock.volume ?? 1}
+                  onChange={e => updateBlock(selectedBlock.trackId, selectedBlock.blockId, { volume: parseFloat(e.target.value) })} />
               </div>
               <p className="text-gray-500">Durée audible: <b>{effectiveDuration(selBlock).toFixed(1)}s</b> (original: {selBlock.duration.toFixed(1)}s)</p>
               <button className={btnSmall + ' w-full !text-red-600 !border-red-300 hover:!bg-red-50'}
