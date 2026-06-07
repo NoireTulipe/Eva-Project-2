@@ -20,6 +20,7 @@ import { chunkText } from '../modules/vocal/chunker.js'
 import {
   generateChunk, mergeChunks, getAudioCacheDir, cleanupSession
 } from '../modules/vocal/tts.service.js'
+import { generateChunkMistral } from '../modules/vocal/mistral.service.js'
 import prisma from '../config/db.js'
 
 const router = Router()
@@ -37,7 +38,7 @@ function generateSessionId() {
 // Le frontend interroge ensuite GET /status/:id pour suivre la progression.
 
 router.post('/generate', authMiddleware, async (req, res) => {
-  const { text, mode, size, format, speed } = req.body
+  const { text, mode, size, format, speed, provider, voiceId } = req.body
 
   if (!text || typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({ error: 'Texte requis' })
@@ -45,8 +46,10 @@ router.post('/generate', authMiddleware, async (req, res) => {
 
   const chunkMode = ['sentences', 'words'].includes(mode) ? mode : 'sentences'
   const chunkSize = Number(size) || (chunkMode === 'sentences' ? 3 : 100)
-  const audioFormat = ['wav', 'mp3'].includes(format) ? format : 'wav'
+  const audioFormat = provider === 'mistral' ? 'mp3' : (['wav', 'mp3'].includes(format) ? format : 'wav')
   const audioSpeed = Math.min(2.0, Math.max(0.5, Number(speed) || 1.0))
+  const ttsProvider = provider === 'mistral' ? 'mistral' : 'piper'
+  const ttsVoiceId = voiceId || 'fr_female'
 
   const { chunks, chunkCount, totalChars, estimatedMinutes } = chunkText(
     text.trim(), chunkMode, chunkSize
@@ -66,6 +69,8 @@ router.post('/generate', authMiddleware, async (req, res) => {
     estimatedMinutes,
     format: audioFormat,
     speed: audioSpeed,
+    provider: ttsProvider,
+    voiceId: ttsVoiceId,
     results: new Array(chunkCount).fill(null),
     currentIndex: 0,
     status: 'generating',
@@ -73,7 +78,7 @@ router.post('/generate', authMiddleware, async (req, res) => {
     createdAt: Date.now()
   })
 
-  logAction(`Vocal : session ${sessionId} démarrée — ${chunkCount} chunks, ~${estimatedMinutes} min`)
+  logAction(`Vocal : session ${sessionId} démarrée — ${chunkCount} chunks, ~${estimatedMinutes} min, provider: ${ttsProvider}${ttsProvider === 'mistral' ? ', voix: ' + ttsVoiceId : ''}`)
 
   // Répondre immédiatement avec le sessionId
   res.json({
@@ -82,7 +87,8 @@ router.post('/generate', authMiddleware, async (req, res) => {
     totalChars,
     estimatedMinutes,
     format: audioFormat,
-    speed: audioSpeed
+    speed: audioSpeed,
+    provider: ttsProvider
   })
 
   // Génération en arrière-plan (après avoir envoyé la réponse)
@@ -93,13 +99,20 @@ async function generateInBackground(sessionId) {
   const session = sessions.get(sessionId)
   if (!session) return
 
-  const { chunks, chunkCount, format, speed } = session
+  const { chunks, chunkCount, format, speed, provider, voiceId } = session
+
+  const generateFn = provider === 'mistral' ? generateChunkMistral : generateChunk
 
   for (let i = 0; i < chunkCount; i++) {
     session.currentIndex = i
 
     try {
-      const result = await generateChunk(chunks[i], i, sessionId, format, speed)
+      // Piper : (text, index, sessionId, format, speed)
+      // Mistral : (text, index, sessionId, voiceId)
+      const result = provider === 'mistral'
+        ? await generateFn(chunks[i], i, sessionId, voiceId)
+        : await generateFn(chunks[i], i, sessionId, format, speed)
+
       session.results[i] = {
         index: i,
         url: result.url,
@@ -136,6 +149,8 @@ async function generateInBackground(sessionId) {
     const manifest = {
       sessionId,
       createdAt: new Date().toISOString(),
+      provider: session.provider || 'piper',
+      voiceId: session.voiceId || null,
       format: session.format,
       speed: session.speed,
       chunkCount: session.chunkCount,
@@ -167,6 +182,7 @@ router.get('/sessions', authMiddleware, async (req, res) => {
         sessions.push({
           sessionId: content.sessionId,
           createdAt: content.createdAt,
+          provider: content.provider || 'piper',
           format: content.format,
           chunkCount: content.chunkCount,
           estimatedMinutes: content.estimatedMinutes,

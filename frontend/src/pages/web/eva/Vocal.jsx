@@ -13,6 +13,19 @@ export default function Vocal() {
   const [chunkSize, setChunkSize] = useState(3)
   const [format, setFormat]   = useState('wav')
   const [speed, setSpeed]     = useState(1.0)
+  const [provider, setProvider] = useState('piper')
+  const [voiceId, setVoiceId] = useState('fr_female')
+
+  // Voix disponibles pour Voxtral
+  const VOICES = [
+    { id: 'fr_female',      label: '🇫🇷 Féminine' },
+    { id: 'fr_male',        label: '🇫🇷 Masculine' },
+    { id: 'neutral_female', label: '😐 Neutre féminin' },
+    { id: 'neutral_male',   label: '😐 Neutre masculin' },
+    { id: 'casual_female',  label: '💬 Décontracté féminin' },
+    { id: 'casual_male',    label: '💬 Décontracté masculin' },
+    { id: 'cheerful_female', label: '😊 Enjoué féminin' }
+  ]
 
   // État
   const [status, setStatus]   = useState('idle') // idle|generating|playing|paused|done|error
@@ -82,7 +95,7 @@ export default function Vocal() {
     setStatus('generating')
 
     try {
-      const data = await vocal.generate(text, { mode, size: chunkSize, format, speed })
+      const data = await vocal.generate(text, { mode, size: chunkSize, format, speed, provider, voiceId })
       setSessionId(data.sessionId); setChunkTotal(data.chunkCount)
       setEstimatedMin(data.estimatedMinutes || 0)
       setChunks(Array.from({ length: data.chunkCount }, (_, i) => ({
@@ -209,20 +222,53 @@ export default function Vocal() {
 
       {/* Zone texte */}
       <div className={cardCls}>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Texte à vocaliser</label>
-        <textarea className={inputCls + ' h-48 resize-y font-mono text-xs'}
-          placeholder="Collez votre texte ici (livre, article, chapitre…)" value={text}
-          onChange={e => setText(e.target.value)} disabled={status === 'generating'} />
-        <div className="flex justify-between mt-1">
-          <span className="text-xs text-gray-400">{text.length.toLocaleString()} car. {estimatedChunks > 0 && `— ~${estimatedChunks} segments`}</span>
-          {text.trim() && <span className="text-xs text-gray-400">~{Math.ceil(text.trim().length / 15 / 60)} min audio</span>}
+        <label className="block text-sm font-medium text-gray-700 mb-2">Texte à vocaliser</label>
+        <textarea
+          className="w-full min-h-[350px] rounded-xl border-2 border-gray-200 hover:border-indigo-300 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 p-5 text-sm leading-relaxed resize-y transition-all outline-none font-serif text-gray-700 bg-gray-50 placeholder:text-gray-400"
+          placeholder="Collez votre texte ici…&#10;&#10;Astuce : utilisez # en début de ligne pour marquer une pause entre paragraphes."
+          value={text}
+          onChange={e => setText(e.target.value)}
+          disabled={status === 'generating'}
+        />
+        <div className="flex justify-between mt-2">
+          <span className="text-xs text-gray-400">
+            {text.length.toLocaleString()} caractères
+            {estimatedChunks > 0 && <span className="ml-2 px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-xs">{estimatedChunks} segments estimés</span>}
+          </span>
+          {text.trim() && <span className="text-xs text-gray-400">~{Math.ceil(text.trim().length / 15 / 60)} min d'audio</span>}
         </div>
       </div>
 
       {/* Paramètres */}
       <div className={cardCls}>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Paramètres</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+        {/* Ligne 1 : Provider + Voix + Format + Vitesse */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Synthèse vocale</label>
+            <select className={inputCls} value={provider} onChange={e => { setProvider(e.target.value); if (e.target.value === 'mistral') setFormat('mp3') }} disabled={status === 'generating'}>
+              <option value="piper">Piper (local)</option>
+              <option value="mistral">Mistral Voxtral</option>
+            </select>
+          </div>
+
+          {provider === 'mistral' ? (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Voix</label>
+              <select className={inputCls} value={voiceId} onChange={e => setVoiceId(e.target.value)} disabled={status === 'generating'}>
+                {VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Format</label>
+              <select className={inputCls} value={format} onChange={e => setFormat(e.target.value)} disabled={status === 'generating'}>
+                <option value="wav">WAV</option><option value="mp3">MP3</option>
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs text-gray-500 mb-1">Découpage</label>
             <select className={inputCls} value={mode} onChange={e => { setMode(e.target.value); setChunkSize(e.target.value === 'sentences' ? 3 : 100) }} disabled={status === 'generating'}>
@@ -233,17 +279,16 @@ export default function Vocal() {
             <label className="block text-xs text-gray-500 mb-1">{mode === 'sentences' ? 'Phrases/seg.' : 'Mots/seg.'}</label>
             <input type="number" className={inputCls} value={chunkSize} onChange={e => setChunkSize(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={mode === 'sentences' ? 20 : 500} disabled={status === 'generating'} />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Format</label>
-            <select className={inputCls} value={format} onChange={e => setFormat(e.target.value)} disabled={status === 'generating'}>
-              <option value="wav">WAV</option><option value="mp3">MP3</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Vitesse {speed.toFixed(1)}x</label>
-            <input type="range" className="w-full" value={speed} onChange={e => setSpeed(parseFloat(e.target.value))} min={0.5} max={2.0} step={0.1} disabled={status === 'generating'} />
-          </div>
         </div>
+
+        {/* Ligne 2 : Vitesse (seulement pour Piper) */}
+        {provider === 'piper' && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-16">Vitesse</span>
+            <input type="range" className="flex-1 max-w-xs" value={speed} onChange={e => setSpeed(parseFloat(e.target.value))} min={0.5} max={2.0} step={0.1} disabled={status === 'generating'} />
+            <span className="text-xs text-gray-600 w-10">{speed.toFixed(1)}x</span>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -343,7 +388,8 @@ export default function Vocal() {
               <div key={s.sessionId} className="flex items-center justify-between p-2 rounded border border-gray-200 hover:bg-gray-50 text-xs">
                 <div>
                   <span className="text-gray-700 font-medium">{new Date(s.createdAt).toLocaleString()}</span>
-                  <span className="text-gray-400 ml-3">{s.chunkCount} segments • {s.format?.toUpperCase()} • ~{s.estimatedMinutes}min</span>
+                  <span className="text-gray-400 ml-2">{s.provider === 'mistral' ? '🤖' : '🔊'} {s.provider === 'mistral' ? 'Voxtral' : 'Piper'}</span>
+                  <span className="text-gray-400 ml-2">{s.chunkCount} seg. • {s.format?.toUpperCase()} • ~{s.estimatedMinutes}min</span>
                 </div>
                 <div className="flex gap-1">
                   <button className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs hover:bg-indigo-200" onClick={() => replaySession(s.sessionId)}>🔁 Rejouer</button>
