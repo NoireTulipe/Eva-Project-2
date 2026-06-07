@@ -56,15 +56,19 @@ export default function Montage() {
     detectRealDuration(trackId, blockId, file)
   }
 
-  function detectRealDuration(trackId, blockId, file) {
-    const a = new Audio(file)
-    a.preload = 'metadata'
-    a.onloadedmetadata = () => {
-      if (a.duration && isFinite(a.duration) && a.duration > 0.1) {
-        updateBlock(trackId, blockId, { duration: Math.round(a.duration * 10) / 10 })
+  async function detectRealDuration(trackId, blockId, file) {
+    try {
+      const resp = await fetch(file)
+      if (!resp.ok) return
+      const buffer = await resp.arrayBuffer()
+      const ctx = new AudioContext()
+      const audioBuffer = await ctx.decodeAudioData(buffer)
+      const dur = audioBuffer.duration
+      ctx.close()
+      if (dur && isFinite(dur) && dur > 0.1) {
+        updateBlock(trackId, blockId, { duration: Math.round(dur * 10) / 10 })
       }
-    }
-    a.onerror = () => {}
+    } catch {}
   }
 
   function updateBlock(trackId, blockId, changes) {
@@ -237,12 +241,8 @@ export default function Montage() {
     const scrollLeft = timelineRef.current?.scrollLeft || 0
     const x = e.clientX - rect.left + scrollLeft
     const time = Math.max(0, x / SCALE)
-    if (playing) {
-      // Rejouer depuis cette position
-      startPlayback(time)
-    } else {
-      setPlayTime(time)
-    }
+    // Toujours lancer la lecture depuis cette position
+    startPlayback(time)
   }
 
   useEffect(() => { return () => stopPlay() }, [])
@@ -353,7 +353,7 @@ export default function Montage() {
         <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-auto relative"
           ref={timelineRef}
           onClick={handleTimelineClick}
-          style={{ cursor: playing ? 'pointer' : 'default' }}
+          style={{ cursor: 'pointer' }}
         >
           {/* Règle cliquable */}
           <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 h-6 flex items-end cursor-pointer" style={{ width: timelineWidth }}>
