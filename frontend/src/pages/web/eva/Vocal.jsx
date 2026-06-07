@@ -135,7 +135,7 @@ export default function Vocal() {
         setMergeUrl(data.mergeUrl); setChunkCurrent(data.chunkCount)
         loadPastSessions()
       }
-    } catch {}
+    } catch (e) { console.error('Vocal poll error:', e) }
   }, [])
 
   const stopGeneration = useCallback(() => {
@@ -370,7 +370,7 @@ export default function Vocal() {
             </div>
           </div>
 
-          <audio ref={audioRef} onEnded={onAudioEnded} onError={onAudioEnded} preload="auto" />
+          <audio ref={audioRef} onEnded={onAudioEnded} onError={(e) => { console.error('Audio error:', audioRef.current?.error, 'src:', audioRef.current?.src); onAudioEnded() }} preload="auto" />
 
           <div className="max-h-64 overflow-y-auto space-y-1">
             {chunks.map((chunk, i) => {

@@ -53,6 +53,10 @@ export async function generateChunkMistral(text, index, sessionId, voiceId = 'fr
     response_format: 'mp3'
   }
 
+  // Timeout 30 secondes pour l'appel API
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30_000)
+
   let response
   try {
     response = await fetch('https://api.mistral.ai/v1/audio/speech', {
@@ -61,11 +65,14 @@ export async function generateChunkMistral(text, index, sessionId, voiceId = 'fr
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     })
   } catch (err) {
-    throw new Error(`Voxtral : échec requête — ${err.message}`)
+    clearTimeout(timeout)
+    throw new Error(`Voxtral : échec requête — ${err.name === 'AbortError' ? 'timeout (30s)' : err.message}`)
   }
+  clearTimeout(timeout)
 
   if (!response.ok) {
     let detail = ''
