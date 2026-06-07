@@ -46,10 +46,25 @@ export default function Montage() {
     const track = tracks.find(t => t.id === trackId)
     if (!track) return
     const lastBlock = track.blocks[track.blocks.length - 1]
-    const start = lastBlock ? lastBlock.start + lastBlock.duration - (lastBlock.trimIn || 0) - (lastBlock.trimOut || 0) : 0
-    const block = { id: uid(), file, label: label?.slice(0, 80), start, duration, trimIn: 0, trimOut: 0, volume: 1.0 }
+    const start = lastBlock ? lastBlock.start + effectiveDuration(lastBlock) : 0
+    const blockId = uid()
+    const block = { id: blockId, file, label: label?.slice(0, 80), start, duration, trimIn: 0, trimOut: 0, volume: 1.0 }
     setTracks(prev => prev.map(t => t.id === trackId ? { ...t, blocks: [...t.blocks, block] } : t))
     setSelectedBlock({ trackId, blockId: block.id })
+
+    // Détecter la vraie durée depuis le fichier audio
+    detectRealDuration(trackId, blockId, file)
+  }
+
+  function detectRealDuration(trackId, blockId, file) {
+    const a = new Audio(file)
+    a.preload = 'metadata'
+    a.onloadedmetadata = () => {
+      if (a.duration && isFinite(a.duration) && a.duration > 0.1) {
+        updateBlock(trackId, blockId, { duration: Math.round(a.duration * 10) / 10 })
+      }
+    }
+    a.onerror = () => {}
   }
 
   function updateBlock(trackId, blockId, changes) {
@@ -414,6 +429,7 @@ export default function Montage() {
                   onChange={e => updateBlock(selectedBlock.trackId, selectedBlock.blockId, { volume: parseFloat(e.target.value) })} />
               </div>
               <p className="text-gray-500">Durée audible: <b>{effectiveDuration(selBlock).toFixed(1)}s</b> (original: {selBlock.duration.toFixed(1)}s)</p>
+              <button className={btnSmall + ' w-full'} onClick={() => detectRealDuration(selectedBlock.trackId, selectedBlock.blockId, selBlock.file)}>🔄 Re-détecter durée réelle</button>
               <button className={btnSmall + ' w-full !text-red-600 !border-red-300 hover:!bg-red-50'}
                 onClick={() => removeBlock(selectedBlock.trackId, selectedBlock.blockId)}>🗑️ Supprimer ce bloc</button>
             </>
