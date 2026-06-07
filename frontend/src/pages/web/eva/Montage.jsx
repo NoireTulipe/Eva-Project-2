@@ -1,13 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { montage, vocal } from '../../../shared/api.js'
+import { montage } from '../../../shared/api.js'
 
-const SCALE = 60 // px par seconde
-const MIN_BLOCK_W = 20 // px minimum
-
+const SCALE = 60
+const MIN_BLOCK_W = 20
 const TRACK_COLORS = { voice: '#dbeafe', music: '#d1fae5', sfx: '#fef3c7' }
 const TRACK_NAMES = { voice: '🎙️ Voix', music: '🎵 Musique', sfx: '🔊 Bruitage' }
-const VOICE_COLORS = ['#fef3c7','#dbeafe','#d1fae5','#ede9fe','#fce7f3','#e0f2fe','#fef2f2','#f0fdf4','#faf5ff','#fff7ed','#ffedd5','#ecfdf5','#eff6ff','#fdf2f8']
-
 const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300'
 const btnCls = 'px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-40'
 const btnSmall = 'px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-50'
@@ -23,28 +20,23 @@ export default function Montage() {
     { id: 'music', name: 'Musique', type: 'music', blocks: [] },
     { id: 'sfx', name: 'Bruitage', type: 'sfx', blocks: [] }
   ])
-  const [selectedBlock, setSelectedBlock] = useState(null) // { trackId, blockId }
+  const [selectedBlock, setSelectedBlock] = useState(null)
   const [playing, setPlaying] = useState(false)
   const [playTime, setPlayTime] = useState(0)
   const [projectName, setProjectName] = useState('Sans titre')
   const [projectId, setProjectId] = useState(null)
   const [exportUrl, setExportUrl] = useState(null)
+  const [previewing, setPreviewing] = useState(false)
 
   const timelineRef = useRef(null)
   const playIntervalRef = useRef(null)
-  const audioContextRef = useRef(null)
-  const playStartTimeRef = useRef(0)
+  const audioCtxRef = useRef(null)
+  const previewAudioRef = useRef(null)
 
-  // Charger les sources
-  const loadSources = useCallback(async () => {
-    try { setSources(await montage.getSources()) } catch {}
-  }, [])
-
+  const loadSources = useCallback(async () => { try { setSources(await montage.getSources()) } catch {} }, [])
   useEffect(() => { loadSources(); loadProjectList() }, [])
 
-  async function loadProjectList() {
-    try { setProjects(await montage.getProjects()) } catch {}
-  }
+  async function loadProjectList() { try { setProjects(await montage.getProjects()) } catch {} }
 
   // ─── Gestion des blocs ─────────────────────────────────────────────────
 
@@ -53,21 +45,19 @@ export default function Montage() {
     if (!track) return
     const lastBlock = track.blocks[track.blocks.length - 1]
     const start = lastBlock ? lastBlock.start + lastBlock.duration : 0
-    const block = { id: uid(), file, label, start, duration, trimIn: 0, trimOut: 0 }
+    const block = { id: uid(), file, label: label?.slice(0, 80), start, duration, trimIn: 0, trimOut: 0 }
     setTracks(prev => prev.map(t => t.id === trackId ? { ...t, blocks: [...t.blocks, block] } : t))
     setSelectedBlock({ trackId, blockId: block.id })
   }
 
   function updateBlock(trackId, blockId, changes) {
     setTracks(prev => prev.map(t => t.id === trackId
-      ? { ...t, blocks: t.blocks.map(b => b.id === blockId ? { ...b, ...changes } : b) }
-      : t))
+      ? { ...t, blocks: t.blocks.map(b => b.id === blockId ? { ...b, ...changes } : b) } : t))
   }
 
   function removeBlock(trackId, blockId) {
     setTracks(prev => prev.map(t => t.id === trackId
-      ? { ...t, blocks: t.blocks.filter(b => b.id !== blockId) }
-      : t))
+      ? { ...t, blocks: t.blocks.filter(b => b.id !== blockId) } : t))
     if (selectedBlock?.trackId === trackId && selectedBlock?.blockId === blockId) setSelectedBlock(null)
   }
 
@@ -77,18 +67,12 @@ export default function Montage() {
 
   function getTotalDuration() {
     let max = 10
-    for (const t of tracks) {
-      for (const b of t.blocks) {
-        const end = b.start + b.duration
-        if (end > max) max = end
-      }
-    }
+    for (const t of tracks) for (const b of t.blocks) { const end = b.start + b.duration; if (end > max) max = end }
     return max
   }
-
   const totalDuration = getTotalDuration()
 
-  // ─── Déplacement des blocs ────────────────────────────────────────────
+  // ─── Drag blocs ───────────────────────────────────────────────────────
 
   function startBlockDrag(e, trackId, blockId) {
     e.preventDefault()
@@ -96,39 +80,106 @@ export default function Montage() {
     if (!block) return
     const startX = e.clientX
     const origStart = block.start
-
-    function onMove(ev) {
-      const dx = (ev.clientX - startX) / SCALE
-      const newStart = Math.max(0, origStart + dx)
-      // Snap à 0.1s
-      updateBlock(trackId, blockId, { start: Math.round(newStart * 10) / 10 })
-    }
-    function onUp() {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
+    function onMove(ev) { updateBlock(trackId, blockId, { start: Math.max(0, Math.round((origStart + (ev.clientX - startX) / SCALE) * 10) / 10) }) }
+    function onUp() { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }
 
-  // ─── Lecture ──────────────────────────────────────────────────────────
+  // ─── Preview d'un bloc ────────────────────────────────────────────────
+
+  async function previewBlock(block) {
+    if (!block?.file) return
+    stopPlay()
+    if (previewAudioRef.current) { previewAudioRef.current.pause(); previewAudioRef.current = null }
+    const a = new Audio(block.file)
+    a.currentTime = block.trimIn || 0
+    previewAudioRef.current = a
+    setPreviewing(true)
+    a.onended = () => setPreviewing(false)
+    a.onerror = () => setPreviewing(false)
+    try { await a.play() } catch { setPreviewing(false) }
+  }
+
+  function stopPreview() {
+    if (previewAudioRef.current) { previewAudioRef.current.pause(); previewAudioRef.current = null }
+    setPreviewing(false)
+  }
+
+  // ─── Lecture globale (Web Audio API) ──────────────────────────────────
+
+  async function startGlobalPlay() {
+    stopPlay(); stopPreview()
+    setPlaying(true); setPlayTime(0)
+
+    const ctx = new AudioContext()
+    audioCtxRef.current = ctx
+
+    // Récupérer et décoder tous les blocs
+    const sources = []
+    for (const track of tracks) {
+      for (const block of track.blocks) {
+        if (!block.file) continue
+        try {
+          const resp = await fetch(block.file)
+          const buffer = await resp.arrayBuffer()
+          const audioBuffer = await ctx.decodeAudioData(buffer)
+          sources.push({ buffer: audioBuffer, block })
+        } catch {}
+      }
+    }
+
+    const startTime = ctx.currentTime
+    const allNodes = []
+
+    for (const { buffer, block } of sources) {
+      const trimIn = block.trimIn || 0
+      const trimOut = block.trimOut || 0
+      const effectiveDur = block.duration - trimIn - trimOut
+      if (effectiveDur <= 0.1) continue
+
+      const node = ctx.createBufferSource()
+      node.buffer = buffer
+      const gain = ctx.createGain()
+      gain.gain.value = 0.8
+      node.connect(gain).connect(ctx.destination)
+      node.start(startTime + block.start, trimIn, effectiveDur)
+      allNodes.push(node)
+    }
+
+    if (allNodes.length === 0) { ctx.close(); setPlaying(false); return }
+
+    const totalDur = totalDuration
+    playStartRef.current = ctx.currentTime - (0) // offset
+    playIntervalRef.current = setInterval(() => {
+      const elapsed = ctx.currentTime - startTime
+      setPlayTime(elapsed)
+      if (elapsed >= totalDur + 1) { stopAll() }
+    }, 80)
+
+    function stopAll() {
+      try { allNodes.forEach(n => { try { n.stop() } catch {} }) } catch {}
+      clearInterval(playIntervalRef.current)
+      ctx.close()
+      setPlaying(false)
+    }
+    audioStopRef.current = stopAll
+  }
+
+  const playStartRef = useRef(0)
+  const audioStopRef = useRef(null)
+
+  function stopPlay() {
+    if (playIntervalRef.current) { clearInterval(playIntervalRef.current); playIntervalRef.current = null }
+    if (audioStopRef.current) { audioStopRef.current(); audioStopRef.current = null }
+    if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {}; audioCtxRef.current = null }
+    setPlaying(false)
+    setPlayTime(0)
+  }
 
   function togglePlay() {
     if (playing) { stopPlay(); return }
-    setPlaying(true)
-    setPlayTime(0)
-    playStartTimeRef.current = Date.now()
-    playIntervalRef.current = setInterval(() => {
-      const elapsed = (Date.now() - playStartTimeRef.current) / 1000
-      setPlayTime(elapsed)
-      if (elapsed >= totalDuration) stopPlay()
-    }, 50)
-  }
-
-  function stopPlay() {
-    setPlaying(false)
-    setPlayTime(0)
-    if (playIntervalRef.current) { clearInterval(playIntervalRef.current); playIntervalRef.current = null }
+    startGlobalPlay()
   }
 
   useEffect(() => { return () => stopPlay() }, [])
@@ -138,7 +189,7 @@ export default function Montage() {
   async function handleExport() {
     try {
       const result = await montage.exportMontage({ tracks })
-      setExportUrl(result.url + '?download=1')
+      setExportUrl(result.url)
     } catch (e) { alert('Erreur export : ' + e.message) }
   }
 
@@ -157,10 +208,9 @@ export default function Montage() {
       setTracks(p.tracks || [])
       setProjectName(p.name || 'Sans titre')
       setProjectId(p.id)
+      stopPlay()
     } catch {}
   }
-
-  // ─── Upload ───────────────────────────────────────────────────────────
 
   async function handleUpload(e) {
     const file = e.target.files?.[0]
@@ -168,18 +218,16 @@ export default function Montage() {
     try {
       const result = await montage.uploadFile(file)
       setSources(prev => ({ ...prev, uploads: [...prev.uploads, { name: result.name, file: result.file, label: result.name }] }))
-      // Ajouter automatiquement à la piste musique
-      addBlockToTrack('music', result.file, result.name, 10)
+      addBlockToTrack('music', result.file, result.name, Math.min(file.size / 16000, 30))
     } catch { alert('Erreur upload') }
   }
 
-  // ─── Bloc sélectionné ─────────────────────────────────────────────────
+  // ─── Sélection ────────────────────────────────────────────────────────
 
   const selBlock = selectedBlock ? getBlock(selectedBlock.trackId, selectedBlock.blockId) : null
+  const timelineWidth = Math.max(totalDuration * SCALE + 100, 800)
 
   // ─── Rendu ────────────────────────────────────────────────────────────
-
-  const timelineWidth = Math.max(totalDuration * SCALE + 100, 800)
 
   return (
     <div className="max-w-full mx-auto space-y-3">
@@ -187,83 +235,73 @@ export default function Montage() {
         <h1 className="text-xl font-bold text-gray-800">🎬 Montage audio</h1>
         <div className="flex gap-2 items-center">
           <input className={inputCls + ' w-40'} value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Nom du projet" />
-          <button className={btnCls} onClick={handleSave}>💾</button>
-          <select className={inputCls + ' w-32'} onChange={e => e.target.value && handleLoad(e.target.value)} value="">
+          <button className={btnCls} onClick={handleSave} title="Sauvegarder">💾</button>
+          <select className={inputCls + ' w-36'} onChange={e => e.target.value && handleLoad(e.target.value)} value="">
             <option value="">📂 Charger…</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.blockCount} blocs)</option>)}
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
       </div>
 
       <div className="flex gap-3" style={{ height: 'calc(100vh - 160px)' }}>
-        {/* ── Sources (gauche) ───────────────────────────────────────── */}
+        {/* ── Sources ───────────────────────────────────────────────── */}
         <div className="w-56 flex-shrink-0 overflow-y-auto space-y-2 bg-white rounded-lg border border-gray-200 p-3">
           <h2 className="text-xs font-semibold text-gray-700 mb-2">📦 Sources</h2>
 
-          {/* Sessions vocales */}
           <details className="text-xs" open>
             <summary className="font-medium text-gray-600 cursor-pointer">🎙️ Sessions vocales</summary>
-            <div className="mt-1 space-y-1 max-h-48 overflow-y-auto">
+            <div className="mt-1 space-y-1 max-h-56 overflow-y-auto">
               {sources.vocal.map(s => (
-                <details key={s.sessionId} className="text-xs ml-2">
-                  <summary className="text-gray-500 cursor-pointer truncate">{new Date(s.createdAt).toLocaleDateString()} — {s.chunks.length} seg.</summary>
-                  <div className="ml-2 space-y-0.5">
+                <details key={s.sessionId} className="text-xs ml-1">
+                  <summary className="text-gray-500 cursor-pointer truncate hover:text-gray-700">
+                    {new Date(s.createdAt).toLocaleDateString()} — {s.chunks.length} seg. ({s.provider})
+                  </summary>
+                  <div className="ml-1 space-y-0.5">
                     {s.chunks.map((c, i) => (
-                      <button key={i} className="block w-full text-left text-gray-600 hover:bg-indigo-50 rounded px-1 py-0.5 truncate"
-                        onClick={() => addBlockToTrack('voice', c.file, c.text?.slice(0, 60) || `Seg. ${i + 1}`, c.duration || 5)}
-                        title={c.text}>🎵 {c.text?.slice(0, 40) || `Seg. ${i + 1}`} ({c.duration || '?'}s)</button>
+                      <button key={i} className="block w-full text-left text-gray-600 hover:bg-blue-50 rounded px-1 py-0.5 text-[11px] truncate"
+                        onClick={() => addBlockToTrack('voice', c.file, c.text || `Seg. ${i + 1}`, c.duration || 5)}
+                        title={c.text}>🎵 {c.text?.slice(0, 45) || `Seg. ${i + 1}`}</button>
                     ))}
                   </div>
                 </details>
               ))}
-              {sources.vocal.length === 0 && <p className="text-gray-400">Aucune session</p>}
+              {sources.vocal.length === 0 && <p className="text-gray-400 italic">Aucune session vocale</p>}
             </div>
           </details>
 
-          {/* Uploads */}
           <details className="text-xs" open>
             <summary className="font-medium text-gray-600 cursor-pointer">📁 Uploads</summary>
-            <div className="mt-1 space-y-1 max-h-48 overflow-y-auto">
+            <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
               {sources.uploads.map((u, i) => (
-                <button key={i} className="block w-full text-left text-gray-600 hover:bg-green-50 rounded px-1 py-0.5 truncate"
-                  onClick={() => addBlockToTrack('music', u.file, u.label, 10)}
-                  title={u.name}>🎧 {u.label}</button>
+                <button key={i} className="block w-full text-left text-gray-600 hover:bg-green-50 rounded px-1 py-0.5 text-[11px] truncate"
+                  onClick={() => addBlockToTrack('music', u.file, u.label, 10)}>🎧 {u.label}</button>
               ))}
-              {sources.uploads.length === 0 && <p className="text-gray-400">Aucun upload</p>}
+              {sources.uploads.length === 0 && <p className="text-gray-400 italic">Aucun upload</p>}
             </div>
           </details>
 
-          <label className="block text-center py-1.5 border-2 border-dashed border-gray-300 rounded text-xs text-gray-400 hover:border-indigo-400 cursor-pointer mt-2">
+          <label className="block text-center py-2 border-2 border-dashed border-gray-300 rounded text-xs text-gray-400 hover:border-indigo-400 cursor-pointer">
             + Importer un fichier
             <input type="file" accept="audio/*" className="hidden" onChange={handleUpload} />
           </label>
         </div>
 
-        {/* ── Timeline (centre) ──────────────────────────────────────── */}
+        {/* ── Timeline ───────────────────────────────────────────────── */}
         <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-auto relative" ref={timelineRef}>
-          {/* Règle du temps */}
           <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 h-6 flex items-end" style={{ width: timelineWidth }}>
             {Array.from({ length: Math.ceil(totalDuration) + 2 }, (_, i) => (
-              <div key={i} className="absolute text-[10px] text-gray-400" style={{ left: i * SCALE, bottom: 2 }}>
-                {i}s
-              </div>
+              <div key={i} className="absolute text-[10px] text-gray-400" style={{ left: i * SCALE, bottom: 2 }}>{i}s</div>
             ))}
           </div>
-
-          {/* Curseur de lecture */}
-          {playing && (
-            <div className="absolute top-6 bottom-0 w-0.5 bg-red-500 z-20 pointer-events-none" style={{ left: playTime * SCALE }} />
-          )}
-
-          {/* Pistes */}
+          {playing && <div className="absolute top-6 bottom-0 w-0.5 bg-red-500 z-20 pointer-events-none" style={{ left: playTime * SCALE }} />}
           <div style={{ width: timelineWidth, paddingBottom: 40 }}>
             {tracks.map(track => (
-              <div key={track.id} className="border-b border-gray-100 relative" style={{ minHeight: 64, backgroundColor: track.type === 'voice' ? '#fafbfc' : track.type === 'music' ? '#f8fdf9' : '#fffdf7' }}>
-                <div className="sticky left-0 w-24 text-xs text-gray-500 py-1 px-2 bg-white/80">{TRACK_NAMES[track.type]}</div>
+              <div key={track.id} className="border-b border-gray-100 relative" style={{ minHeight: 60, backgroundColor: track.type === 'voice' ? '#fafbfc' : track.type === 'music' ? '#f8fdf9' : '#fffdf7' }}>
+                <div className="sticky left-0 w-20 text-[11px] text-gray-500 py-1 px-2 bg-white/90 font-medium">{TRACK_NAMES[track.type]}</div>
                 {track.blocks.map(block => {
                   const isSel = selectedBlock?.trackId === track.id && selectedBlock?.blockId === block.id
-                  const effectiveDur = Math.max(0.3, block.duration - block.trimIn - block.trimOut)
-                  const w = Math.max(MIN_BLOCK_W, effectiveDur * SCALE)
+                  const effDur = Math.max(0.3, block.duration - (block.trimIn || 0) - (block.trimOut || 0))
+                  const w = Math.max(MIN_BLOCK_W, effDur * SCALE)
                   const trimInW = (block.trimIn || 0) * SCALE
                   const trimOutW = (block.trimOut || 0) * SCALE
                   return (
@@ -271,17 +309,13 @@ export default function Montage() {
                       className={`absolute top-2 h-14 rounded border-2 cursor-pointer group ${isSel ? 'border-indigo-500 ring-2 ring-indigo-200 z-10' : 'border-gray-300 hover:border-gray-400'}`}
                       style={{ left: block.start * SCALE, width: w + trimInW + trimOutW, backgroundColor: TRACK_COLORS[track.type] }}
                       onClick={() => setSelectedBlock({ trackId: track.id, blockId: block.id })}
-                      onMouseDown={e => startBlockDrag(e, track.id, block.id)}
-                    >
-                      {/* Zone trimmée gauche */}
-                      {trimInW > 0 && <div className="absolute left-0 top-0 h-full bg-gray-300/60 rounded-l" style={{ width: trimInW }} />}
-                      {/* Zone trimmée droite */}
-                      {trimOutW > 0 && <div className="absolute right-0 top-0 h-full bg-gray-300/60 rounded-r" style={{ width: trimOutW }} />}
-                      {/* Zone active */}
+                      onDoubleClick={() => previewBlock(block)}
+                      onMouseDown={e => startBlockDrag(e, track.id, block.id)}>
+                      {trimInW > 0 && <div className="absolute left-0 top-0 h-full bg-gray-300/50 rounded-l" style={{ width: trimInW }} />}
+                      {trimOutW > 0 && <div className="absolute right-0 top-0 h-full bg-gray-300/50 rounded-r" style={{ width: trimOutW }} />}
                       <div className="absolute top-0 h-full flex items-center px-1 overflow-hidden" style={{ left: trimInW, width: w }}>
                         <span className="text-[10px] text-gray-700 truncate">{block.label}</span>
                       </div>
-                      {/* Bouton supprimer */}
                       <button className="absolute -top-2 -right-2 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] hidden group-hover:flex items-center justify-center"
                         onClick={e => { e.stopPropagation(); removeBlock(track.id, block.id) }}>✕</button>
                     </div>
@@ -292,43 +326,57 @@ export default function Montage() {
           </div>
         </div>
 
-        {/* ── Propriétés (droite) ─────────────────────────────────────── */}
+        {/* ── Propriétés ─────────────────────────────────────────────── */}
         <div className="w-48 flex-shrink-0 bg-white rounded-lg border border-gray-200 p-3 overflow-y-auto text-xs space-y-3">
-          <h2 className="font-semibold text-gray-700">✏️ Propriétés</h2>
+          <h2 className="font-semibold text-gray-700">✏️ Bloc</h2>
           {selBlock ? (
             <>
-              <p className="text-gray-600 truncate">{selBlock.label}</p>
+              <p className="text-gray-600 truncate text-[11px]" title={selBlock.label}>{selBlock.label}</p>
+              <div className="flex gap-1">
+                <button className={btnSmall + ' flex-1 ' + (previewing ? '!bg-green-100 !border-green-400' : '')}
+                  onClick={() => previewBlock(selBlock)}>
+                  {previewing ? '⏹️ Stop' : '▶️ Écouter'}
+                </button>
+              </div>
               <div>
-                <label className="text-gray-500">Début</label>
+                <label className="text-gray-500">Début (s)</label>
                 <input type="number" className={inputCls} step={0.1} min={0} value={selBlock.start}
                   onChange={e => updateBlock(selectedBlock.trackId, selectedBlock.blockId, { start: parseFloat(e.target.value) || 0 })} />
               </div>
               <div>
-                <label className="text-gray-500">Trim début (s)</label>
+                <label className="text-gray-500">Trim début</label>
                 <input type="range" className="w-full" min={0} max={selBlock.duration - (selBlock.trimOut || 0) - 0.3} step={0.1} value={selBlock.trimIn || 0}
                   onChange={e => updateBlock(selectedBlock.trackId, selectedBlock.blockId, { trimIn: parseFloat(e.target.value) || 0 })} />
                 <span className="text-gray-400">{selBlock.trimIn || 0}s</span>
               </div>
               <div>
-                <label className="text-gray-500">Trim fin (s)</label>
+                <label className="text-gray-500">Trim fin</label>
                 <input type="range" className="w-full" min={0} max={selBlock.duration - (selBlock.trimIn || 0) - 0.3} step={0.1} value={selBlock.trimOut || 0}
                   onChange={e => updateBlock(selectedBlock.trackId, selectedBlock.blockId, { trimOut: parseFloat(e.target.value) || 0 })} />
                 <span className="text-gray-400">{selBlock.trimOut || 0}s</span>
               </div>
               <p className="text-gray-400">Effectif: {(selBlock.duration - (selBlock.trimIn || 0) - (selBlock.trimOut || 0)).toFixed(1)}s</p>
-              <button className={btnSmall + ' w-full'} onClick={() => removeBlock(selectedBlock.trackId, selectedBlock.blockId)}>🗑️ Supprimer</button>
+              <button className={btnSmall + ' w-full !text-red-600 !border-red-300 hover:!bg-red-50'}
+                onClick={() => removeBlock(selectedBlock.trackId, selectedBlock.blockId)}>🗑️ Supprimer ce bloc</button>
             </>
           ) : (
-            <p className="text-gray-400">Sélectionnez un bloc</p>
+            <div className="text-gray-400 text-[11px] space-y-1">
+              <p>Sélectionnez un bloc</p>
+              <p>💡 Double-clic = écouter</p>
+              <p>✕ au survol = supprimer</p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── Contrôles (bas) ──────────────────────────────────────────── */}
+      {/* ── Contrôles ────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 bg-white rounded-lg border border-gray-200 px-4 py-2">
-        <button className={btnCls + ' text-base px-4'} onClick={togglePlay}>{playing ? '⏹️' : '▶️'} {playing ? `${playTime.toFixed(1)}s` : 'Lecture'}</button>
+        <button className={btnCls + ' text-base px-4'} onClick={togglePlay}>
+          {playing ? '⏹️ Stop' : '▶️ Lecture globale'}
+        </button>
+        <span className="text-xs text-gray-500">{playing ? `${playTime.toFixed(1)}s / ${totalDuration.toFixed(1)}s` : ''}</span>
         <button className={btnCls + ' !bg-green-600 hover:!bg-green-700'} onClick={handleExport}>📥 Exporter MP3</button>
-        {exportUrl && <a href={exportUrl} className="text-xs text-green-600 font-medium" download>Télécharger</a>}
+        {exportUrl && <a href={exportUrl} className="text-xs text-green-600 font-medium" download>Télécharger l'export</a>}
         <div className="flex-1" />
         <span className="text-xs text-gray-400">Total: {totalDuration.toFixed(1)}s • {tracks.reduce((s, t) => s + t.blocks.length, 0)} blocs</span>
       </div>
